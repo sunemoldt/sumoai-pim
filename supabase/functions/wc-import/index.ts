@@ -186,6 +186,14 @@ Deno.serve(async (req) => {
 
     const dedupedRows = Array.from(rowsByEan.values());
 
+    // Create import log entry
+    const { data: logEntry } = await supabase
+      .from("import_logs")
+      .insert({ source: "woocommerce", status: "running", total_fetched: allProducts.length + variations.length })
+      .select("id")
+      .single();
+    const logId = logEntry?.id;
+
     // Upsert in batches
     let imported = 0;
     const errors: string[] = [];
@@ -203,6 +211,18 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Update import log
+    if (logId) {
+      await supabase.from("import_logs").update({
+        status: errors.length > 0 ? "completed_with_errors" : "completed",
+        imported,
+        deduplicated: rows.length - dedupedRows.length,
+        errors: errors.length > 0 ? errors : [],
+        ean_snapshot: dedupedRows.map((r) => r.ean),
+        completed_at: new Date().toISOString(),
+      }).eq("id", logId);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -211,6 +231,7 @@ Deno.serve(async (req) => {
         deduplicated: rows.length - dedupedRows.length,
         duplicate_eans: duplicateEans.size > 0 ? Array.from(duplicateEans).slice(0, 25) : undefined,
         errors: errors.length > 0 ? errors : undefined,
+        log_id: logId,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
