@@ -43,10 +43,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get the product from DB to find WooCommerce product ID
+    // Get the product from DB to find WooCommerce product ID and current values
     const { data: product, error: dbError } = await supabase
       .from("master_products")
-      .select("webshop_product_id, webshop_parent_id, title, ean")
+      .select("webshop_product_id, webshop_parent_id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed")
       .eq("id", master_product_id)
       .single();
 
