@@ -238,6 +238,7 @@ export default function ProductDetailPage() {
           <TabsTrigger value="pricing">Avance</TabsTrigger>
           <TabsTrigger value="suppliers">Leverandører</TabsTrigger>
           <TabsTrigger value="push" onClick={initPushFields}>Opdater shop</TabsTrigger>
+          <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
 
         <TabsContent value="details" className="space-y-4 mt-4">
