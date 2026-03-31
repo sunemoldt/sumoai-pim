@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     // Get the product from DB to find WooCommerce product ID
     const { data: product, error: dbError } = await supabase
       .from("master_products")
-      .select("webshop_product_id, title, ean")
+      .select("webshop_product_id, webshop_parent_id, title, ean")
       .eq("id", master_product_id)
       .single();
 
@@ -63,6 +63,8 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const isVariation = !!product.webshop_parent_id;
 
     // Build WooCommerce update payload
     const wcPayload: Record<string, any> = {};
