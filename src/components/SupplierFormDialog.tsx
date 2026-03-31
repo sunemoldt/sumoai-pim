@@ -142,6 +142,25 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
             </div>
           )}
 
+          {feedType !== "manual" && (
+            <div className="space-y-2">
+              <Label>Synkroniseringsfrekvens</Label>
+              <Select value={feedSchedule} onValueChange={setFeedSchedule}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manuel (ingen automatisk)</SelectItem>
+                  <SelectItem value="0 * * * *">Hver time</SelectItem>
+                  <SelectItem value="0 */2 * * *">Hver 2. time</SelectItem>
+                  <SelectItem value="0 */4 * * *">Hver 4. time</SelectItem>
+                  <SelectItem value="0 */6 * * *">Hver 6. time</SelectItem>
+                  <SelectItem value="0 */12 * * *">Hver 12. time</SelectItem>
+                  <SelectItem value="0 6 * * *">Dagligt kl. 06:00</SelectItem>
+                  <SelectItem value="0 6 * * 1">Ugentligt (mandag kl. 06:00)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <Label htmlFor="active">Aktiv</Label>
             <Switch id="active" checked={isActive} onCheckedChange={setIsActive} />
