@@ -30,6 +30,8 @@ export default function ProductListPage() {
   const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortField, setSortField] = useState<SortField>("title");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
