@@ -261,13 +261,23 @@ export default function ProductListPage() {
                         "—"
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-foreground">{formatPrice(product.webshop_price)}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {product.sale_price ? (
-                        <span className="text-warning">{formatPrice(product.sale_price)}</span>
+                    <TableCell className="text-right font-mono text-foreground">
+                      {product.webshop_price ? (
+                        <div>
+                          <span>{formatPrice(product.webshop_price)}</span>
+                          <p className="text-xs text-muted-foreground">ex. {formatPrice(exVat(product.webshop_price))}</p>
+                        </div>
                       ) : "—"}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-primary">{formatPrice(recommendedPrice)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {product.sale_price ? (
+                        <div>
+                          <span className="text-warning">{formatPrice(product.sale_price)}</span>
+                          <p className="text-xs text-muted-foreground">ex. {formatPrice(exVat(product.sale_price))}</p>
+                        </div>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-primary">{formatPrice(recommendedPriceInclVat)}</TableCell>
                     <TableCell className="text-right">
                       {margin !== null ? (
                         <Badge
