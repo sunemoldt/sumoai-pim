@@ -1,10 +1,11 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Package, Truck, Settings } from "lucide-react";
+import { LayoutDashboard, Package, Truck, Settings, Download } from "lucide-react";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/products", icon: Package, label: "Produkter" },
   { to: "/suppliers", icon: Truck, label: "Leverandører" },
+  { to: "/import", icon: Download, label: "WC Import" },
   { to: "/settings", icon: Settings, label: "Indstillinger" },
 ];
 
