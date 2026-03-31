@@ -267,7 +267,9 @@ export default function ProductListPage() {
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Anbefalet</th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
-              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Redigeret</th>
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
+                <span className="inline-flex items-center">Redigeret<SortIcon field="updated_at" /></span>
+              </th>
               <th className="h-9 px-2 text-center align-middle font-medium text-muted-foreground w-10"></th>
             </tr>
           </thead>
