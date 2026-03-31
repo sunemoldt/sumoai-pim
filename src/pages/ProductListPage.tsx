@@ -18,6 +18,7 @@ export default function ProductListPage() {
   const [search, setSearch] = useState("");
   const { data: products = [], isLoading } = useMasterProducts(search || undefined);
   const { data: priceSettings = [] } = usePriceSettings();
+  const { data: suppliers = [] } = useSuppliers();
   const navigate = useNavigate();
 
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
@@ -25,6 +26,8 @@ export default function ProductListPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [marginFilter, setMarginFilter] = useState<MarginFilter>("all");
   const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
+  const [supplierFilter, setSupplierFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
