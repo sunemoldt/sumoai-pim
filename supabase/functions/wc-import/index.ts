@@ -26,21 +26,18 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    // Fetch all products from WooCommerce (paginated)
     let page = 1;
     let allProducts: any[] = [];
     const perPage = 100;
+    const baseUrl = WC_STORE_URL.replace(/\/$/, "");
 
     while (true) {
-      const baseUrl = WC_STORE_URL.replace(/\/$/, "");
       const url = `${baseUrl}/wp-json/wc/v3/products?per_page=${perPage}&page=${page}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
-
       const res = await fetch(url);
       if (!res.ok) {
         const body = await res.text();
         throw new Error(`WooCommerce API error [${res.status}]: ${body}`);
       }
-
       const products = await res.json();
       if (!Array.isArray(products) || products.length === 0) break;
       allProducts = allProducts.concat(products);
@@ -48,31 +45,37 @@ Deno.serve(async (req) => {
       page++;
     }
 
-    // Also fetch variations for variable products
+    // Fetch variations for variable products
     const variableProducts = allProducts.filter((p: any) => p.type === "variable");
     const variations: any[] = [];
     for (const vp of variableProducts) {
       let vPage = 1;
       while (true) {
-        const baseUrl = WC_STORE_URL.replace(/\/$/, "");
         const url = `${baseUrl}/wp-json/wc/v3/products/${vp.id}/variations?per_page=${perPage}&page=${vPage}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
         const res = await fetch(url);
         if (!res.ok) break;
         const vars = await res.json();
         if (!Array.isArray(vars) || vars.length === 0) break;
         for (const v of vars) {
-          variations.push({ ...v, _parent_id: vp.id, _parent_name: vp.name, _parent_categories: vp.categories });
+          variations.push({
+            ...v,
+            _parent_id: vp.id,
+            _parent_name: vp.name,
+            _parent_brand: vp.brands?.[0]?.name || vp.tags?.[0]?.name || null,
+            _parent_categories: vp.categories,
+            _parent_image: vp.images?.[0]?.src || null,
+          });
         }
         if (vars.length < perPage) break;
         vPage++;
       }
     }
 
-    // Map WC products to master_products rows
+    // Map to master_products rows
     const rows: any[] = [];
 
     for (const p of allProducts) {
-      if (p.type === "variable") continue; // we handle variations instead
+      if (p.type === "variable") continue;
 
       const ean = p.sku || `wc-${p.id}`;
       rows.push({
@@ -83,7 +86,8 @@ Deno.serve(async (req) => {
         image_url: p.images?.[0]?.src || null,
         webshop_product_id: String(p.id),
         webshop_platform: "woocommerce",
-        webshop_price: p.price ? parseFloat(p.price) : null,
+        webshop_price: p.regular_price ? parseFloat(p.regular_price) : (p.price ? parseFloat(p.price) : null),
+        sale_price: p.sale_price ? parseFloat(p.sale_price) : null,
       });
     }
 
@@ -93,26 +97,26 @@ Deno.serve(async (req) => {
       rows.push({
         ean,
         title: attrStr ? `${v._parent_name} - ${attrStr}` : v._parent_name,
-        brand: null,
+        brand: v._parent_brand,
         category: v._parent_categories?.[0]?.name || null,
-        image_url: v.image?.src || null,
+        image_url: v.image?.src || v._parent_image || null,
         webshop_product_id: String(v.id),
         webshop_platform: "woocommerce",
-        webshop_price: v.price ? parseFloat(v.price) : null,
+        webshop_price: v.regular_price ? parseFloat(v.regular_price) : (v.price ? parseFloat(v.price) : null),
+        sale_price: v.sale_price ? parseFloat(v.sale_price) : null,
       });
     }
 
-    // Upsert into master_products (on ean conflict)
+    // Upsert in batches
     let imported = 0;
-    let errors: string[] = [];
-    
-    // Process in batches of 50
+    const errors: string[] = [];
+
     for (let i = 0; i < rows.length; i += 50) {
       const batch = rows.slice(i, i + 50);
       const { error } = await supabase
         .from("master_products")
         .upsert(batch, { onConflict: "ean" });
-      
+
       if (error) {
         errors.push(`Batch ${i}-${i + batch.length}: ${error.message}`);
       } else {
