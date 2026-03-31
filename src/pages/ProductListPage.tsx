@@ -99,6 +99,7 @@ export default function ProductListPage() {
                     </TableCell>
                     <TableCell className="font-medium text-foreground max-w-[200px] truncate">{product.title}</TableCell>
                     <TableCell className="text-muted-foreground font-mono text-xs">{product.ean}</TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-xs">{(product as any).sku ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{product.brand ?? "—"}</TableCell>
                     <TableCell className="text-right font-mono">
                       {cheapestPrice !== null ? (
