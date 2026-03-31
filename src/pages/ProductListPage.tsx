@@ -72,10 +72,11 @@ export default function ProductListPage() {
               products.map((product) => {
                 const cheapest = getCheapestSupplier(product.supplier_products);
                 const cheapestPrice = cheapest?.purchase_price ?? null;
-                const recommendedPrice = cheapestPrice ? getRecommendedPrice(cheapestPrice, globalMarkup) : null;
+                const recommendedPrice = cheapestPrice ? getRecommendedPrice(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
+                const activePrice = product.sale_price ?? product.webshop_price;
                 const margin =
-                  product.webshop_price && cheapestPrice
-                    ? getMarginPercent(product.webshop_price, cheapestPrice)
+                  activePrice && cheapestPrice
+                    ? getMarginPercent(activePrice, cheapestPrice)
                     : null;
                 const allOutOfStock =
                   product.supplier_products.length > 0 && product.supplier_products.every((sp) => !sp.in_stock);
