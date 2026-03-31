@@ -1,22 +1,63 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMasterProduct, getCheapestSupplier, getMarginPercent, getRecommendedPrice, usePriceSettings } from "@/hooks/use-products";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, CheckCircle, XCircle, Package } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: product, isLoading } = useMasterProduct(id!);
   const { data: priceSettings = [] } = usePriceSettings();
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const [markupInput, setMarkupInput] = useState<string | null>(null);
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
-  const formatPrice = (price: number | null) => {
+  // Use product-specific markup if set, otherwise global
+  const effectiveMarkup = product?.custom_markup_percentage != null
+    ? product.custom_markup_percentage
+    : globalMarkup;
+
+  // Initialize markup input when product loads
+  const displayMarkup = markupInput ?? (product?.custom_markup_percentage?.toString() ?? "");
+
+  const formatPrice = (price: number | null | undefined) => {
     if (price === null || price === undefined) return "—";
     return new Intl.NumberFormat("da-DK", { style: "currency", currency: "DKK" }).format(price);
+  };
+
+  const saveMarkup = async () => {
+    if (!product) return;
+    setSaving(true);
+    try {
+      const val = displayMarkup.trim() === "" ? null : parseFloat(displayMarkup);
+      if (val !== null && isNaN(val)) {
+        toast.error("Ugyldig værdi");
+        return;
+      }
+      const { error } = await supabase
+        .from("master_products")
+        .update({ custom_markup_percentage: val })
+        .eq("id", product.id);
+      if (error) throw error;
+      toast.success(val !== null ? `Avance sat til ${val}%` : "Avance nulstillet til global");
+      queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+      setMarkupInput(null);
+    } catch (err: any) {
+      toast.error(err?.message || "Fejl ved gemning");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (isLoading) {
@@ -39,9 +80,10 @@ export default function ProductDetailPage() {
 
   const cheapest = getCheapestSupplier(product.supplier_products);
   const cheapestPrice = cheapest?.purchase_price ?? null;
-  const recommendedPrice = cheapestPrice ? getRecommendedPrice(cheapestPrice, globalMarkup) : null;
-  const margin = product.webshop_price && cheapestPrice ? getMarginPercent(product.webshop_price, cheapestPrice) : null;
-  const priceDiff = product.webshop_price && recommendedPrice ? product.webshop_price - recommendedPrice : null;
+  const recommendedPrice = cheapestPrice ? getRecommendedPrice(cheapestPrice, effectiveMarkup) : null;
+  const currentPrice = (product as any).sale_price ?? product.webshop_price;
+  const margin = currentPrice && cheapestPrice ? getMarginPercent(currentPrice, cheapestPrice) : null;
+  const priceDiff = currentPrice && recommendedPrice ? currentPrice - recommendedPrice : null;
 
   return (
     <div className="space-y-6">
@@ -51,11 +93,14 @@ export default function ProductDetailPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-semibold text-foreground">{product.title}</h1>
-          <p className="text-sm text-muted-foreground">EAN: {product.ean} {product.brand && `· ${product.brand}`}</p>
+          <p className="text-sm text-muted-foreground">
+            EAN: {product.ean}
+            {product.brand && <> · <span className="font-medium text-foreground">{product.brand}</span></>}
+          </p>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card className="shadow-sm">
           <CardContent className="p-5">
             <p className="text-sm text-muted-foreground">Billigste indkøbspris</p>
@@ -65,9 +110,22 @@ export default function ProductDetailPage() {
         </Card>
         <Card className="shadow-sm">
           <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Webshop salgspris</p>
+            <p className="text-sm text-muted-foreground">Normal salgspris</p>
             <p className="text-2xl font-semibold text-foreground mt-1">{formatPrice(product.webshop_price)}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{product.webshop_platform}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-5">
+            <p className="text-sm text-muted-foreground">Tilbudspris</p>
+            <p className={`text-2xl font-semibold mt-1 ${(product as any).sale_price ? "text-warning" : "text-muted-foreground"}`}>
+              {formatPrice((product as any).sale_price)}
+            </p>
+            {(product as any).sale_price && product.webshop_price && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                -{Math.round(((product.webshop_price - (product as any).sale_price) / product.webshop_price) * 100)}% rabat
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card className="shadow-sm">
@@ -89,10 +147,42 @@ export default function ProductDetailPage() {
             }`}>
               {margin !== null ? `${margin.toFixed(1)}%` : "—"}
             </p>
-            <p className="text-xs text-muted-foreground mt-0.5">Markup: {globalMarkup}%</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {product.custom_markup_percentage != null ? `Produkt-markup: ${product.custom_markup_percentage}%` : `Global markup: ${globalMarkup}%`}
+            </p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Per-product markup setting */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-medium">Avanceindstilling for dette produkt</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-end gap-3 max-w-md">
+            <div className="space-y-2 flex-1">
+              <Label>Markup % (lad tom for global: {globalMarkup}%)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={displayMarkup}
+                onChange={(e) => setMarkupInput(e.target.value)}
+                placeholder={`${globalMarkup} (global)`}
+              />
+            </div>
+            <Button onClick={saveMarkup} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+              Gem
+            </Button>
+          </div>
+          {product.custom_markup_percentage != null && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Produktet bruger egen markup på {product.custom_markup_percentage}% i stedet for global ({globalMarkup}%)
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="shadow-sm">
         <CardHeader className="pb-3">
