@@ -356,6 +356,9 @@ export default function ProductListPage() {
             )}
           </TableBody>
         </Table>
+        </div>
+        <ScrollBar orientation="horizontal" />
+        </ScrollArea>
       </div>
     </div>
   );
