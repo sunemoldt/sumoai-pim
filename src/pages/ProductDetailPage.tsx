@@ -237,6 +237,7 @@ export default function ProductDetailPage() {
           <TabsTrigger value="attributes">Attributter</TabsTrigger>
           <TabsTrigger value="pricing">Avance</TabsTrigger>
           <TabsTrigger value="suppliers">Leverandører</TabsTrigger>
+          <TabsTrigger value="comparison">Sammenligning</TabsTrigger>
           <TabsTrigger value="push" onClick={initPushFields}>Opdater shop</TabsTrigger>
           <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
