@@ -20,6 +20,7 @@ export default function ProductDetailPage() {
   const navigate = useNavigate();
   const { data: product, isLoading } = useMasterProduct(id!);
   const { data: priceSettings = [] } = usePriceSettings();
+  const { data: changeLog = [] } = useProductChangeLog(id!);
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [markupInput, setMarkupInput] = useState<string | null>(null);
