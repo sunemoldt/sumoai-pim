@@ -151,12 +151,47 @@ Deno.serve(async (req) => {
       });
     }
 
+    const scoreRow = (row: any) => {
+      const populatedValues = [
+        row.title,
+        row.brand,
+        row.category,
+        row.image_url,
+        row.short_description,
+        row.long_description,
+        row.meta_title,
+        row.meta_description,
+        row.sku,
+        row.webshop_price,
+        row.sale_price,
+      ];
+
+      return populatedValues.filter((value) => value !== null && value !== undefined && value !== "").length +
+        (row.attributes && Object.keys(row.attributes).length > 0 ? 1 : 0);
+    };
+
+    const rowsByEan = new Map<string, any>();
+    const duplicateEans = new Set<string>();
+
+    for (const row of rows) {
+      const existing = rowsByEan.get(row.ean);
+      if (!existing) {
+        rowsByEan.set(row.ean, row);
+        continue;
+      }
+
+      duplicateEans.add(row.ean);
+      rowsByEan.set(row.ean, scoreRow(row) >= scoreRow(existing) ? row : existing);
+    }
+
+    const dedupedRows = Array.from(rowsByEan.values());
+
     // Upsert in batches
     let imported = 0;
     const errors: string[] = [];
 
-    for (let i = 0; i < rows.length; i += 50) {
-      const batch = rows.slice(i, i + 50);
+    for (let i = 0; i < dedupedRows.length; i += 50) {
+      const batch = dedupedRows.slice(i, i + 50);
       const { error } = await supabase
         .from("master_products")
         .upsert(batch, { onConflict: "ean" });
@@ -173,6 +208,8 @@ Deno.serve(async (req) => {
         success: true,
         total_fetched: allProducts.length + variations.length,
         imported,
+        deduplicated: rows.length - dedupedRows.length,
+        duplicate_eans: duplicateEans.size > 0 ? Array.from(duplicateEans).slice(0, 25) : undefined,
         errors: errors.length > 0 ? errors : undefined,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
