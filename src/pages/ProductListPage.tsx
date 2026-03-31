@@ -43,23 +43,29 @@ export default function ProductListPage() {
 
   const filtered = useMemo(() => {
     return products.filter((product) => {
-      // Stock filter
       if (stockFilter === "instock" && product.stock_status !== "instock") return false;
       if (stockFilter === "outofstock" && product.stock_status !== "outofstock") return false;
       if (stockFilter === "backorder" && !product.backorders_allowed) return false;
-
-      // Brand filter
       if (brandFilter !== "all" && product.brand !== brandFilter) return false;
-
-      // Category filter
       if (categoryFilter !== "all" && product.category !== categoryFilter) return false;
-
-      // Price filter
       if (priceFilter === "has_price" && !product.webshop_price) return false;
       if (priceFilter === "no_price" && product.webshop_price) return false;
       if (priceFilter === "on_sale" && !product.sale_price) return false;
 
-      // Margin filter
+      // Supplier filter
+      if (supplierFilter !== "all") {
+        const hasSupplier = product.supplier_products.some((sp) => sp.supplier_id === supplierFilter);
+        if (!hasSupplier) return false;
+      }
+
+      // Status filter (supplier stock status badge)
+      if (statusFilter !== "all") {
+        const allOut = product.supplier_products.length > 0 && product.supplier_products.every((sp) => !sp.in_stock);
+        if (statusFilter === "on_stock" && (product.supplier_products.length === 0 || allOut)) return false;
+        if (statusFilter === "out_of_stock" && !allOut) return false;
+        if (statusFilter === "no_data" && product.supplier_products.length > 0) return false;
+      }
+
       if (marginFilter !== "all") {
         const cheapest = getCheapestSupplier(product.supplier_products);
         const activePrice = product.sale_price ?? product.webshop_price;
@@ -72,7 +78,7 @@ export default function ProductListPage() {
 
       return true;
     });
-  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter]);
+  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter]);
 
   const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter].filter((f) => f !== "all").length;
 
