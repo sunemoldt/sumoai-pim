@@ -107,6 +107,34 @@ export function usePriceHistory(supplierProductId: string) {
   });
 }
 
+export type ProductChangeLog = {
+  id: string;
+  master_product_id: string;
+  change_type: string;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  source: string;
+  created_at: string;
+};
+
+export function useProductChangeLog(productId: string) {
+  return useQuery({
+    queryKey: ["product_change_log", productId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("product_change_log")
+        .select("*")
+        .eq("master_product_id", productId)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return data as ProductChangeLog[];
+    },
+    enabled: !!productId,
+  });
+}
+
 // Utility: get cheapest in-stock supplier for a product
 export function getCheapestSupplier(
   supplierProducts: (SupplierProduct & { suppliers: Supplier | null })[]

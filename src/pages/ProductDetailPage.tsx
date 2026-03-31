@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useMasterProduct, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat } from "@/hooks/use-products";
+import { useMasterProduct, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog } from "@/hooks/use-products";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ export default function ProductDetailPage() {
   const navigate = useNavigate();
   const { data: product, isLoading } = useMasterProduct(id!);
   const { data: priceSettings = [] } = usePriceSettings();
+  const { data: changeLog = [] } = useProductChangeLog(id!);
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [markupInput, setMarkupInput] = useState<string | null>(null);
@@ -237,6 +238,7 @@ export default function ProductDetailPage() {
           <TabsTrigger value="pricing">Avance</TabsTrigger>
           <TabsTrigger value="suppliers">Leverandører</TabsTrigger>
           <TabsTrigger value="push" onClick={initPushFields}>Opdater shop</TabsTrigger>
+          <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
 
         <TabsContent value="details" className="space-y-4 mt-4">
@@ -601,6 +603,58 @@ export default function ProductDetailPage() {
                 {pushing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 Opdater shop
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="changelog" className="space-y-4 mt-4">
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <History className="h-4 w-4" /> Ændringslog
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {changeLog.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">Ingen ændringer registreret endnu</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-secondary/50">
+                      <TableHead>Tidspunkt</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Felt</TableHead>
+                      <TableHead>Gammel værdi</TableHead>
+                      <TableHead>Ny værdi</TableHead>
+                      <TableHead>Kilde</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {changeLog.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(log.created_at).toLocaleString("da-DK")}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={
+                            log.change_type === "price_update" ? "text-primary border-primary/30" :
+                            log.change_type === "stock_update" ? "text-warning border-warning/30" :
+                            "text-muted-foreground"
+                          }>
+                            {log.change_type === "price_update" ? "Pris" :
+                             log.change_type === "stock_update" ? "Lager" :
+                             log.change_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{log.field_name}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{log.old_value ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-xs text-foreground">{log.new_value ?? "—"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{log.source}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

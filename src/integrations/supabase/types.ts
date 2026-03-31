@@ -196,6 +196,47 @@ export type Database = {
         }
         Relationships: []
       }
+      product_change_log: {
+        Row: {
+          change_type: string
+          created_at: string
+          field_name: string
+          id: string
+          master_product_id: string
+          new_value: string | null
+          old_value: string | null
+          source: string | null
+        }
+        Insert: {
+          change_type: string
+          created_at?: string
+          field_name: string
+          id?: string
+          master_product_id: string
+          new_value?: string | null
+          old_value?: string | null
+          source?: string | null
+        }
+        Update: {
+          change_type?: string
+          created_at?: string
+          field_name?: string
+          id?: string
+          master_product_id?: string
+          new_value?: string | null
+          old_value?: string | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_change_log_master_product_id_fkey"
+            columns: ["master_product_id"]
+            isOneToOne: false
+            referencedRelation: "master_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_products: {
         Row: {
           created_at: string
