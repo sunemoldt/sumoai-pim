@@ -111,6 +111,11 @@ export default function ProductListPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-foreground">{formatPrice(product.webshop_price)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {product.sale_price ? (
+                        <span className="text-warning">{formatPrice(product.sale_price)}</span>
+                      ) : "—"}
+                    </TableCell>
                     <TableCell className="text-right font-mono text-primary">{formatPrice(recommendedPrice)}</TableCell>
                     <TableCell className="text-right">
                       {margin !== null ? (
