@@ -266,6 +266,25 @@ export default function ImportPage() {
               produktkataloget. Eksisterende produkter matches på EAN.
             </p>
 
+            <div className="space-y-2">
+              <Label className="text-sm">Automatisk synkronisering</Label>
+              <Select value={wcSchedule} onValueChange={saveWcSchedule} disabled={savingSchedule}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manuel (ingen automatisk)</SelectItem>
+                  <SelectItem value="0 * * * *">Hver time</SelectItem>
+                  <SelectItem value="0 */2 * * *">Hver 2. time</SelectItem>
+                  <SelectItem value="0 */4 * * *">Hver 4. time</SelectItem>
+                  <SelectItem value="0 */6 * * *">Hver 6. time</SelectItem>
+                  <SelectItem value="0 */12 * * *">Hver 12. time</SelectItem>
+                  <SelectItem value="0 6 * * *">Dagligt kl. 06:00</SelectItem>
+                  <SelectItem value="0 6 * * 1">Ugentligt (mandag kl. 06:00)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button onClick={runImport} disabled={loading} className="w-full">
               {loading ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
