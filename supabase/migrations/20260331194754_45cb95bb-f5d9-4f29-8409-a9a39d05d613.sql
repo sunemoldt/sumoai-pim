@@ -1,0 +1,1 @@
+ALTER TABLE public.master_products ADD COLUMN IF NOT EXISTS webshop_parent_id text DEFAULT NULL;
