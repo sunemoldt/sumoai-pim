@@ -333,6 +333,21 @@ export default function ProductListPage() {
                         <Badge variant="secondary" className="text-xs">Ingen data</Badge>
                       )}
                     </td>
+                    <td className="px-2 py-1.5 align-middle text-muted-foreground whitespace-nowrap">
+                      {format(new Date(product.updated_at), "d. MMM yyyy HH:mm", { locale: da })}
+                    </td>
+                    <td className="px-2 py-1.5 align-middle text-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/products/${product.id}`, '_blank');
+                        }}
+                        className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                        title="Åbn i ny fane"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
                   </tr>
                 );
               })
