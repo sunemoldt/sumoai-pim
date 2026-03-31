@@ -114,29 +114,46 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Update local DB to match what we pushed
+    // Log changes and update local DB
+    const changeLogs: { master_product_id: string; change_type: string; field_name: string; old_value: string | null; new_value: string | null; source: string }[] = [];
     const dbUpdate: Record<string, any> = {};
+
+    const logChange = (field: string, oldVal: any, newVal: any, type = "shop_update") => {
+      const o = oldVal != null ? String(oldVal) : null;
+      const n = newVal != null ? String(newVal) : null;
+      if (o !== n) {
+        changeLogs.push({ master_product_id, change_type: type, field_name: field, old_value: o, new_value: n, source: "wc-update-product" });
+      }
+    };
+
     if (regular_price !== undefined && regular_price !== null) {
+      logChange("webshop_price", product.webshop_price, regular_price, "price_update");
       dbUpdate.webshop_price = regular_price;
     }
     if (sale_price !== undefined) {
+      logChange("sale_price", product.sale_price, sale_price, "price_update");
       dbUpdate.sale_price = sale_price;
     }
     if (stock_quantity !== undefined && stock_quantity !== null) {
+      logChange("stock_quantity", product.stock_quantity, stock_quantity, "stock_update");
       dbUpdate.stock_quantity = stock_quantity;
     }
     if (stock_status) {
+      logChange("stock_status", product.stock_status, stock_status, "stock_update");
       dbUpdate.stock_status = stock_status;
     }
     if (backorders) {
-      dbUpdate.backorders_allowed = backorders === "yes" || backorders === "notify";
+      const newVal = backorders === "yes" || backorders === "notify";
+      logChange("backorders_allowed", product.backorders_allowed, newVal, "stock_update");
+      dbUpdate.backorders_allowed = newVal;
     }
 
     if (Object.keys(dbUpdate).length > 0) {
-      await supabase
-        .from("master_products")
-        .update(dbUpdate)
-        .eq("id", master_product_id);
+      await supabase.from("master_products").update(dbUpdate).eq("id", master_product_id);
+    }
+
+    if (changeLogs.length > 0) {
+      await supabase.from("product_change_log").insert(changeLogs);
     }
 
     return new Response(
