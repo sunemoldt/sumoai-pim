@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       master_products: {
         Row: {
+          attributes: Json | null
           brand: string | null
           category: string | null
           created_at: string
@@ -23,7 +24,12 @@ export type Database = {
           ean: string
           id: string
           image_url: string | null
+          long_description: string | null
+          meta_description: string | null
+          meta_title: string | null
           sale_price: number | null
+          short_description: string | null
+          sku: string | null
           title: string
           updated_at: string
           webshop_platform: string | null
@@ -31,6 +37,7 @@ export type Database = {
           webshop_product_id: string | null
         }
         Insert: {
+          attributes?: Json | null
           brand?: string | null
           category?: string | null
           created_at?: string
@@ -38,7 +45,12 @@ export type Database = {
           ean: string
           id?: string
           image_url?: string | null
+          long_description?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
           sale_price?: number | null
+          short_description?: string | null
+          sku?: string | null
           title: string
           updated_at?: string
           webshop_platform?: string | null
@@ -46,6 +58,7 @@ export type Database = {
           webshop_product_id?: string | null
         }
         Update: {
+          attributes?: Json | null
           brand?: string | null
           category?: string | null
           created_at?: string
@@ -53,7 +66,12 @@ export type Database = {
           ean?: string
           id?: string
           image_url?: string | null
+          long_description?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
           sale_price?: number | null
+          short_description?: string | null
+          sku?: string | null
           title?: string
           updated_at?: string
           webshop_platform?: string | null
