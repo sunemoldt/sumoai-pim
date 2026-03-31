@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Filter, X, ExternalLink } from "lucide-react";
+import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
@@ -13,6 +13,8 @@ type StockFilter = "all" | "instock" | "outofstock" | "backorder";
 type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
+type SortField = "title" | "stock_quantity" | "updated_at";
+type SortDir = "asc" | "desc";
 
 export default function ProductListPage() {
   const [search, setSearch] = useState("");
@@ -28,6 +30,8 @@ export default function ProductListPage() {
   const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortField, setSortField] = useState<SortField>("title");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
@@ -80,6 +84,30 @@ export default function ProductListPage() {
     });
   }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter]);
 
+  const sorted = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      if (sortField === "title") return dir * a.title.localeCompare(b.title, "da");
+      if (sortField === "stock_quantity") return dir * ((a.stock_quantity ?? 0) - (b.stock_quantity ?? 0));
+      if (sortField === "updated_at") return dir * (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime());
+      return 0;
+    });
+  }, [filtered, sortField, sortDir]);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
+  };
+
   const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter].filter((f) => f !== "all").length;
 
   const clearFilters = () => {
@@ -103,7 +131,7 @@ export default function ProductListPage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Produkter</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Master produktliste – {filtered.length} af {products.length} produkter
+            Master produktliste – {sorted.length} af {products.length} produkter
           </p>
         </div>
       </div>
@@ -223,11 +251,15 @@ export default function ProductListPage() {
           <thead className="[&_tr]:border-b">
             <tr className="border-b bg-secondary/50">
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground w-10"></th>
-              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Produkt</th>
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("title")}>
+                <span className="inline-flex items-center">Produkt<SortIcon field="title" /></span>
+              </th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">EAN</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">SKU</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Brand</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Eget</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("stock_quantity")}>
+                <span className="inline-flex items-center justify-end">Eget<SortIcon field="stock_quantity" /></span>
+              </th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Lev.</th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Indkøb</th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Webshop</th>
@@ -235,7 +267,9 @@ export default function ProductListPage() {
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Anbefalet</th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
-              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Redigeret</th>
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
+                <span className="inline-flex items-center">Redigeret<SortIcon field="updated_at" /></span>
+              </th>
               <th className="h-9 px-2 text-center align-middle font-medium text-muted-foreground w-10"></th>
             </tr>
           </thead>
@@ -246,7 +280,7 @@ export default function ProductListPage() {
                   Indlæser...
                 </td>
               </tr>
-            ) : filtered.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <tr className="border-b">
                 <td colSpan={15} className="text-center py-8 text-muted-foreground">
                   <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
@@ -254,7 +288,7 @@ export default function ProductListPage() {
                 </td>
               </tr>
             ) : (
-              filtered.map((product) => {
+              sorted.map((product) => {
                 const cheapest = getCheapestSupplier(product.supplier_products);
                 const cheapestPrice = cheapest?.purchase_price ?? null;
                 const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
