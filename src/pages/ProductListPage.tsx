@@ -84,6 +84,30 @@ export default function ProductListPage() {
     });
   }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter]);
 
+  const sorted = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      if (sortField === "title") return dir * a.title.localeCompare(b.title, "da");
+      if (sortField === "stock_quantity") return dir * ((a.stock_quantity ?? 0) - (b.stock_quantity ?? 0));
+      if (sortField === "updated_at") return dir * (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime());
+      return 0;
+    });
+  }, [filtered, sortField, sortDir]);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
+  };
+
   const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter].filter((f) => f !== "all").length;
 
   const clearFilters = () => {
