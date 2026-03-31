@@ -191,11 +191,11 @@ export default function ProductListPage() {
               <TableHead>SKU</TableHead>
               <TableHead>Brand</TableHead>
               <TableHead className="text-right">Lager</TableHead>
-              <TableHead className="text-right">Billigste indkøb</TableHead>
-              <TableHead className="text-right">Webshop pris</TableHead>
-              <TableHead className="text-right">Tilbudspris</TableHead>
-              <TableHead className="text-right">Anbefalet pris</TableHead>
-              <TableHead className="text-right">Avance</TableHead>
+              <TableHead className="text-right">Indkøb (ex. moms)</TableHead>
+              <TableHead className="text-right">Webshop (inkl. moms)</TableHead>
+              <TableHead className="text-right">Tilbud (inkl. moms)</TableHead>
+              <TableHead className="text-right">Anbefalet (inkl.)</TableHead>
+              <TableHead className="text-right">Avance (ex.)</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
