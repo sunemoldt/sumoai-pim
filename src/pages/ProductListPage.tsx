@@ -80,7 +80,7 @@ export default function ProductListPage() {
     });
   }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter]);
 
-  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter].filter((f) => f !== "all").length;
+  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter].filter((f) => f !== "all").length;
 
   const clearFilters = () => {
     setStockFilter("all");
@@ -88,6 +88,8 @@ export default function ProductListPage() {
     setCategoryFilter("all");
     setMarginFilter("all");
     setPriceFilter("all");
+    setSupplierFilter("all");
+    setStatusFilter("all");
   };
 
   const formatPrice = (price: number | null) => {
