@@ -5,6 +5,12 @@ import type { Tables } from "@/integrations/supabase/types";
 export type MasterProduct = Tables<"master_products"> & {
   sale_price?: number | null;
   custom_markup_percentage?: number | null;
+  short_description?: string | null;
+  long_description?: string | null;
+  meta_title?: string | null;
+  meta_description?: string | null;
+  sku?: string | null;
+  attributes?: Record<string, string> | null;
 };
 export type Supplier = Tables<"suppliers">;
 export type SupplierProduct = Tables<"supplier_products">;
@@ -37,7 +43,7 @@ export function useMasterProducts(search?: string) {
         .order("title");
       
       if (search) {
-        query = query.or(`title.ilike.%${search}%,ean.ilike.%${search}%,brand.ilike.%${search}%`);
+        query = query.or(`title.ilike.%${search}%,ean.ilike.%${search}%,brand.ilike.%${search}%,sku.ilike.%${search}%`);
       }
 
       const { data, error } = await query;

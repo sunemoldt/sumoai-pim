@@ -64,6 +64,8 @@ Deno.serve(async (req) => {
             _parent_brand: vp.brands?.[0]?.name || vp.tags?.[0]?.name || null,
             _parent_categories: vp.categories,
             _parent_image: vp.images?.[0]?.src || null,
+            _parent_short_description: vp.short_description || null,
+            _parent_long_description: vp.description || null,
           });
         }
         if (vars.length < perPage) break;
@@ -78,12 +80,28 @@ Deno.serve(async (req) => {
       if (p.type === "variable") continue;
 
       const ean = p.sku || `wc-${p.id}`;
+      const attrs: Record<string, string> = {};
+      if (p.attributes) {
+        for (const a of p.attributes) {
+          if (a.name && a.options) {
+            attrs[a.name] = Array.isArray(a.options) ? a.options.join(", ") : String(a.options);
+          } else if (a.name && a.option) {
+            attrs[a.name] = a.option;
+          }
+        }
+      }
       rows.push({
         ean,
+        sku: p.sku || null,
         title: p.name,
         brand: p.brands?.[0]?.name || p.tags?.[0]?.name || null,
         category: p.categories?.[0]?.name || null,
         image_url: p.images?.[0]?.src || null,
+        short_description: p.short_description || null,
+        long_description: p.description || null,
+        meta_title: p.meta_data?.find((m: any) => m.key === "_yoast_wpseo_title")?.value || p.meta_data?.find((m: any) => m.key === "rank_math_title")?.value || null,
+        meta_description: p.meta_data?.find((m: any) => m.key === "_yoast_wpseo_metadesc")?.value || p.meta_data?.find((m: any) => m.key === "rank_math_description")?.value || null,
+        attributes: Object.keys(attrs).length > 0 ? attrs : {},
         webshop_product_id: String(p.id),
         webshop_platform: "woocommerce",
         webshop_price: p.regular_price ? parseFloat(p.regular_price) : (p.price ? parseFloat(p.price) : null),
@@ -94,12 +112,24 @@ Deno.serve(async (req) => {
     for (const v of variations) {
       const ean = v.sku || `wc-${v._parent_id}-${v.id}`;
       const attrStr = v.attributes?.map((a: any) => a.option).join(" / ") || "";
+      const varAttrs: Record<string, string> = {};
+      if (v.attributes) {
+        for (const a of v.attributes) {
+          if (a.name && a.option) varAttrs[a.name] = a.option;
+        }
+      }
       rows.push({
         ean,
+        sku: v.sku || null,
         title: attrStr ? `${v._parent_name} - ${attrStr}` : v._parent_name,
         brand: v._parent_brand,
         category: v._parent_categories?.[0]?.name || null,
         image_url: v.image?.src || v._parent_image || null,
+        short_description: v.description || v._parent_short_description || null,
+        long_description: v._parent_long_description || null,
+        meta_title: null,
+        meta_description: v.meta_data?.find((m: any) => m.key === "_yoast_wpseo_metadesc")?.value || null,
+        attributes: Object.keys(varAttrs).length > 0 ? varAttrs : {},
         webshop_product_id: String(v.id),
         webshop_platform: "woocommerce",
         webshop_price: v.regular_price ? parseFloat(v.regular_price) : (v.price ? parseFloat(v.price) : null),
