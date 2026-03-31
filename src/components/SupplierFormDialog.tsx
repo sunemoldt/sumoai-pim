@@ -25,6 +25,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
   const [name, setName] = useState("");
   const [feedType, setFeedType] = useState("csv");
   const [feedUrl, setFeedUrl] = useState("");
+  const [feedSchedule, setFeedSchedule] = useState("manual");
   const [isActive, setIsActive] = useState(true);
 
   useEffect(() => {
@@ -32,11 +33,13 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setName(supplier.name);
       setFeedType(supplier.feed_type);
       setFeedUrl(supplier.feed_url ?? "");
+      setFeedSchedule(supplier.feed_schedule ?? "manual");
       setIsActive(supplier.is_active);
     } else {
       setName("");
       setFeedType("csv");
       setFeedUrl("");
+      setFeedSchedule("manual");
       setIsActive(true);
     }
   }, [supplier, open]);
