@@ -170,7 +170,7 @@ export default function ImportPage() {
         const batch = cleanRows.slice(i, i + batchSize);
         const { error } = await supabase
           .from("master_products")
-          .upsert(batch, { onConflict: "ean" });
+          .upsert(batch as any, { onConflict: "ean" });
         if (error) {
           errors.push(`Batch ${i}-${i + batch.length}: ${error.message}`);
         } else {
