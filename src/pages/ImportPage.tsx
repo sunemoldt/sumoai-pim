@@ -52,9 +52,45 @@ export default function ImportPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [importing, setImporting] = useState(false);
+  const [wcSchedule, setWcSchedule] = useState("manual");
+  const [savingSchedule, setSavingSchedule] = useState(false);
   const queryClient = useQueryClient();
   const { data: logs = [] } = useImportLogs();
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Load WC schedule from price_settings (reuse table with scope='wc_schedule')
+  useEffect(() => {
+    supabase
+      .from("price_settings")
+      .select("scope_value")
+      .eq("scope", "wc_schedule")
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.scope_value) setWcSchedule(data.scope_value);
+      });
+  }, []);
+
+  const saveWcSchedule = async (val: string) => {
+    setWcSchedule(val);
+    setSavingSchedule(true);
+    try {
+      const { data: existing } = await supabase
+        .from("price_settings")
+        .select("id")
+        .eq("scope", "wc_schedule")
+        .maybeSingle();
+      if (existing) {
+        await supabase.from("price_settings").update({ scope_value: val }).eq("id", existing.id);
+      } else {
+        await supabase.from("price_settings").insert({ scope: "wc_schedule", scope_value: val, markup_percentage: 0, minimum_margin: 0 });
+      }
+      toast.success("WooCommerce synkroniseringsfrekvens gemt");
+    } catch (err: any) {
+      toast.error("Fejl ved gemning af frekvens");
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
 
   const runImport = async () => {
     setLoading(true);
