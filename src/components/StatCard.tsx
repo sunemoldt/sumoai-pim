@@ -7,6 +7,7 @@ interface StatCardProps {
   icon: ReactNode;
   description?: string;
   variant?: "default" | "success" | "warning" | "destructive";
+  onClick?: () => void;
 }
 
 const variantStyles = {
@@ -16,9 +17,9 @@ const variantStyles = {
   destructive: "text-destructive",
 };
 
-export default function StatCard({ title, value, icon, description, variant = "default" }: StatCardProps) {
+export default function StatCard({ title, value, icon, description, variant = "default", onClick }: StatCardProps) {
   return (
-    <Card className="shadow-sm">
+    <Card className={`shadow-sm ${onClick ? "cursor-pointer hover:bg-accent/50 transition-colors" : ""}`} onClick={onClick}>
       <CardContent className="flex items-center gap-4 p-5">
         <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-secondary ${variantStyles[variant]}`}>
           {icon}
