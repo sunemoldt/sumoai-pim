@@ -185,6 +185,30 @@ export default function ProductListPage() {
             </SelectContent>
           </Select>
 
+          <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+            <SelectTrigger className="w-[170px] h-9 text-sm">
+              <SelectValue placeholder="Leverandør" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle leverandører</SelectItem>
+              {suppliers.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+            <SelectTrigger className="w-[150px] h-9 text-sm">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle statusser</SelectItem>
+              <SelectItem value="on_stock">På lager</SelectItem>
+              <SelectItem value="out_of_stock">Udsolgt</SelectItem>
+              <SelectItem value="no_data">Ingen data</SelectItem>
+            </SelectContent>
+          </Select>
+
           {activeFilterCount > 0 && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-sm gap-1">
               <X className="h-3.5 w-3.5" />
