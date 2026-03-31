@@ -23,6 +23,13 @@ export default function ProductDetailPage() {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [markupInput, setMarkupInput] = useState<string | null>(null);
+  const [pushing, setPushing] = useState(false);
+  const [pushPrice, setPushPrice] = useState<string>("");
+  const [pushSalePrice, setPushSalePrice] = useState<string>("");
+  const [pushStockQty, setPushStockQty] = useState<string>("");
+  const [pushStockStatus, setPushStockStatus] = useState<string>("");
+  const [pushBackorders, setPushBackorders] = useState<string>("");
+  const [pushInitialized, setPushInitialized] = useState(false);
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
