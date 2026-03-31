@@ -73,13 +73,27 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Helper to extract EAN from meta_data
+    const eanMetaKeys = ["_avecdo_ean", "_gtin", "woo_feed_ean_var", "woo_feed_gtin_var", "_wc_gla_gtin"];
+    function extractEan(metaData: any[], sku: string | null, fallbackId: string): string {
+      if (metaData) {
+        for (const key of eanMetaKeys) {
+          const val = metaData.find((m: any) => m.key === key)?.value;
+          if (val && String(val).trim()) return String(val).trim();
+        }
+      }
+      // Only use SKU if it looks like a numeric barcode (8-14 digits)
+      if (sku && /^\d{8,14}$/.test(sku.trim())) return sku.trim();
+      return fallbackId;
+    }
+
     // Map to master_products rows
     const rows: any[] = [];
 
     for (const p of allProducts) {
       if (p.type === "variable") continue;
 
-      const ean = p.sku || `wc-${p.id}`;
+      const ean = extractEan(p.meta_data, p.sku, `wc-${p.id}`);
       const attrs: Record<string, string> = {};
       if (p.attributes) {
         for (const a of p.attributes) {
@@ -110,7 +124,7 @@ Deno.serve(async (req) => {
     }
 
     for (const v of variations) {
-      const ean = v.sku || `wc-${v._parent_id}-${v.id}`;
+      const ean = extractEan(v.meta_data, v.sku, `wc-${v._parent_id}-${v.id}`);
       const attrStr = v.attributes?.map((a: any) => a.option).join(" / ") || "";
       const varAttrs: Record<string, string> = {};
       if (v.attributes) {
