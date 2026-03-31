@@ -237,6 +237,7 @@ export default function ProductDetailPage() {
           <TabsTrigger value="attributes">Attributter</TabsTrigger>
           <TabsTrigger value="pricing">Avance</TabsTrigger>
           <TabsTrigger value="suppliers">Leverandører</TabsTrigger>
+          <TabsTrigger value="comparison">Sammenligning</TabsTrigger>
           <TabsTrigger value="push" onClick={initPushFields}>Opdater shop</TabsTrigger>
           <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
@@ -464,6 +465,123 @@ export default function ProductDetailPage() {
                       })}
                   </TableBody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="comparison" className="space-y-4 mt-4">
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium">Leverandør-sammenligning</CardTitle>
+              <p className="text-sm text-muted-foreground">Overblik over alle leverandørers priser, lager og status for dette produkt.</p>
+            </CardHeader>
+            <CardContent>
+              {product.supplier_products.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">Ingen leverandørdata tilgængelig.</p>
+              ) : (
+                <div className="overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-secondary/50">
+                        <th className="h-10 px-3 text-left font-medium text-muted-foreground">Leverandør</th>
+                        <th className="h-10 px-3 text-right font-medium text-muted-foreground">Indkøbspris (ex. moms)</th>
+                        <th className="h-10 px-3 text-right font-medium text-muted-foreground">Anbefalet (inkl.)</th>
+                        <th className="h-10 px-3 text-right font-medium text-muted-foreground">Avance vs. webshop</th>
+                        <th className="h-10 px-3 text-right font-medium text-muted-foreground">Antal på lager</th>
+                        <th className="h-10 px-3 text-left font-medium text-muted-foreground">Status</th>
+                        <th className="h-10 px-3 text-right font-medium text-muted-foreground">Prisforskel</th>
+                        <th className="h-10 px-3 text-left font-medium text-muted-foreground">Sidst opdateret</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...product.supplier_products]
+                        .sort((a, b) => a.purchase_price - b.purchase_price)
+                        .map((sp) => {
+                          const isCheapest = cheapest?.id === sp.id;
+                          const spRecommended = getRecommendedPriceInclVat(sp.purchase_price, effectiveMarkup);
+                          const spMargin = currentPriceExVat
+                            ? getMarginPercent(currentPriceExVat, sp.purchase_price)
+                            : null;
+                          const diffVsCheapest = cheapestPrice !== null
+                            ? sp.purchase_price - cheapestPrice
+                            : null;
+
+                          return (
+                            <tr key={sp.id} className={`border-b transition-colors ${isCheapest ? "bg-success/5" : "hover:bg-accent/30"}`}>
+                              <td className="px-3 py-2.5 font-medium text-foreground">
+                                <div className="flex items-center gap-2">
+                                  {sp.suppliers?.name ?? "Ukendt"}
+                                  {isCheapest && (
+                                    <Badge className="bg-success/10 text-success border-0 text-xs">Billigst</Badge>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-mono text-foreground">{formatPrice(sp.purchase_price)}</td>
+                              <td className="px-3 py-2.5 text-right font-mono text-primary">{formatPrice(spRecommended)}</td>
+                              <td className="px-3 py-2.5 text-right">
+                                {spMargin !== null ? (
+                                  <Badge
+                                    variant="outline"
+                                    className={
+                                      spMargin < 10
+                                        ? "text-destructive border-destructive/30"
+                                        : spMargin < 20
+                                        ? "text-warning border-warning/30"
+                                        : "text-success border-success/30"
+                                    }
+                                  >
+                                    {spMargin.toFixed(1)}%
+                                  </Badge>
+                                ) : "—"}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-mono text-foreground">{sp.stock_quantity ?? "—"}</td>
+                              <td className="px-3 py-2.5">
+                                {sp.in_stock ? (
+                                  <span className="flex items-center gap-1 text-success">
+                                    <CheckCircle className="h-3.5 w-3.5" /> På lager
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1 text-destructive">
+                                    <XCircle className="h-3.5 w-3.5" /> Udsolgt
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-mono">
+                                {diffVsCheapest !== null && diffVsCheapest > 0 ? (
+                                  <span className="text-destructive">+{formatPrice(diffVsCheapest)}</span>
+                                ) : (
+                                  <span className="text-success">—</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-muted-foreground text-xs">
+                                {new Date(sp.last_updated).toLocaleDateString("da-DK")}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                    {currentPrice && (
+                      <tfoot>
+                        <tr className="border-t-2 border-border bg-secondary/30">
+                          <td className="px-3 py-2.5 font-medium text-muted-foreground">Din webshop</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{formatPrice(currentPriceExVat)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{formatPrice(currentPrice)}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            {margin !== null && (
+                              <Badge variant="outline" className="text-muted-foreground">{margin.toFixed(1)}%</Badge>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono text-muted-foreground">{product.stock_quantity ?? "—"}</td>
+                          <td className="px-3 py-2.5 text-muted-foreground text-sm">
+                            {product.stock_status === "instock" ? "På lager" : "Udsolgt"}
+                          </td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
               )}
             </CardContent>
           </Card>
