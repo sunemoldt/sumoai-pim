@@ -251,11 +251,15 @@ export default function ProductListPage() {
           <thead className="[&_tr]:border-b">
             <tr className="border-b bg-secondary/50">
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground w-10"></th>
-              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Produkt</th>
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("title")}>
+                <span className="inline-flex items-center">Produkt<SortIcon field="title" /></span>
+              </th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">EAN</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">SKU</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Brand</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Eget</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("stock_quantity")}>
+                <span className="inline-flex items-center justify-end">Eget<SortIcon field="stock_quantity" /></span>
+              </th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Lev.</th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Indkøb</th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Webshop</th>
