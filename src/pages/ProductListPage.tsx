@@ -280,7 +280,7 @@ export default function ProductListPage() {
                   Indlæser...
                 </td>
               </tr>
-            ) : filtered.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <tr className="border-b">
                 <td colSpan={15} className="text-center py-8 text-muted-foreground">
                   <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
@@ -288,7 +288,7 @@ export default function ProductListPage() {
                 </td>
               </tr>
             ) : (
-              filtered.map((product) => {
+              sorted.map((product) => {
                 const cheapest = getCheapestSupplier(product.supplier_products);
                 const cheapestPrice = cheapest?.purchase_price ?? null;
                 const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
