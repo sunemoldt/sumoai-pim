@@ -250,6 +250,11 @@ export default function ProductListPage() {
                     <TableCell className="text-right font-mono text-muted-foreground">
                       {product.stock_quantity ?? "—"}
                     </TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">
+                      {product.supplier_products.length > 0
+                        ? product.supplier_products.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0) || "—"
+                        : "—"}
+                    </TableCell>
                     <TableCell className="text-right font-mono">
                       {cheapestPrice !== null ? (
                         <div>
