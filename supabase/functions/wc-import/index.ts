@@ -64,6 +64,8 @@ Deno.serve(async (req) => {
             _parent_brand: vp.brands?.[0]?.name || vp.tags?.[0]?.name || null,
             _parent_categories: vp.categories,
             _parent_image: vp.images?.[0]?.src || null,
+            _parent_short_description: vp.short_description || null,
+            _parent_long_description: vp.description || null,
           });
         }
         if (vars.length < perPage) break;
