@@ -151,6 +151,9 @@ Deno.serve(async (req) => {
         webshop_platform: "woocommerce",
         webshop_price: v.regular_price ? parseFloat(v.regular_price) : (v.price ? parseFloat(v.price) : null),
         sale_price: v.sale_price ? parseFloat(v.sale_price) : null,
+        stock_quantity: v.stock_quantity ?? null,
+        stock_status: v.stock_status || "instock",
+        backorders_allowed: v.backorders === "yes" || v.backorders === "notify",
       });
     }
 
