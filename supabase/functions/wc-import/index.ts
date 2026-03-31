@@ -110,12 +110,24 @@ Deno.serve(async (req) => {
     for (const v of variations) {
       const ean = v.sku || `wc-${v._parent_id}-${v.id}`;
       const attrStr = v.attributes?.map((a: any) => a.option).join(" / ") || "";
+      const varAttrs: Record<string, string> = {};
+      if (v.attributes) {
+        for (const a of v.attributes) {
+          if (a.name && a.option) varAttrs[a.name] = a.option;
+        }
+      }
       rows.push({
         ean,
+        sku: v.sku || null,
         title: attrStr ? `${v._parent_name} - ${attrStr}` : v._parent_name,
         brand: v._parent_brand,
         category: v._parent_categories?.[0]?.name || null,
         image_url: v.image?.src || v._parent_image || null,
+        short_description: v.description || v._parent_short_description || null,
+        long_description: v._parent_long_description || null,
+        meta_title: null,
+        meta_description: v.meta_data?.find((m: any) => m.key === "_yoast_wpseo_metadesc")?.value || null,
+        attributes: Object.keys(varAttrs).length > 0 ? varAttrs : {},
         webshop_product_id: String(v.id),
         webshop_platform: "woocommerce",
         webshop_price: v.regular_price ? parseFloat(v.regular_price) : (v.price ? parseFloat(v.price) : null),
