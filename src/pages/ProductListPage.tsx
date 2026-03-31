@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useMasterProducts, getCheapestSupplier, getMarginPercent, getRecommendedPrice, usePriceSettings } from "@/hooks/use-products";
+import { useMasterProducts, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat } from "@/hooks/use-products";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
