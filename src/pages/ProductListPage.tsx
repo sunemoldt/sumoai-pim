@@ -47,6 +47,7 @@ export default function ProductListPage() {
               <TableHead>EAN</TableHead>
               <TableHead>SKU</TableHead>
               <TableHead>Brand</TableHead>
+              <TableHead className="text-right">Lager</TableHead>
               <TableHead className="text-right">Billigste indkøb</TableHead>
               <TableHead className="text-right">Webshop pris</TableHead>
               <TableHead className="text-right">Tilbudspris</TableHead>
