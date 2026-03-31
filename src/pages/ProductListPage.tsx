@@ -99,7 +99,7 @@ export default function ProductListPage() {
       }
       return 0;
     });
-  }, [filtered, sortField, sortDir]);
+  }, [filtered, sortField, sortDir, globalMarkup]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
