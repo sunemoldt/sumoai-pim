@@ -81,7 +81,7 @@ export default function ProductDetailPage() {
   const cheapest = getCheapestSupplier(product.supplier_products);
   const cheapestPrice = cheapest?.purchase_price ?? null;
   const recommendedPrice = cheapestPrice ? getRecommendedPrice(cheapestPrice, effectiveMarkup) : null;
-  const currentPrice = (product as any).sale_price ?? product.webshop_price;
+  const currentPrice = product.sale_price ?? product.webshop_price;
   const margin = currentPrice && cheapestPrice ? getMarginPercent(currentPrice, cheapestPrice) : null;
   const priceDiff = currentPrice && recommendedPrice ? currentPrice - recommendedPrice : null;
 
@@ -118,12 +118,12 @@ export default function ProductDetailPage() {
         <Card className="shadow-sm">
           <CardContent className="p-5">
             <p className="text-sm text-muted-foreground">Tilbudspris</p>
-            <p className={`text-2xl font-semibold mt-1 ${(product as any).sale_price ? "text-warning" : "text-muted-foreground"}`}>
-              {formatPrice((product as any).sale_price)}
+            <p className={`text-2xl font-semibold mt-1 ${product.sale_price ? "text-warning" : "text-muted-foreground"}`}>
+              {formatPrice(product.sale_price)}
             </p>
-            {(product as any).sale_price && product.webshop_price && (
+            {product.sale_price && product.webshop_price && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                -{Math.round(((product.webshop_price - (product as any).sale_price) / product.webshop_price) * 100)}% rabat
+                -{Math.round(((product.webshop_price - product.sale_price) / product.webshop_price) * 100)}% rabat
               </p>
             )}
           </CardContent>
