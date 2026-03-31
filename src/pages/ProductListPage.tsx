@@ -2,8 +2,10 @@ import { useState, useMemo } from "react";
 import { useMasterProducts, useSuppliers, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat } from "@/hooks/use-products";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Filter, X } from "lucide-react";
+import { Search, Package, Filter, X, ExternalLink } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
@@ -233,18 +235,20 @@ export default function ProductListPage() {
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Anbefalet</th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Redigeret</th>
+              <th className="h-9 px-2 text-center align-middle font-medium text-muted-foreground w-10"></th>
             </tr>
           </thead>
           <tbody className="[&_tr:last-child]:border-0">
             {isLoading ? (
               <tr className="border-b">
-                <td colSpan={13} className="text-center py-8 text-muted-foreground">
+                <td colSpan={15} className="text-center py-8 text-muted-foreground">
                   Indlæser...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr className="border-b">
-                <td colSpan={13} className="text-center py-8 text-muted-foreground">
+                <td colSpan={15} className="text-center py-8 text-muted-foreground">
                   <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
                   Ingen produkter fundet
                 </td>
@@ -328,6 +332,21 @@ export default function ProductListPage() {
                       ) : (
                         <Badge variant="secondary" className="text-xs">Ingen data</Badge>
                       )}
+                    </td>
+                    <td className="px-2 py-1.5 align-middle text-muted-foreground whitespace-nowrap">
+                      {format(new Date(product.updated_at), "d. MMM yyyy HH:mm", { locale: da })}
+                    </td>
+                    <td className="px-2 py-1.5 align-middle text-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/products/${product.id}`, '_blank');
+                        }}
+                        className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                        title="Åbn i ny fane"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
                     </td>
                   </tr>
                 );
