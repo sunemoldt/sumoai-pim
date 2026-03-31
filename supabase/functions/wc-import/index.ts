@@ -148,6 +148,7 @@ Deno.serve(async (req) => {
         meta_description: v.meta_data?.find((m: any) => m.key === "_yoast_wpseo_metadesc")?.value || null,
         attributes: Object.keys(varAttrs).length > 0 ? varAttrs : {},
         webshop_product_id: String(v.id),
+        webshop_parent_id: String(v._parent_id),
         webshop_platform: "woocommerce",
         webshop_price: v.regular_price ? parseFloat(v.regular_price) : (v.price ? parseFloat(v.price) : null),
         sale_price: v.sale_price ? parseFloat(v.sale_price) : null,

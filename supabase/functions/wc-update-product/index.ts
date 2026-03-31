@@ -86,8 +86,10 @@ Deno.serve(async (req) => {
       wcPayload.backorders = backorders;
     }
 
-    // Call WooCommerce REST API
-    const wcUrl = `${WC_STORE_URL}/wp-json/wc/v3/products/${product.webshop_product_id}`;
+    // Use variation endpoint if this is a variation
+    const wcUrl = isVariation
+      ? `${WC_STORE_URL}/wp-json/wc/v3/products/${product.webshop_parent_id}/variations/${product.webshop_product_id}`
+      : `${WC_STORE_URL}/wp-json/wc/v3/products/${product.webshop_product_id}`;
     const auth = btoa(`${WC_CONSUMER_KEY}:${WC_CONSUMER_SECRET}`);
 
     const wcRes = await fetch(wcUrl, {
