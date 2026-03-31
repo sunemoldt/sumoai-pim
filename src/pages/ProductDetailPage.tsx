@@ -82,10 +82,12 @@ export default function ProductDetailPage() {
 
   const cheapest = getCheapestSupplier(product.supplier_products);
   const cheapestPrice = cheapest?.purchase_price ?? null;
-  const recommendedPrice = cheapestPrice ? getRecommendedPrice(cheapestPrice, effectiveMarkup) : null;
+  const recommendedPriceExVat = cheapestPrice ? getRecommendedPrice(cheapestPrice, effectiveMarkup) : null;
+  const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, effectiveMarkup) : null;
   const currentPrice = product.sale_price ?? product.webshop_price;
-  const margin = currentPrice && cheapestPrice ? getMarginPercent(currentPrice, cheapestPrice) : null;
-  const priceDiff = currentPrice && recommendedPrice ? currentPrice - recommendedPrice : null;
+  const currentPriceExVat = currentPrice ? exVat(currentPrice) : null;
+  const margin = currentPriceExVat && cheapestPrice ? getMarginPercent(currentPriceExVat, cheapestPrice) : null;
+  const priceDiff = currentPrice && recommendedPriceInclVat ? currentPrice - recommendedPriceInclVat : null;
 
   const attributes = (product as any).attributes as Record<string, string> | null | undefined;
 
