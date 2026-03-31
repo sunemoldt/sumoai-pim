@@ -76,6 +76,7 @@ export default function SupplierListPage() {
                 <TableHead>Navn</TableHead>
                 <TableHead>Feed type</TableHead>
                 <TableHead>Feed URL / Fil</TableHead>
+                <TableHead>Frekvens</TableHead>
                 <TableHead>Sidst synkroniseret</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Handlinger</TableHead>
