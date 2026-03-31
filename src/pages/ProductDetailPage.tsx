@@ -70,7 +70,56 @@ export default function ProductDetailPage() {
     }
   };
 
-  if (isLoading) {
+  // Initialize push fields when product loads and tab is first opened
+  const initPushFields = () => {
+    if (pushInitialized || !product) return;
+    const recPrice = cheapestPriceForInit
+      ? getRecommendedPriceInclVat(cheapestPriceForInit, product.custom_markup_percentage ?? globalMarkup)
+      : product.webshop_price;
+    setPushPrice(recPrice?.toString() ?? product.webshop_price?.toString() ?? "");
+    setPushSalePrice(product.sale_price?.toString() ?? "");
+    setPushStockQty(product.stock_quantity?.toString() ?? "0");
+    setPushStockStatus(product.stock_status ?? "instock");
+    setPushBackorders(product.backorders_allowed ? "yes" : "no");
+    setPushInitialized(true);
+  };
+
+  const pushToShop = async () => {
+    if (!product) return;
+    setPushing(true);
+    try {
+      const payload: Record<string, any> = {
+        master_product_id: product.id,
+      };
+      if (pushPrice) payload.regular_price = parseFloat(pushPrice);
+      payload.sale_price = pushSalePrice ? parseFloat(pushSalePrice) : null;
+      if (pushStockQty) payload.stock_quantity = parseInt(pushStockQty, 10);
+      if (pushStockStatus) payload.stock_status = pushStockStatus;
+      if (pushBackorders) payload.backorders = pushBackorders;
+
+      const { data, error } = await supabase.functions.invoke("wc-update-product", {
+        body: payload,
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(`Produktet er opdateret i webshoppen (${data.updated_fields?.length ?? 0} felter)`);
+      queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+    } catch (err: any) {
+      toast.error(err?.message || "Fejl ved opdatering af webshop");
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  // Pre-compute cheapest for init (before early returns)
+  const cheapestPriceForInit = (() => {
+    if (!product) return null;
+    const c = getCheapestSupplier(product.supplier_products);
+    return c?.purchase_price ?? null;
+  })();
+
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">Indlæser produkt...</div>
     );
