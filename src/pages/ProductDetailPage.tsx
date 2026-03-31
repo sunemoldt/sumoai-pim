@@ -606,6 +606,58 @@ export default function ProductDetailPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="changelog" className="space-y-4 mt-4">
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <History className="h-4 w-4" /> Ændringslog
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {changeLog.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">Ingen ændringer registreret endnu</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-secondary/50">
+                      <TableHead>Tidspunkt</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Felt</TableHead>
+                      <TableHead>Gammel værdi</TableHead>
+                      <TableHead>Ny værdi</TableHead>
+                      <TableHead>Kilde</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {changeLog.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(log.created_at).toLocaleString("da-DK")}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={
+                            log.change_type === "price_update" ? "text-primary border-primary/30" :
+                            log.change_type === "stock_update" ? "text-warning border-warning/30" :
+                            "text-muted-foreground"
+                          }>
+                            {log.change_type === "price_update" ? "Pris" :
+                             log.change_type === "stock_update" ? "Lager" :
+                             log.change_type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{log.field_name}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{log.old_value ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-xs text-foreground">{log.new_value ?? "—"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{log.source}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
