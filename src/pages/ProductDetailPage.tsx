@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -22,6 +23,13 @@ export default function ProductDetailPage() {
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [markupInput, setMarkupInput] = useState<string | null>(null);
+  const [pushing, setPushing] = useState(false);
+  const [pushPrice, setPushPrice] = useState<string>("");
+  const [pushSalePrice, setPushSalePrice] = useState<string>("");
+  const [pushStockQty, setPushStockQty] = useState<string>("");
+  const [pushStockStatus, setPushStockStatus] = useState<string>("");
+  const [pushBackorders, setPushBackorders] = useState<string>("");
+  const [pushInitialized, setPushInitialized] = useState(false);
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
@@ -61,6 +69,56 @@ export default function ProductDetailPage() {
       setSaving(false);
     }
   };
+
+  // Initialize push fields when product loads and tab is first opened
+  const initPushFields = () => {
+    if (pushInitialized || !product) return;
+    const recPrice = cheapestPriceForInit
+      ? getRecommendedPriceInclVat(cheapestPriceForInit, product.custom_markup_percentage ?? globalMarkup)
+      : product.webshop_price;
+    setPushPrice(recPrice?.toString() ?? product.webshop_price?.toString() ?? "");
+    setPushSalePrice(product.sale_price?.toString() ?? "");
+    setPushStockQty(product.stock_quantity?.toString() ?? "0");
+    setPushStockStatus(product.stock_status ?? "instock");
+    setPushBackorders(product.backorders_allowed ? "yes" : "no");
+    setPushInitialized(true);
+  };
+
+  const pushToShop = async () => {
+    if (!product) return;
+    setPushing(true);
+    try {
+      const payload: Record<string, any> = {
+        master_product_id: product.id,
+      };
+      if (pushPrice) payload.regular_price = parseFloat(pushPrice);
+      payload.sale_price = pushSalePrice ? parseFloat(pushSalePrice) : null;
+      if (pushStockQty) payload.stock_quantity = parseInt(pushStockQty, 10);
+      if (pushStockStatus) payload.stock_status = pushStockStatus;
+      if (pushBackorders) payload.backorders = pushBackorders;
+
+      const { data, error } = await supabase.functions.invoke("wc-update-product", {
+        body: payload,
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(`Produktet er opdateret i webshoppen (${data.updated_fields?.length ?? 0} felter)`);
+      queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+    } catch (err: any) {
+      toast.error(err?.message || "Fejl ved opdatering af webshop");
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  // Pre-compute cheapest for init (before early returns)
+  const cheapestPriceForInit = (() => {
+    if (!product) return null;
+    const c = getCheapestSupplier(product.supplier_products);
+    return c?.purchase_price ?? null;
+  })();
 
   if (isLoading) {
     return (
@@ -174,6 +232,7 @@ export default function ProductDetailPage() {
           <TabsTrigger value="attributes">Attributter</TabsTrigger>
           <TabsTrigger value="pricing">Avance</TabsTrigger>
           <TabsTrigger value="suppliers">Leverandører</TabsTrigger>
+          <TabsTrigger value="push" onClick={initPushFields}>Opdater shop</TabsTrigger>
         </TabsList>
 
         <TabsContent value="details" className="space-y-4 mt-4">
@@ -400,6 +459,144 @@ export default function ProductDetailPage() {
                   </TableBody>
                 </Table>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="push" className="space-y-4 mt-4">
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium">Godkend & opdater webshop</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Justér værdierne nedenfor og tryk "Opdater shop" for at pushe ændringerne til WooCommerce. Intet sker automatisk.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Price section */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-foreground">Priser (inkl. moms)</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+                  <div className="space-y-2">
+                    <Label>Normalpris (inkl. moms)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={pushPrice}
+                      onChange={(e) => setPushPrice(e.target.value)}
+                    />
+                    {pushPrice && (
+                      <p className="text-xs text-muted-foreground">
+                        Ex. moms: {formatPrice(exVat(parseFloat(pushPrice)))}
+                        {cheapestPrice !== null && (
+                          <> · Avance: {getMarginPercent(exVat(parseFloat(pushPrice)), cheapestPrice).toFixed(1)}%</>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tilbudspris (inkl. moms)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={pushSalePrice}
+                      onChange={(e) => setPushSalePrice(e.target.value)}
+                      placeholder="Lad tom = ingen tilbud"
+                    />
+                    {pushSalePrice && cheapestPrice !== null && (
+                      <p className="text-xs text-muted-foreground">
+                        Ex. moms: {formatPrice(exVat(parseFloat(pushSalePrice)))}
+                        · Avance: {getMarginPercent(exVat(parseFloat(pushSalePrice)), cheapestPrice).toFixed(1)}%
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {recommendedPriceInclVat && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-primary border-primary/30">
+                      Anbefalet: {formatPrice(recommendedPriceInclVat)} inkl. moms
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPushPrice(recommendedPriceInclVat.toString())}
+                    >
+                      Brug anbefalet
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Stock section */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-foreground">Lagerstyring</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-xl">
+                  <div className="space-y-2">
+                    <Label>Lagerantal</Label>
+                    <Input
+                      type="number"
+                      value={pushStockQty}
+                      onChange={(e) => setPushStockQty(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Lagerstatus</Label>
+                    <Select value={pushStockStatus} onValueChange={setPushStockStatus}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="instock">På lager</SelectItem>
+                        <SelectItem value="outofstock">Udsolgt</SelectItem>
+                        <SelectItem value="onbackorder">Restordre</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Restordre</Label>
+                    <Select value={pushBackorders} onValueChange={setPushBackorders}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="no">Nej</SelectItem>
+                        <SelectItem value="yes">Ja</SelectItem>
+                        <SelectItem value="notify">Ja, med besked</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Current vs new comparison */}
+              <div className="rounded-md border border-border bg-secondary/30 p-4">
+                <h4 className="text-sm font-medium text-foreground mb-2">Sammenligning</h4>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="text-muted-foreground">Felt</div>
+                  <div className="text-muted-foreground">Nuværende</div>
+                  <div className="text-muted-foreground">Ny værdi</div>
+
+                  <div>Normalpris</div>
+                  <div className="font-mono">{formatPrice(product.webshop_price)}</div>
+                  <div className="font-mono text-primary">{pushPrice ? formatPrice(parseFloat(pushPrice)) : "—"}</div>
+
+                  <div>Tilbudspris</div>
+                  <div className="font-mono">{formatPrice(product.sale_price)}</div>
+                  <div className="font-mono text-warning">{pushSalePrice ? formatPrice(parseFloat(pushSalePrice)) : "Ingen"}</div>
+
+                  <div>Lagerantal</div>
+                  <div className="font-mono">{product.stock_quantity ?? "—"}</div>
+                  <div className="font-mono">{pushStockQty || "—"}</div>
+
+                  <div>Lagerstatus</div>
+                  <div>{product.stock_status}</div>
+                  <div>{pushStockStatus}</div>
+                </div>
+              </div>
+
+              <Button onClick={pushToShop} disabled={pushing} size="lg" className="gap-2">
+                {pushing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Opdater shop
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

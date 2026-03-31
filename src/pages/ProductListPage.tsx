@@ -190,7 +190,8 @@ export default function ProductListPage() {
               <TableHead>EAN</TableHead>
               <TableHead>SKU</TableHead>
               <TableHead>Brand</TableHead>
-              <TableHead className="text-right">Lager</TableHead>
+              <TableHead className="text-right">Eget lager</TableHead>
+              <TableHead className="text-right">Lev. lager</TableHead>
               <TableHead className="text-right">Indkøb (ex. moms)</TableHead>
               <TableHead className="text-right">Webshop (inkl. moms)</TableHead>
               <TableHead className="text-right">Tilbud (inkl. moms)</TableHead>
@@ -202,13 +203,13 @@ export default function ProductListPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                   Indlæser...
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                   <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
                   Ingen produkter fundet
                 </TableCell>
@@ -248,6 +249,11 @@ export default function ProductListPage() {
                     <TableCell className="text-muted-foreground">{product.brand ?? "—"}</TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">
                       {product.stock_quantity ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">
+                      {product.supplier_products.length > 0
+                        ? product.supplier_products.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0) || "—"
+                        : "—"}
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {cheapestPrice !== null ? (
