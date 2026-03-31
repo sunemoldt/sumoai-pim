@@ -90,6 +90,13 @@ export default function ProductListPage() {
       if (sortField === "title") return dir * a.title.localeCompare(b.title, "da");
       if (sortField === "stock_quantity") return dir * ((a.stock_quantity ?? 0) - (b.stock_quantity ?? 0));
       if (sortField === "updated_at") return dir * (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime());
+      if (sortField === "recommended") {
+        const cA = getCheapestSupplier(a.supplier_products);
+        const cB = getCheapestSupplier(b.supplier_products);
+        const rA = cA ? getRecommendedPriceInclVat(cA.purchase_price, a.custom_markup_percentage ?? globalMarkup) : 0;
+        const rB = cB ? getRecommendedPriceInclVat(cB.purchase_price, b.custom_markup_percentage ?? globalMarkup) : 0;
+        return dir * (rA - rB);
+      }
       return 0;
     });
   }, [filtered, sortField, sortDir]);
