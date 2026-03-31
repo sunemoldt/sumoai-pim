@@ -26,6 +26,17 @@ export default function SupplierListPage() {
     manual: "Manuel",
   };
 
+  const scheduleLabels: Record<string, string> = {
+    "manual": "Manuel",
+    "0 * * * *": "Hver time",
+    "0 */2 * * *": "Hver 2. time",
+    "0 */4 * * *": "Hver 4. time",
+    "0 */6 * * *": "Hver 6. time",
+    "0 */12 * * *": "Hver 12. time",
+    "0 6 * * *": "Dagligt kl. 06:00",
+    "0 6 * * 1": "Ugentligt (mandag)",
+  };
+
   const handleSync = async (supplier: Supplier) => {
     setSyncing(supplier.id);
     try {
@@ -65,6 +76,7 @@ export default function SupplierListPage() {
                 <TableHead>Navn</TableHead>
                 <TableHead>Feed type</TableHead>
                 <TableHead>Feed URL / Fil</TableHead>
+                <TableHead>Frekvens</TableHead>
                 <TableHead>Sidst synkroniseret</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Handlinger</TableHead>
@@ -73,11 +85,11 @@ export default function SupplierListPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Indlæser...</TableCell>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Indlæser...</TableCell>
                 </TableRow>
               ) : suppliers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     <Truck className="mx-auto h-8 w-8 mb-2 opacity-40" />
                     Ingen leverandører konfigureret endnu
                   </TableCell>
@@ -91,6 +103,11 @@ export default function SupplierListPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs font-mono max-w-[200px] truncate">
                       {s.feed_url ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {scheduleLabels[s.feed_schedule ?? "manual"] ?? s.feed_schedule ?? "Manuel"}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
                       {s.last_sync_at ? new Date(s.last_sync_at).toLocaleString("da-DK") : "Aldrig"}

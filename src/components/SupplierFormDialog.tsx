@@ -25,6 +25,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
   const [name, setName] = useState("");
   const [feedType, setFeedType] = useState("csv");
   const [feedUrl, setFeedUrl] = useState("");
+  const [feedSchedule, setFeedSchedule] = useState("manual");
   const [isActive, setIsActive] = useState(true);
 
   useEffect(() => {
@@ -32,11 +33,13 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setName(supplier.name);
       setFeedType(supplier.feed_type);
       setFeedUrl(supplier.feed_url ?? "");
+      setFeedSchedule(supplier.feed_schedule ?? "manual");
       setIsActive(supplier.is_active);
     } else {
       setName("");
       setFeedType("csv");
       setFeedUrl("");
+      setFeedSchedule("manual");
       setIsActive(true);
     }
   }, [supplier, open]);
@@ -71,6 +74,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
         name: name.trim(),
         feed_type: feedType,
         feed_url: feedUrl.trim() || null,
+        feed_schedule: feedSchedule,
         is_active: isActive,
       };
 
@@ -135,6 +139,25 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
                 </Button>
                 <input type="file" accept=".csv,.xml,.xlsx,.xls,.txt" className="hidden" onChange={handleFileUpload} />
               </label>
+            </div>
+          )}
+
+          {feedType !== "manual" && (
+            <div className="space-y-2">
+              <Label>Synkroniseringsfrekvens</Label>
+              <Select value={feedSchedule} onValueChange={setFeedSchedule}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manuel (ingen automatisk)</SelectItem>
+                  <SelectItem value="0 * * * *">Hver time</SelectItem>
+                  <SelectItem value="0 */2 * * *">Hver 2. time</SelectItem>
+                  <SelectItem value="0 */4 * * *">Hver 4. time</SelectItem>
+                  <SelectItem value="0 */6 * * *">Hver 6. time</SelectItem>
+                  <SelectItem value="0 */12 * * *">Hver 12. time</SelectItem>
+                  <SelectItem value="0 6 * * *">Dagligt kl. 06:00</SelectItem>
+                  <SelectItem value="0 6 * * 1">Ugentligt (mandag kl. 06:00)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           )}
 
