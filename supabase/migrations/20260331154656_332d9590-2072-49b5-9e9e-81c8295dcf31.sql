@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS supplier_products_supplier_master_unique ON public.supplier_products (supplier_id, master_product_id);
