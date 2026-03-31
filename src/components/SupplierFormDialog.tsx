@@ -74,6 +74,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
         name: name.trim(),
         feed_type: feedType,
         feed_url: feedUrl.trim() || null,
+        feed_schedule: feedSchedule,
         is_active: isActive,
       };
 
