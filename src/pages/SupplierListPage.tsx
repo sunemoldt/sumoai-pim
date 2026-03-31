@@ -85,11 +85,11 @@ export default function SupplierListPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Indlæser...</TableCell>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Indlæser...</TableCell>
                 </TableRow>
               ) : suppliers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     <Truck className="mx-auto h-8 w-8 mb-2 opacity-40" />
                     Ingen leverandører konfigureret endnu
                   </TableCell>
