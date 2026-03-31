@@ -78,8 +78,12 @@ export default function ProductDetailPage() {
       : product.webshop_price;
     setPushPrice(recPrice?.toString() ?? product.webshop_price?.toString() ?? "");
     setPushSalePrice(product.sale_price?.toString() ?? "");
-    setPushStockQty(product.stock_quantity?.toString() ?? "0");
-    setPushStockStatus(product.stock_status ?? "instock");
+    // Suggest supplier stock total as stock quantity
+    const supplierStockTotal = product.supplier_products.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
+    setPushStockQty(supplierStockTotal > 0 ? supplierStockTotal.toString() : (product.stock_quantity?.toString() ?? "0"));
+    // Set status based on supplier stock
+    const hasSupplierStock = product.supplier_products.some(sp => sp.in_stock);
+    setPushStockStatus(hasSupplierStock ? "instock" : (product.stock_status ?? "outofstock"));
     setPushBackorders(product.backorders_allowed ? "yes" : "no");
     setPushInitialized(true);
   };
