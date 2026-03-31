@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
     }
 
     for (const v of variations) {
-      const ean = v.sku || `wc-${v._parent_id}-${v.id}`;
+      const ean = extractEan(v.meta_data, v.sku, `wc-${v._parent_id}-${v.id}`);
       const attrStr = v.attributes?.map((a: any) => a.option).join(" / ") || "";
       const varAttrs: Record<string, string> = {};
       if (v.attributes) {
