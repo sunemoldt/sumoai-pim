@@ -19,9 +19,11 @@ export type Database = {
           brand: string | null
           category: string | null
           created_at: string
+          custom_markup_percentage: number | null
           ean: string
           id: string
           image_url: string | null
+          sale_price: number | null
           title: string
           updated_at: string
           webshop_platform: string | null
@@ -32,9 +34,11 @@ export type Database = {
           brand?: string | null
           category?: string | null
           created_at?: string
+          custom_markup_percentage?: number | null
           ean: string
           id?: string
           image_url?: string | null
+          sale_price?: number | null
           title: string
           updated_at?: string
           webshop_platform?: string | null
@@ -45,9 +49,11 @@ export type Database = {
           brand?: string | null
           category?: string | null
           created_at?: string
+          custom_markup_percentage?: number | null
           ean?: string
           id?: string
           image_url?: string | null
+          sale_price?: number | null
           title?: string
           updated_at?: string
           webshop_platform?: string | null

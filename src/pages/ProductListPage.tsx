@@ -48,6 +48,7 @@ export default function ProductListPage() {
               <TableHead>Brand</TableHead>
               <TableHead className="text-right">Billigste indkøb</TableHead>
               <TableHead className="text-right">Webshop pris</TableHead>
+              <TableHead className="text-right">Tilbudspris</TableHead>
               <TableHead className="text-right">Anbefalet pris</TableHead>
               <TableHead className="text-right">Avance</TableHead>
               <TableHead>Status</TableHead>
@@ -56,13 +57,13 @@ export default function ProductListPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   Indlæser...
                 </TableCell>
               </TableRow>
             ) : products.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
                   Ingen produkter fundet
                 </TableCell>
@@ -71,10 +72,11 @@ export default function ProductListPage() {
               products.map((product) => {
                 const cheapest = getCheapestSupplier(product.supplier_products);
                 const cheapestPrice = cheapest?.purchase_price ?? null;
-                const recommendedPrice = cheapestPrice ? getRecommendedPrice(cheapestPrice, globalMarkup) : null;
+                const recommendedPrice = cheapestPrice ? getRecommendedPrice(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
+                const activePrice = product.sale_price ?? product.webshop_price;
                 const margin =
-                  product.webshop_price && cheapestPrice
-                    ? getMarginPercent(product.webshop_price, cheapestPrice)
+                  activePrice && cheapestPrice
+                    ? getMarginPercent(activePrice, cheapestPrice)
                     : null;
                 const allOutOfStock =
                   product.supplier_products.length > 0 && product.supplier_products.every((sp) => !sp.in_stock);
@@ -110,6 +112,11 @@ export default function ProductListPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-foreground">{formatPrice(product.webshop_price)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {product.sale_price ? (
+                        <span className="text-warning">{formatPrice(product.sale_price)}</span>
+                      ) : "—"}
+                    </TableCell>
                     <TableCell className="text-right font-mono text-primary">{formatPrice(recommendedPrice)}</TableCell>
                     <TableCell className="text-right">
                       {margin !== null ? (
