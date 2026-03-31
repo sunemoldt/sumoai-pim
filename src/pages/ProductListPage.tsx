@@ -131,7 +131,7 @@ export default function ProductListPage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Produkter</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Master produktliste – {filtered.length} af {products.length} produkter
+            Master produktliste – {sorted.length} af {products.length} produkter
           </p>
         </div>
       </div>
