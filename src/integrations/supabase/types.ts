@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      import_logs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          deduplicated: number | null
+          ean_snapshot: Json | null
+          errors: Json | null
+          id: string
+          imported: number | null
+          skipped: number | null
+          source: string
+          started_at: string
+          status: string
+          total_fetched: number | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          deduplicated?: number | null
+          ean_snapshot?: Json | null
+          errors?: Json | null
+          id?: string
+          imported?: number | null
+          skipped?: number | null
+          source: string
+          started_at?: string
+          status?: string
+          total_fetched?: number | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          deduplicated?: number | null
+          ean_snapshot?: Json | null
+          errors?: Json | null
+          id?: string
+          imported?: number | null
+          skipped?: number | null
+          source?: string
+          started_at?: string
+          status?: string
+          total_fetched?: number | null
+        }
+        Relationships: []
+      }
       master_products: {
         Row: {
           attributes: Json | null
