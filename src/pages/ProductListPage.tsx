@@ -48,6 +48,7 @@ export default function ProductListPage() {
               <TableHead>Brand</TableHead>
               <TableHead className="text-right">Billigste indkøb</TableHead>
               <TableHead className="text-right">Webshop pris</TableHead>
+              <TableHead className="text-right">Tilbudspris</TableHead>
               <TableHead className="text-right">Anbefalet pris</TableHead>
               <TableHead className="text-right">Avance</TableHead>
               <TableHead>Status</TableHead>
