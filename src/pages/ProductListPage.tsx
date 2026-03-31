@@ -13,7 +13,7 @@ type StockFilter = "all" | "instock" | "outofstock" | "backorder";
 type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
-type SortField = "title" | "stock_quantity" | "updated_at";
+type SortField = "title" | "stock_quantity" | "updated_at" | "recommended";
 type SortDir = "asc" | "desc";
 
 export default function ProductListPage() {
@@ -90,9 +90,16 @@ export default function ProductListPage() {
       if (sortField === "title") return dir * a.title.localeCompare(b.title, "da");
       if (sortField === "stock_quantity") return dir * ((a.stock_quantity ?? 0) - (b.stock_quantity ?? 0));
       if (sortField === "updated_at") return dir * (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime());
+      if (sortField === "recommended") {
+        const cA = getCheapestSupplier(a.supplier_products);
+        const cB = getCheapestSupplier(b.supplier_products);
+        const rA = cA ? getRecommendedPriceInclVat(cA.purchase_price, a.custom_markup_percentage ?? globalMarkup) : 0;
+        const rB = cB ? getRecommendedPriceInclVat(cB.purchase_price, b.custom_markup_percentage ?? globalMarkup) : 0;
+        return dir * (rA - rB);
+      }
       return 0;
     });
-  }, [filtered, sortField, sortDir]);
+  }, [filtered, sortField, sortDir, globalMarkup]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -264,7 +271,9 @@ export default function ProductListPage() {
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Indkøb</th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Webshop</th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Tilbud</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Anbefalet</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("recommended")}>
+                <span className="inline-flex items-center justify-end">Anbefalet<SortIcon field="recommended" /></span>
+              </th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
