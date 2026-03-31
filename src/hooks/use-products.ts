@@ -2,7 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 
-export type MasterProduct = Tables<"master_products">;
+export type MasterProduct = Tables<"master_products"> & {
+  sale_price?: number | null;
+  custom_markup_percentage?: number | null;
+};
 export type Supplier = Tables<"suppliers">;
 export type SupplierProduct = Tables<"supplier_products">;
 export type PriceSetting = Tables<"price_settings">;
