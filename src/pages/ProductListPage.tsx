@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useMasterProducts, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat } from "@/hooks/use-products";
+import { useMasterProducts, useSuppliers, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat } from "@/hooks/use-products";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -7,15 +7,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Package, Filter, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 type StockFilter = "all" | "instock" | "outofstock" | "backorder";
 type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
+type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
 
 export default function ProductListPage() {
   const [search, setSearch] = useState("");
   const { data: products = [], isLoading } = useMasterProducts(search || undefined);
   const { data: priceSettings = [] } = usePriceSettings();
+  const { data: suppliers = [] } = useSuppliers();
   const navigate = useNavigate();
 
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
@@ -23,6 +26,8 @@ export default function ProductListPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [marginFilter, setMarginFilter] = useState<MarginFilter>("all");
   const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
+  const [supplierFilter, setSupplierFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
@@ -38,23 +43,29 @@ export default function ProductListPage() {
 
   const filtered = useMemo(() => {
     return products.filter((product) => {
-      // Stock filter
       if (stockFilter === "instock" && product.stock_status !== "instock") return false;
       if (stockFilter === "outofstock" && product.stock_status !== "outofstock") return false;
       if (stockFilter === "backorder" && !product.backorders_allowed) return false;
-
-      // Brand filter
       if (brandFilter !== "all" && product.brand !== brandFilter) return false;
-
-      // Category filter
       if (categoryFilter !== "all" && product.category !== categoryFilter) return false;
-
-      // Price filter
       if (priceFilter === "has_price" && !product.webshop_price) return false;
       if (priceFilter === "no_price" && product.webshop_price) return false;
       if (priceFilter === "on_sale" && !product.sale_price) return false;
 
-      // Margin filter
+      // Supplier filter
+      if (supplierFilter !== "all") {
+        const hasSupplier = product.supplier_products.some((sp) => sp.supplier_id === supplierFilter);
+        if (!hasSupplier) return false;
+      }
+
+      // Status filter (supplier stock status badge)
+      if (statusFilter !== "all") {
+        const allOut = product.supplier_products.length > 0 && product.supplier_products.every((sp) => !sp.in_stock);
+        if (statusFilter === "on_stock" && (product.supplier_products.length === 0 || allOut)) return false;
+        if (statusFilter === "out_of_stock" && !allOut) return false;
+        if (statusFilter === "no_data" && product.supplier_products.length > 0) return false;
+      }
+
       if (marginFilter !== "all") {
         const cheapest = getCheapestSupplier(product.supplier_products);
         const activePrice = product.sale_price ?? product.webshop_price;
@@ -67,9 +78,9 @@ export default function ProductListPage() {
 
       return true;
     });
-  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter]);
+  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter]);
 
-  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter].filter((f) => f !== "all").length;
+  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter].filter((f) => f !== "all").length;
 
   const clearFilters = () => {
     setStockFilter("all");
@@ -77,6 +88,8 @@ export default function ProductListPage() {
     setCategoryFilter("all");
     setMarginFilter("all");
     setPriceFilter("all");
+    setSupplierFilter("all");
+    setStatusFilter("all");
   };
 
   const formatPrice = (price: number | null) => {
@@ -172,6 +185,30 @@ export default function ProductListPage() {
             </SelectContent>
           </Select>
 
+          <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+            <SelectTrigger className="w-[170px] h-9 text-sm">
+              <SelectValue placeholder="Leverandør" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle leverandører</SelectItem>
+              {suppliers.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+            <SelectTrigger className="w-[150px] h-9 text-sm">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle statusser</SelectItem>
+              <SelectItem value="on_stock">På lager</SelectItem>
+              <SelectItem value="out_of_stock">Udsolgt</SelectItem>
+              <SelectItem value="no_data">Ingen data</SelectItem>
+            </SelectContent>
+          </Select>
+
           {activeFilterCount > 0 && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-sm gap-1">
               <X className="h-3.5 w-3.5" />
@@ -182,6 +219,8 @@ export default function ProductListPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+        <ScrollArea className="w-full" type="auto">
+        <div className="min-w-[1200px]">
         <Table>
           <TableHeader>
             <TableRow className="bg-secondary/50">
@@ -317,6 +356,9 @@ export default function ProductListPage() {
             )}
           </TableBody>
         </Table>
+        </div>
+        <ScrollBar orientation="horizontal" />
+        </ScrollArea>
       </div>
     </div>
   );
