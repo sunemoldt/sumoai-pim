@@ -62,6 +62,7 @@ export type Database = {
       master_products: {
         Row: {
           attributes: Json | null
+          backorders_allowed: boolean | null
           brand: string | null
           category: string | null
           created_at: string
@@ -75,6 +76,8 @@ export type Database = {
           sale_price: number | null
           short_description: string | null
           sku: string | null
+          stock_quantity: number | null
+          stock_status: string | null
           title: string
           updated_at: string
           webshop_platform: string | null
@@ -83,6 +86,7 @@ export type Database = {
         }
         Insert: {
           attributes?: Json | null
+          backorders_allowed?: boolean | null
           brand?: string | null
           category?: string | null
           created_at?: string
@@ -96,6 +100,8 @@ export type Database = {
           sale_price?: number | null
           short_description?: string | null
           sku?: string | null
+          stock_quantity?: number | null
+          stock_status?: string | null
           title: string
           updated_at?: string
           webshop_platform?: string | null
@@ -104,6 +110,7 @@ export type Database = {
         }
         Update: {
           attributes?: Json | null
+          backorders_allowed?: boolean | null
           brand?: string | null
           category?: string | null
           created_at?: string
@@ -117,6 +124,8 @@ export type Database = {
           sale_price?: number | null
           short_description?: string | null
           sku?: string | null
+          stock_quantity?: number | null
+          stock_status?: string | null
           title?: string
           updated_at?: string
           webshop_platform?: string | null
