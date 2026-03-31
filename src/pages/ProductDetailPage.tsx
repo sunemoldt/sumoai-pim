@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useMasterProduct, getCheapestSupplier, getMarginPercent, getRecommendedPrice, usePriceSettings } from "@/hooks/use-products";
+import { useMasterProduct, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat } from "@/hooks/use-products";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -82,10 +82,12 @@ export default function ProductDetailPage() {
 
   const cheapest = getCheapestSupplier(product.supplier_products);
   const cheapestPrice = cheapest?.purchase_price ?? null;
-  const recommendedPrice = cheapestPrice ? getRecommendedPrice(cheapestPrice, effectiveMarkup) : null;
+  const recommendedPriceExVat = cheapestPrice ? getRecommendedPrice(cheapestPrice, effectiveMarkup) : null;
+  const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, effectiveMarkup) : null;
   const currentPrice = product.sale_price ?? product.webshop_price;
-  const margin = currentPrice && cheapestPrice ? getMarginPercent(currentPrice, cheapestPrice) : null;
-  const priceDiff = currentPrice && recommendedPrice ? currentPrice - recommendedPrice : null;
+  const currentPriceExVat = currentPrice ? exVat(currentPrice) : null;
+  const margin = currentPriceExVat && cheapestPrice ? getMarginPercent(currentPriceExVat, cheapestPrice) : null;
+  const priceDiff = currentPrice && recommendedPriceInclVat ? currentPrice - recommendedPriceInclVat : null;
 
   const attributes = (product as any).attributes as Record<string, string> | null | undefined;
 
@@ -110,14 +112,17 @@ export default function ProductDetailPage() {
           <CardContent className="p-5">
             <p className="text-sm text-muted-foreground">Billigste indkøbspris</p>
             <p className="text-2xl font-semibold text-foreground mt-1">{formatPrice(cheapestPrice)}</p>
-            {cheapest?.suppliers && <p className="text-xs text-muted-foreground mt-0.5">{cheapest.suppliers.name}</p>}
+            <p className="text-xs text-muted-foreground mt-0.5">ex. moms</p>
+            {cheapest?.suppliers && <p className="text-xs text-muted-foreground">{cheapest.suppliers.name}</p>}
           </CardContent>
         </Card>
         <Card className="shadow-sm">
           <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Normal salgspris</p>
+            <p className="text-sm text-muted-foreground">Webshop pris</p>
             <p className="text-2xl font-semibold text-foreground mt-1">{formatPrice(product.webshop_price)}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{product.webshop_platform}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              inkl. moms · ex. {formatPrice(product.webshop_price ? exVat(product.webshop_price) : null)}
+            </p>
           </CardContent>
         </Card>
         <Card className="shadow-sm">
@@ -126,17 +131,20 @@ export default function ProductDetailPage() {
             <p className={`text-2xl font-semibold mt-1 ${product.sale_price ? "text-warning" : "text-muted-foreground"}`}>
               {formatPrice(product.sale_price)}
             </p>
-            {product.sale_price && product.webshop_price && (
+            {product.sale_price && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                -{Math.round(((product.webshop_price - product.sale_price) / product.webshop_price) * 100)}% rabat
+                inkl. moms · ex. {formatPrice(exVat(product.sale_price))}
               </p>
             )}
           </CardContent>
         </Card>
         <Card className="shadow-sm">
           <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Anbefalet salgspris</p>
-            <p className="text-2xl font-semibold text-primary mt-1">{formatPrice(recommendedPrice)}</p>
+            <p className="text-sm text-muted-foreground">Anbefalet pris</p>
+            <p className="text-2xl font-semibold text-primary mt-1">{formatPrice(recommendedPriceInclVat)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              inkl. moms · ex. {formatPrice(recommendedPriceExVat)}
+            </p>
             {priceDiff !== null && (
               <p className={`text-xs mt-0.5 ${priceDiff > 0 ? "text-success" : priceDiff < 0 ? "text-destructive" : "text-muted-foreground"}`}>
                 {priceDiff > 0 ? "+" : ""}{formatPrice(priceDiff)} vs. anbefalet
@@ -146,7 +154,7 @@ export default function ProductDetailPage() {
         </Card>
         <Card className="shadow-sm">
           <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Aktuel avance</p>
+            <p className="text-sm text-muted-foreground">Avance (ex. moms)</p>
             <p className={`text-2xl font-semibold mt-1 ${
               margin !== null ? (margin < 10 ? "text-destructive" : margin < 20 ? "text-warning" : "text-success") : "text-foreground"
             }`}>

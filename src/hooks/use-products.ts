@@ -116,13 +116,31 @@ export function getCheapestSupplier(
   return inStock.reduce((min, sp) => (sp.purchase_price < min.purchase_price ? sp : min));
 }
 
-// Utility: calculate recommended price
+// Danish VAT rate
+export const VAT_RATE = 0.25;
+
+// Utility: remove VAT from an incl-VAT price
+export function exVat(priceInclVat: number): number {
+  return Math.round((priceInclVat / (1 + VAT_RATE)) * 100) / 100;
+}
+
+// Utility: add VAT to an ex-VAT price
+export function inclVat(priceExVat: number): number {
+  return Math.round(priceExVat * (1 + VAT_RATE) * 100) / 100;
+}
+
+// Utility: calculate recommended price (ex-VAT → ex-VAT, then add VAT for shop price)
 export function getRecommendedPrice(purchasePrice: number, markupPct: number): number {
   return Math.round(purchasePrice * (1 + markupPct / 100) * 100) / 100;
 }
 
-// Utility: calculate margin percentage
-export function getMarginPercent(salePrice: number, purchasePrice: number): number {
-  if (salePrice === 0) return 0;
-  return Math.round(((salePrice - purchasePrice) / salePrice) * 10000) / 100;
+// Utility: recommended price incl VAT (for display as webshop price)
+export function getRecommendedPriceInclVat(purchasePrice: number, markupPct: number): number {
+  return inclVat(getRecommendedPrice(purchasePrice, markupPct));
+}
+
+// Utility: calculate margin percentage (both prices must be ex-VAT)
+export function getMarginPercent(salePriceExVat: number, purchasePriceExVat: number): number {
+  if (salePriceExVat === 0) return 0;
+  return Math.round(((salePriceExVat - purchasePriceExVat) / salePriceExVat) * 10000) / 100;
 }

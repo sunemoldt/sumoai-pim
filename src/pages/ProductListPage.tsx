@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useMasterProducts, getCheapestSupplier, getMarginPercent, getRecommendedPrice, usePriceSettings } from "@/hooks/use-products";
+import { useMasterProducts, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat } from "@/hooks/use-products";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -58,8 +58,8 @@ export default function ProductListPage() {
       if (marginFilter !== "all") {
         const cheapest = getCheapestSupplier(product.supplier_products);
         const activePrice = product.sale_price ?? product.webshop_price;
-        if (!activePrice || !cheapest) return marginFilter === "low" ? false : false;
-        const margin = getMarginPercent(activePrice, cheapest.purchase_price);
+        if (!activePrice || !cheapest) return false;
+        const margin = getMarginPercent(exVat(activePrice), cheapest.purchase_price);
         if (marginFilter === "low" && margin >= 10) return false;
         if (marginFilter === "medium" && (margin < 10 || margin >= 20)) return false;
         if (marginFilter === "good" && margin < 20) return false;
@@ -191,11 +191,11 @@ export default function ProductListPage() {
               <TableHead>SKU</TableHead>
               <TableHead>Brand</TableHead>
               <TableHead className="text-right">Lager</TableHead>
-              <TableHead className="text-right">Billigste indkøb</TableHead>
-              <TableHead className="text-right">Webshop pris</TableHead>
-              <TableHead className="text-right">Tilbudspris</TableHead>
-              <TableHead className="text-right">Anbefalet pris</TableHead>
-              <TableHead className="text-right">Avance</TableHead>
+              <TableHead className="text-right">Indkøb (ex. moms)</TableHead>
+              <TableHead className="text-right">Webshop (inkl. moms)</TableHead>
+              <TableHead className="text-right">Tilbud (inkl. moms)</TableHead>
+              <TableHead className="text-right">Anbefalet (inkl.)</TableHead>
+              <TableHead className="text-right">Avance (ex.)</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -217,11 +217,12 @@ export default function ProductListPage() {
               filtered.map((product) => {
                 const cheapest = getCheapestSupplier(product.supplier_products);
                 const cheapestPrice = cheapest?.purchase_price ?? null;
-                const recommendedPrice = cheapestPrice ? getRecommendedPrice(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
+                const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
                 const activePrice = product.sale_price ?? product.webshop_price;
+                const activePriceExVat = activePrice ? exVat(activePrice) : null;
                 const margin =
-                  activePrice && cheapestPrice
-                    ? getMarginPercent(activePrice, cheapestPrice)
+                  activePriceExVat && cheapestPrice
+                    ? getMarginPercent(activePriceExVat, cheapestPrice)
                     : null;
                 const allOutOfStock =
                   product.supplier_products.length > 0 && product.supplier_products.every((sp) => !sp.in_stock);
@@ -260,13 +261,23 @@ export default function ProductListPage() {
                         "—"
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-foreground">{formatPrice(product.webshop_price)}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {product.sale_price ? (
-                        <span className="text-warning">{formatPrice(product.sale_price)}</span>
+                    <TableCell className="text-right font-mono text-foreground">
+                      {product.webshop_price ? (
+                        <div>
+                          <span>{formatPrice(product.webshop_price)}</span>
+                          <p className="text-xs text-muted-foreground">ex. {formatPrice(exVat(product.webshop_price))}</p>
+                        </div>
                       ) : "—"}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-primary">{formatPrice(recommendedPrice)}</TableCell>
+                    <TableCell className="text-right font-mono">
+                      {product.sale_price ? (
+                        <div>
+                          <span className="text-warning">{formatPrice(product.sale_price)}</span>
+                          <p className="text-xs text-muted-foreground">ex. {formatPrice(exVat(product.sale_price))}</p>
+                        </div>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-primary">{formatPrice(recommendedPriceInclVat)}</TableCell>
                     <TableCell className="text-right">
                       {margin !== null ? (
                         <Badge
