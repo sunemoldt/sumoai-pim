@@ -26,6 +26,17 @@ export default function SupplierListPage() {
     manual: "Manuel",
   };
 
+  const scheduleLabels: Record<string, string> = {
+    "manual": "Manuel",
+    "0 * * * *": "Hver time",
+    "0 */2 * * *": "Hver 2. time",
+    "0 */4 * * *": "Hver 4. time",
+    "0 */6 * * *": "Hver 6. time",
+    "0 */12 * * *": "Hver 12. time",
+    "0 6 * * *": "Dagligt kl. 06:00",
+    "0 6 * * 1": "Ugentligt (mandag)",
+  };
+
   const handleSync = async (supplier: Supplier) => {
     setSyncing(supplier.id);
     try {
