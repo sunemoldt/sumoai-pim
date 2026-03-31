@@ -47,6 +47,7 @@ export default function ProductListPage() {
               <TableHead>EAN</TableHead>
               <TableHead>SKU</TableHead>
               <TableHead>Brand</TableHead>
+              <TableHead className="text-right">Lager</TableHead>
               <TableHead className="text-right">Billigste indkøb</TableHead>
               <TableHead className="text-right">Webshop pris</TableHead>
               <TableHead className="text-right">Tilbudspris</TableHead>
@@ -58,13 +59,13 @@ export default function ProductListPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
                   Indlæser...
                 </TableCell>
               </TableRow>
             ) : products.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
                   <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
                   Ingen produkter fundet
                 </TableCell>
@@ -101,6 +102,9 @@ export default function ProductListPage() {
                     <TableCell className="text-muted-foreground font-mono text-xs">{product.ean}</TableCell>
                     <TableCell className="text-muted-foreground font-mono text-xs">{(product as any).sku ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">{product.brand ?? "—"}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">
+                      {(product as any).stock_quantity ?? "—"}
+                    </TableCell>
                     <TableCell className="text-right font-mono">
                       {cheapestPrice !== null ? (
                         <div>

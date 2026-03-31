@@ -188,7 +188,7 @@ export default function ProductDetailPage() {
                   dangerouslySetInnerHTML={{ __html: (product as any).long_description || "<span class='text-muted-foreground'>Ingen lang beskrivelse</span>" }}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
                   <Label className="text-muted-foreground text-xs">Brand</Label>
                   <p className="text-sm text-foreground">{product.brand || "—"}</p>
@@ -204,6 +204,36 @@ export default function ProductDetailPage() {
                 <div>
                   <Label className="text-muted-foreground text-xs">EAN</Label>
                   <p className="text-sm font-mono text-foreground">{product.ean}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Lagerbeholdning</Label>
+                  <p className="text-sm font-mono text-foreground">
+                    {(product as any).stock_quantity !== null && (product as any).stock_quantity !== undefined
+                      ? (product as any).stock_quantity
+                      : "—"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Lagerstatus</Label>
+                  <p className="text-sm text-foreground">
+                    {(product as any).stock_status === "instock" ? (
+                      <Badge variant="outline" className="text-success border-success/30">På lager</Badge>
+                    ) : (product as any).stock_status === "onbackorder" ? (
+                      <Badge variant="outline" className="text-warning border-warning/30">Restordre</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-destructive border-destructive/30">Udsolgt</Badge>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Restordre tilladt</Label>
+                  <p className="text-sm text-foreground">
+                    {(product as any).backorders_allowed ? (
+                      <Badge variant="outline" className="text-success border-success/30">Ja</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">Nej</Badge>
+                    )}
+                  </p>
                 </div>
               </div>
             </CardContent>
