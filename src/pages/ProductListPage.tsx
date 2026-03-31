@@ -203,13 +203,13 @@ export default function ProductListPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                   Indlæser...
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                   <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
                   Ingen produkter fundet
                 </TableCell>
