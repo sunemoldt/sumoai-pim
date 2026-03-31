@@ -218,41 +218,39 @@ export default function ProductListPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
-        <ScrollArea className="w-full" type="auto">
-        <div className="min-w-[1200px]">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-secondary/50">
-              <TableHead className="w-12"></TableHead>
-              <TableHead>Produkt</TableHead>
-              <TableHead>EAN</TableHead>
-              <TableHead>SKU</TableHead>
-              <TableHead>Brand</TableHead>
-              <TableHead className="text-right">Eget lager</TableHead>
-              <TableHead className="text-right">Lev. lager</TableHead>
-              <TableHead className="text-right">Indkøb (ex. moms)</TableHead>
-              <TableHead className="text-right">Webshop (inkl. moms)</TableHead>
-              <TableHead className="text-right">Tilbud (inkl. moms)</TableHead>
-              <TableHead className="text-right">Anbefalet (inkl.)</TableHead>
-              <TableHead className="text-right">Avance (ex.)</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+      <div className="rounded-lg border border-border bg-card shadow-sm overflow-auto">
+        <table className="w-full caption-bottom text-xs">
+          <thead className="[&_tr]:border-b">
+            <tr className="border-b bg-secondary/50">
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground w-10"></th>
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Produkt</th>
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">EAN</th>
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">SKU</th>
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Brand</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Eget</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Lev.</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Indkøb</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Webshop</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Tilbud</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Anbefalet</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
+            </tr>
+          </thead>
+          <tbody className="[&_tr:last-child]:border-0">
             {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
+              <tr className="border-b">
+                <td colSpan={13} className="text-center py-8 text-muted-foreground">
                   Indlæser...
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
+              <tr className="border-b">
+                <td colSpan={13} className="text-center py-8 text-muted-foreground">
                   <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
                   Ingen produkter fundet
-                </TableCell>
-              </TableRow>
+                </td>
+              </tr>
             ) : (
               filtered.map((product) => {
                 const cheapest = getCheapestSupplier(product.supplier_products);
@@ -268,97 +266,77 @@ export default function ProductListPage() {
                   product.supplier_products.length > 0 && product.supplier_products.every((sp) => !sp.in_stock);
 
                 return (
-                  <TableRow
+                  <tr
                     key={product.id}
-                    className="cursor-pointer hover:bg-accent/50 transition-colors"
+                    className="border-b cursor-pointer hover:bg-accent/50 transition-colors"
                     onClick={() => navigate(`/products/${product.id}`)}
                   >
-                    <TableCell>
+                    <td className="px-2 py-1.5 align-middle">
                       {product.image_url ? (
-                        <img src={product.image_url} alt="" className="h-8 w-8 rounded object-cover" />
+                        <img src={product.image_url} alt="" className="h-7 w-7 rounded object-cover" />
                       ) : (
-                        <div className="h-8 w-8 rounded bg-secondary flex items-center justify-center">
-                          <Package className="h-4 w-4 text-muted-foreground" />
+                        <div className="h-7 w-7 rounded bg-secondary flex items-center justify-center">
+                          <Package className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                       )}
-                    </TableCell>
-                    <TableCell className="font-medium text-foreground max-w-[200px] truncate">{product.title}</TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-xs">{product.ean}</TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-xs">{product.sku ?? "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">{product.brand ?? "—"}</TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">
+                    </td>
+                    <td className="px-2 py-1.5 align-middle font-medium text-foreground max-w-[160px] truncate">{product.title}</td>
+                    <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono">{product.ean}</td>
+                    <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono">{product.sku ?? "—"}</td>
+                    <td className="px-2 py-1.5 align-middle text-muted-foreground">{product.brand ?? "—"}</td>
+                    <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
                       {product.stock_quantity ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">
+                    </td>
+                    <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
                       {product.supplier_products.length > 0
                         ? product.supplier_products.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0) || "—"
                         : "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
+                    </td>
+                    <td className="px-2 py-1.5 align-middle text-right font-mono">
                       {cheapestPrice !== null ? (
-                        <div>
-                          <span className="text-foreground">{formatPrice(cheapestPrice)}</span>
-                          {cheapest?.suppliers && (
-                            <p className="text-xs text-muted-foreground">{cheapest.suppliers.name}</p>
-                          )}
-                        </div>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-foreground">
-                      {product.webshop_price ? (
-                        <div>
-                          <span>{formatPrice(product.webshop_price)}</span>
-                          <p className="text-xs text-muted-foreground">ex. {formatPrice(exVat(product.webshop_price))}</p>
-                        </div>
+                        <span className="text-foreground">{formatPrice(cheapestPrice)}</span>
                       ) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
+                    </td>
+                    <td className="px-2 py-1.5 align-middle text-right font-mono text-foreground">
+                      {product.webshop_price ? formatPrice(product.webshop_price) : "—"}
+                    </td>
+                    <td className="px-2 py-1.5 align-middle text-right font-mono">
                       {product.sale_price ? (
-                        <div>
-                          <span className="text-warning">{formatPrice(product.sale_price)}</span>
-                          <p className="text-xs text-muted-foreground">ex. {formatPrice(exVat(product.sale_price))}</p>
-                        </div>
+                        <span className="text-warning">{formatPrice(product.sale_price)}</span>
                       ) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-primary">{formatPrice(recommendedPriceInclVat)}</TableCell>
-                    <TableCell className="text-right">
+                    </td>
+                    <td className="px-2 py-1.5 align-middle text-right font-mono text-primary">{formatPrice(recommendedPriceInclVat)}</td>
+                    <td className="px-2 py-1.5 align-middle text-right">
                       {margin !== null ? (
                         <Badge
                           variant="outline"
                           className={
                             margin < 10
-                              ? "text-destructive border-destructive/30"
+                              ? "text-destructive border-destructive/30 text-xs"
                               : margin < 20
-                              ? "text-warning border-warning/30"
-                              : "text-success border-success/30"
+                              ? "text-warning border-warning/30 text-xs"
+                              : "text-success border-success/30 text-xs"
                           }
                         >
                           {margin.toFixed(1)}%
                         </Badge>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell>
+                      ) : "—"}
+                    </td>
+                    <td className="px-2 py-1.5 align-middle">
                       {allOutOfStock ? (
-                        <Badge variant="destructive">Udsolgt</Badge>
+                        <Badge variant="destructive" className="text-xs">Udsolgt</Badge>
                       ) : product.supplier_products.length > 0 ? (
-                        <Badge variant="outline" className="text-success border-success/30">På lager</Badge>
+                        <Badge variant="outline" className="text-success border-success/30 text-xs">På lager</Badge>
                       ) : (
-                        <Badge variant="secondary">Ingen data</Badge>
+                        <Badge variant="secondary" className="text-xs">Ingen data</Badge>
                       )}
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 );
               })
             )}
-          </TableBody>
-        </Table>
-        </div>
-        <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+          </tbody>
+        </table>
       </div>
     </div>
   );
