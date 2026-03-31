@@ -104,6 +104,11 @@ export default function SupplierListPage() {
                     <TableCell className="text-muted-foreground text-xs font-mono max-w-[200px] truncate">
                       {s.feed_url ?? "—"}
                     </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {scheduleLabels[s.feed_schedule ?? "manual"] ?? s.feed_schedule ?? "Manuel"}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-xs">
                       {s.last_sync_at ? new Date(s.last_sync_at).toLocaleString("da-DK") : "Aldrig"}
                     </TableCell>
