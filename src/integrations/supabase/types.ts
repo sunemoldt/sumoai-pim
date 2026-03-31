@@ -80,6 +80,7 @@ export type Database = {
           stock_status: string | null
           title: string
           updated_at: string
+          webshop_parent_id: string | null
           webshop_platform: string | null
           webshop_price: number | null
           webshop_product_id: string | null
@@ -104,6 +105,7 @@ export type Database = {
           stock_status?: string | null
           title: string
           updated_at?: string
+          webshop_parent_id?: string | null
           webshop_platform?: string | null
           webshop_price?: number | null
           webshop_product_id?: string | null
@@ -128,6 +130,7 @@ export type Database = {
           stock_status?: string | null
           title?: string
           updated_at?: string
+          webshop_parent_id?: string | null
           webshop_platform?: string | null
           webshop_price?: number | null
           webshop_product_id?: string | null
