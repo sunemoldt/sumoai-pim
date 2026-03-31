@@ -219,6 +219,8 @@ export default function ProductListPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+        <ScrollArea className="w-full" type="auto">
+        <div className="min-w-[1200px]">
         <Table>
           <TableHeader>
             <TableRow className="bg-secondary/50">
