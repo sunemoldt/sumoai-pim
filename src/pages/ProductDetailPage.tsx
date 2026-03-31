@@ -717,6 +717,71 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
+              {/* Supplier overview */}
+              {product.supplier_products.length > 0 && (
+                <div className="rounded-md border border-border bg-secondary/30 p-4">
+                  <h4 className="text-sm font-medium text-foreground mb-2">Leverandøroverblik</h4>
+                  <div className="overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="pb-2 text-left font-medium text-muted-foreground">Leverandør</th>
+                          <th className="pb-2 text-right font-medium text-muted-foreground">Indkøb (ex.)</th>
+                          <th className="pb-2 text-right font-medium text-muted-foreground">Antal</th>
+                          <th className="pb-2 text-left font-medium text-muted-foreground pl-3">Status</th>
+                          <th className="pb-2 text-right font-medium text-muted-foreground">Avance vs. ny pris</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...product.supplier_products]
+                          .sort((a, b) => a.purchase_price - b.purchase_price)
+                          .map((sp) => {
+                            const isCheapest = cheapest?.id === sp.id;
+                            const newPriceExVat = pushPrice ? exVat(parseFloat(pushPrice)) : null;
+                            const spMargin = newPriceExVat
+                              ? getMarginPercent(newPriceExVat, sp.purchase_price)
+                              : null;
+                            return (
+                              <tr key={sp.id} className={`border-b last:border-0 ${isCheapest ? "bg-success/5" : ""}`}>
+                                <td className="py-2 text-foreground">
+                                  <span className="flex items-center gap-1.5">
+                                    {sp.suppliers?.name ?? "Ukendt"}
+                                    {isCheapest && <Badge className="bg-success/10 text-success border-0 text-xs">Billigst</Badge>}
+                                  </span>
+                                </td>
+                                <td className="py-2 text-right font-mono text-foreground">{formatPrice(sp.purchase_price)}</td>
+                                <td className="py-2 text-right font-mono text-foreground">{sp.stock_quantity ?? "—"}</td>
+                                <td className="py-2 pl-3">
+                                  {sp.in_stock ? (
+                                    <span className="flex items-center gap-1 text-success text-xs">
+                                      <CheckCircle className="h-3 w-3" /> På lager
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-destructive text-xs">
+                                      <XCircle className="h-3 w-3" /> Udsolgt
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2 text-right">
+                                  {spMargin !== null ? (
+                                    <Badge variant="outline" className={
+                                      spMargin < 10 ? "text-destructive border-destructive/30 text-xs"
+                                        : spMargin < 20 ? "text-warning border-warning/30 text-xs"
+                                        : "text-success border-success/30 text-xs"
+                                    }>
+                                      {spMargin.toFixed(1)}%
+                                    </Badge>
+                                  ) : "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <Button onClick={pushToShop} disabled={pushing} size="lg" className="gap-2">
                 {pushing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 Opdater shop
