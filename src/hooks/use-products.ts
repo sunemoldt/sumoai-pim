@@ -43,7 +43,7 @@ export function useMasterProducts(search?: string) {
         .order("title");
       
       if (search) {
-        query = query.or(`title.ilike.%${search}%,ean.ilike.%${search}%,brand.ilike.%${search}%`);
+        query = query.or(`title.ilike.%${search}%,ean.ilike.%${search}%,brand.ilike.%${search}%,sku.ilike.%${search}%`);
       }
 
       const { data, error } = await query;
