@@ -235,6 +235,8 @@ export default function ProductListPage() {
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Anbefalet</th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
+              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Redigeret</th>
+              <th className="h-9 px-2 text-center align-middle font-medium text-muted-foreground w-10"></th>
             </tr>
           </thead>
           <tbody className="[&_tr:last-child]:border-0">
