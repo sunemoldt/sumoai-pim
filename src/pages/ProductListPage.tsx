@@ -58,8 +58,8 @@ export default function ProductListPage() {
       if (marginFilter !== "all") {
         const cheapest = getCheapestSupplier(product.supplier_products);
         const activePrice = product.sale_price ?? product.webshop_price;
-        if (!activePrice || !cheapest) return marginFilter === "low" ? false : false;
-        const margin = getMarginPercent(activePrice, cheapest.purchase_price);
+        if (!activePrice || !cheapest) return false;
+        const margin = getMarginPercent(exVat(activePrice), cheapest.purchase_price);
         if (marginFilter === "low" && margin >= 10) return false;
         if (marginFilter === "medium" && (margin < 10 || margin >= 20)) return false;
         if (marginFilter === "good" && margin < 20) return false;
