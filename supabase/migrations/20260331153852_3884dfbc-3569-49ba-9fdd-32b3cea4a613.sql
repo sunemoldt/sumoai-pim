@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS master_products_ean_unique ON public.master_products (ean);
