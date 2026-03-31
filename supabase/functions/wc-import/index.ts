@@ -78,12 +78,28 @@ Deno.serve(async (req) => {
       if (p.type === "variable") continue;
 
       const ean = p.sku || `wc-${p.id}`;
+      const attrs: Record<string, string> = {};
+      if (p.attributes) {
+        for (const a of p.attributes) {
+          if (a.name && a.options) {
+            attrs[a.name] = Array.isArray(a.options) ? a.options.join(", ") : String(a.options);
+          } else if (a.name && a.option) {
+            attrs[a.name] = a.option;
+          }
+        }
+      }
       rows.push({
         ean,
+        sku: p.sku || null,
         title: p.name,
         brand: p.brands?.[0]?.name || p.tags?.[0]?.name || null,
         category: p.categories?.[0]?.name || null,
         image_url: p.images?.[0]?.src || null,
+        short_description: p.short_description || null,
+        long_description: p.description || null,
+        meta_title: p.meta_data?.find((m: any) => m.key === "_yoast_wpseo_title")?.value || p.meta_data?.find((m: any) => m.key === "rank_math_title")?.value || null,
+        meta_description: p.meta_data?.find((m: any) => m.key === "_yoast_wpseo_metadesc")?.value || p.meta_data?.find((m: any) => m.key === "rank_math_description")?.value || null,
+        attributes: Object.keys(attrs).length > 0 ? attrs : {},
         webshop_product_id: String(p.id),
         webshop_platform: "woocommerce",
         webshop_price: p.regular_price ? parseFloat(p.regular_price) : (p.price ? parseFloat(p.price) : null),
