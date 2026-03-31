@@ -7,6 +7,7 @@ interface StatCardProps {
   icon: ReactNode;
   description?: string;
   variant?: "default" | "success" | "warning" | "destructive";
+  onClick?: () => void;
 }
 
 const variantStyles = {
