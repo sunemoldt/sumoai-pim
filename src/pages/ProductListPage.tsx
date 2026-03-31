@@ -190,7 +190,8 @@ export default function ProductListPage() {
               <TableHead>EAN</TableHead>
               <TableHead>SKU</TableHead>
               <TableHead>Brand</TableHead>
-              <TableHead className="text-right">Lager</TableHead>
+              <TableHead className="text-right">Eget lager</TableHead>
+              <TableHead className="text-right">Lev. lager</TableHead>
               <TableHead className="text-right">Indkøb (ex. moms)</TableHead>
               <TableHead className="text-right">Webshop (inkl. moms)</TableHead>
               <TableHead className="text-right">Tilbud (inkl. moms)</TableHead>
