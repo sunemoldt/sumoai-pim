@@ -63,7 +63,7 @@ export default function ProductListPage() {
               </TableRow>
             ) : products.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
                   Ingen produkter fundet
                 </TableCell>
