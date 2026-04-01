@@ -18,7 +18,12 @@ export default function SettingsPage() {
   const { data: webhooks = [] } = useWebhookConfigs();
   const [formOpen, setFormOpen] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<WebhookConfig | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
   const qc = useQueryClient();
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
