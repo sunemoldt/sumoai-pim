@@ -41,14 +41,13 @@ const mcpServer = new McpServer({
 const ALL_PRODUCT_FIELDS = "id, ean, title, brand, category, sku, webshop_price, sale_price, stock_quantity, stock_status, image_url, short_description, long_description, meta_title, meta_description, webshop_product_id, webshop_platform, webshop_parent_id, backorders_allowed, custom_markup_percentage, attributes, created_at, updated_at";
 
 // Tool: List products
-mcpServer.tool({
-  name: "list_products",
+mcpServer.tool("list_products", {
   description: "List all products in the PIM with all fields. Returns up to 100 products.",
   inputSchema: {
-    type: "object",
+    type: "object" as const,
     properties: {
-      limit: { type: "number", description: "Max results (default 50)" },
-      offset: { type: "number", description: "Offset for pagination (default 0)" },
+      limit: { type: "number" as const, description: "Max results (default 50)" },
+      offset: { type: "number" as const, description: "Offset for pagination (default 0)" },
     },
   },
   handler: async ({ limit = 50, offset = 0 }: { limit?: number; offset?: number }) => {
@@ -63,13 +62,12 @@ mcpServer.tool({
 });
 
 // Tool: Search products
-mcpServer.tool({
-  name: "search_products",
+mcpServer.tool("search_products", {
   description: "Search products by title, EAN, SKU, brand, or category.",
   inputSchema: {
-    type: "object",
+    type: "object" as const,
     properties: {
-      query: { type: "string", description: "Search term" },
+      query: { type: "string" as const, description: "Search term" },
     },
     required: ["query"],
   },
@@ -85,18 +83,16 @@ mcpServer.tool({
 });
 
 // Tool: Get product with supplier details
-mcpServer.tool({
-  name: "get_product",
+mcpServer.tool("get_product", {
   description: "Get detailed product info including all fields and all supplier prices, stock, and descriptions. Use product ID or EAN.",
   inputSchema: {
-    type: "object",
+    type: "object" as const,
     properties: {
-      product_id: { type: "string", description: "The product UUID or EAN" },
+      product_id: { type: "string" as const, description: "The product UUID or EAN" },
     },
     required: ["product_id"],
   },
   handler: async ({ product_id }: { product_id: string }) => {
-    // Try UUID first, then EAN
     let query = supabase
       .from("master_products")
       .select("*, supplier_products(*, suppliers(name))");
@@ -115,15 +111,14 @@ mcpServer.tool({
 });
 
 // Tool: Update product
-mcpServer.tool({
-  name: "update_product",
+mcpServer.tool("update_product", {
   description: "Update one or more fields on a product. Provide product_id and the fields to update. Updatable fields: title, brand, category, sku, webshop_price, sale_price, stock_quantity, stock_status, image_url, short_description, long_description, meta_title, meta_description, backorders_allowed, custom_markup_percentage, attributes.",
   inputSchema: {
-    type: "object",
+    type: "object" as const,
     properties: {
-      product_id: { type: "string", description: "The product UUID" },
+      product_id: { type: "string" as const, description: "The product UUID" },
       updates: {
-        type: "object",
+        type: "object" as const,
         description: "Object with field names and new values",
       },
     },
@@ -158,10 +153,9 @@ mcpServer.tool({
 });
 
 // Tool: List suppliers
-mcpServer.tool({
-  name: "list_suppliers",
+mcpServer.tool("list_suppliers", {
   description: "List all suppliers with their feed type, feed URL, schedule, sync status, and column mappings.",
-  inputSchema: { type: "object", properties: {} },
+  inputSchema: { type: "object" as const, properties: {} },
   handler: async () => {
     const { data, error } = await supabase
       .from("suppliers")
@@ -173,13 +167,12 @@ mcpServer.tool({
 });
 
 // Tool: Get supplier details with products
-mcpServer.tool({
-  name: "get_supplier",
+mcpServer.tool("get_supplier", {
   description: "Get detailed supplier info including all its products with prices and stock.",
   inputSchema: {
-    type: "object",
+    type: "object" as const,
     properties: {
-      supplier_id: { type: "string", description: "The supplier UUID" },
+      supplier_id: { type: "string" as const, description: "The supplier UUID" },
     },
     required: ["supplier_id"],
   },
@@ -195,13 +188,12 @@ mcpServer.tool({
 });
 
 // Tool: Get price info for a product
-mcpServer.tool({
-  name: "get_price_info",
+mcpServer.tool("get_price_info", {
   description: "Get price comparison across suppliers for a product, including purchase prices, recommended prices, margins, and stock levels.",
   inputSchema: {
-    type: "object",
+    type: "object" as const,
     properties: {
-      product_id: { type: "string", description: "The product UUID" },
+      product_id: { type: "string" as const, description: "The product UUID" },
     },
     required: ["product_id"],
   },
@@ -244,14 +236,13 @@ mcpServer.tool({
 });
 
 // Tool: Get price history
-mcpServer.tool({
-  name: "get_price_history",
+mcpServer.tool("get_price_history", {
   description: "Get price history for a supplier product over time.",
   inputSchema: {
-    type: "object",
+    type: "object" as const,
     properties: {
-      supplier_product_id: { type: "string", description: "The supplier_product UUID" },
-      limit: { type: "number", description: "Max records (default 50)" },
+      supplier_product_id: { type: "string" as const, description: "The supplier_product UUID" },
+      limit: { type: "number" as const, description: "Max records (default 50)" },
     },
     required: ["supplier_product_id"],
   },
@@ -268,14 +259,13 @@ mcpServer.tool({
 });
 
 // Tool: Get change log
-mcpServer.tool({
-  name: "get_change_log",
+mcpServer.tool("get_change_log", {
   description: "Get change log for a product showing all field changes over time.",
   inputSchema: {
-    type: "object",
+    type: "object" as const,
     properties: {
-      product_id: { type: "string", description: "The master product UUID" },
-      limit: { type: "number", description: "Max records (default 50)" },
+      product_id: { type: "string" as const, description: "The master product UUID" },
+      limit: { type: "number" as const, description: "Max records (default 50)" },
     },
     required: ["product_id"],
   },
@@ -292,10 +282,9 @@ mcpServer.tool({
 });
 
 // Tool: Get price settings
-mcpServer.tool({
-  name: "get_price_settings",
+mcpServer.tool("get_price_settings", {
   description: "Get all markup/margin settings (global, brand-level, product-level).",
-  inputSchema: { type: "object", properties: {} },
+  inputSchema: { type: "object" as const, properties: {} },
   handler: async () => {
     const { data, error } = await supabase
       .from("price_settings")
@@ -307,13 +296,12 @@ mcpServer.tool({
 });
 
 // Tool: Get import logs
-mcpServer.tool({
-  name: "get_import_logs",
+mcpServer.tool("get_import_logs", {
   description: "Get import/sync logs showing history of data imports and their results.",
   inputSchema: {
-    type: "object",
+    type: "object" as const,
     properties: {
-      limit: { type: "number", description: "Max records (default 20)" },
+      limit: { type: "number" as const, description: "Max records (default 20)" },
     },
   },
   handler: async ({ limit = 20 }: { limit?: number }) => {
@@ -328,10 +316,9 @@ mcpServer.tool({
 });
 
 // Tool: Get webhook configs
-mcpServer.tool({
-  name: "get_webhooks",
+mcpServer.tool("get_webhooks", {
   description: "Get all configured webhooks for automation (n8n, Make.com, etc.).",
-  inputSchema: { type: "object", properties: {} },
+  inputSchema: { type: "object" as const, properties: {} },
   handler: async () => {
     const { data, error } = await supabase
       .from("webhook_configs")
@@ -343,14 +330,13 @@ mcpServer.tool({
 });
 
 // Tool: Get product analytics
-mcpServer.tool({
-  name: "get_product_analytics",
+mcpServer.tool("get_product_analytics", {
   description: "Get performance analytics (GA4 + GSC) for a product or all products. Includes page views, conversions, Google position, CTR.",
   inputSchema: {
-    type: "object",
+    type: "object" as const,
     properties: {
-      product_id: { type: "string", description: "Optional: specific product ID. Omit for all." },
-      limit: { type: "number", description: "Max results (default 50)" },
+      product_id: { type: "string" as const, description: "Optional: specific product ID. Omit for all." },
+      limit: { type: "number" as const, description: "Max results (default 50)" },
     },
   },
   handler: async ({ product_id, limit = 50 }: { product_id?: string; limit?: number }) => {
@@ -363,14 +349,13 @@ mcpServer.tool({
 });
 
 // Tool: Get product recommendations
-mcpServer.tool({
-  name: "get_recommendations",
+mcpServer.tool("get_recommendations", {
   description: "Get active action recommendations (e.g. high traffic no sales, low stock alerts, SEO tips).",
   inputSchema: {
-    type: "object",
+    type: "object" as const,
     properties: {
-      product_id: { type: "string", description: "Optional: filter by product ID" },
-      severity: { type: "string", description: "Optional: filter by severity (critical, warning, info)" },
+      product_id: { type: "string" as const, description: "Optional: filter by product ID" },
+      severity: { type: "string" as const, description: "Optional: filter by severity (critical, warning, info)" },
     },
   },
   handler: async ({ product_id, severity }: { product_id?: string; severity?: string }) => {
@@ -384,10 +369,9 @@ mcpServer.tool({
 });
 
 // Tool: Trigger analytics sync
-mcpServer.tool({
-  name: "sync_analytics",
+mcpServer.tool("sync_analytics", {
   description: "Trigger a manual sync of Google Analytics 4 and Search Console data.",
-  inputSchema: { type: "object", properties: {} },
+  inputSchema: { type: "object" as const, properties: {} },
   handler: async () => {
     try {
       const res = await fetch(`${supabaseUrl}/functions/v1/fetch-analytics`, {
