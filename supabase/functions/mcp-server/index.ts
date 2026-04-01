@@ -40,11 +40,28 @@ async function verifySignedCode(code: string): Promise<Record<string, string> | 
   } catch { return null; }
 }
 
-function jsonResponse(data: any, status = 200) {
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type, accept, mcp-session-id, x-client-info, apikey",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Expose-Headers": "WWW-Authenticate",
+};
+
+function jsonResponse(data: unknown, status = 200, headers: HeadersInit = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+    headers: { ...corsHeaders, "Content-Type": "application/json", ...headers },
   });
+}
+
+function unauthorizedResponse() {
+  return jsonResponse(
+    { error: "Unauthorized" },
+    401,
+    {
+      "WWW-Authenticate": `Bearer realm="mcp", scope="mcp:tools", resource_metadata="${BASE_URL}/.well-known/oauth-protected-resource"`,
+    },
+  );
 }
 
 // ── OAuth Handlers ──
