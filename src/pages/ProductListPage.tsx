@@ -62,7 +62,6 @@ export default function ProductListPage() {
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
-  const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
   const brands = useMemo(() => {
     const set = new Set(products.map((p) => p.brand).filter(Boolean) as string[]);
