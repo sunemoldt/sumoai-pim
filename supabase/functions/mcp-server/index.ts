@@ -135,9 +135,14 @@ async function handleToken(req: Request) {
 
   // PKCE verification
   if (payload.code_challenge && body.code_verifier) {
-    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body.code_verifier));
-    const computed = btoa(String.fromCharCode(...new Uint8Array(hash)))
-      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    let computed: string;
+    if (payload.code_challenge_method === "plain") {
+      computed = body.code_verifier;
+    } else {
+      const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body.code_verifier));
+      computed = btoa(String.fromCharCode(...new Uint8Array(hash)))
+        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    }
     if (computed !== payload.code_challenge) {
       return jsonResponse({ error: "invalid_grant", error_description: "PKCE failed" }, 400);
     }
