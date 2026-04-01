@@ -172,7 +172,7 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-7">
         <Card className="shadow-sm">
           <CardContent className="p-5">
             <p className="text-sm text-muted-foreground">Billigste indkøbspris</p>
@@ -227,6 +227,32 @@ export default function ProductDetailPage() {
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {product.custom_markup_percentage != null ? `Produkt-markup: ${product.custom_markup_percentage}%` : `Global markup: ${globalMarkup}%`}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-1.5">
+              <Eye className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Besøg (30d)</p>
+            </div>
+            <p className="text-2xl font-semibold text-foreground mt-1">{analytics?.page_views ?? "—"}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">sidevisninger</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-1.5">
+              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Konv. % (30d)</p>
+            </div>
+            <p className={`text-2xl font-semibold mt-1 ${
+              analytics?.conversion_rate && analytics.conversion_rate > 0 ? "text-success" : "text-muted-foreground"
+            }`}>
+              {analytics?.conversion_rate != null ? `${analytics.conversion_rate.toFixed(1)}%` : "—"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {analytics?.purchases ? `${analytics.purchases} solgt` : "ingen salg"}
             </p>
           </CardContent>
         </Card>
