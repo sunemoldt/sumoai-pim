@@ -188,7 +188,8 @@ export function useProductAnalytics(productId: string) {
         .from("product_analytics")
         .select("*")
         .eq("master_product_id", productId)
-        .order("period_start", { ascending: false })
+        .order("updated_at", { ascending: false })
+        .order("period_end", { ascending: false })
         .limit(1);
       if (error) throw error;
       return (data?.[0] ?? null) as ProductAnalytics | null;
@@ -201,13 +202,13 @@ export function useAllProductAnalytics() {
   return useQuery({
     queryKey: ["all_product_analytics"],
     queryFn: async () => {
-      // Get latest period analytics for all products
+      // Keep the newest analytics sync per product instead of the row with latest period_start
       const { data, error } = await supabase
         .from("product_analytics")
         .select("*")
-        .order("period_start", { ascending: false });
+        .order("updated_at", { ascending: false })
+        .order("period_end", { ascending: false });
       if (error) throw error;
-      // Deduplicate: keep only latest per product
       const byProduct = new Map<string, ProductAnalytics>();
       for (const row of data as ProductAnalytics[]) {
         if (!byProduct.has(row.master_product_id)) {
