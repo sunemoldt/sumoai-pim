@@ -799,6 +799,99 @@ export default function ProductDetailPage() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="performance" className="space-y-4 mt-4">
+          {/* Recommendations */}
+          {recommendations.length > 0 && (
+            <div className="space-y-3">
+              {recommendations.map((rec) => (
+                <Card key={rec.id} className={`shadow-sm border-l-4 ${
+                  rec.severity === "critical" ? "border-l-destructive" : 
+                  rec.severity === "warning" ? "border-l-warning" : "border-l-primary"
+                }`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      {rec.severity === "critical" ? (
+                        <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                      ) : (
+                        <Lightbulb className="h-5 w-5 text-warning mt-0.5 shrink-0" />
+                      )}
+                      <div>
+                        <p className="font-medium text-foreground">{rec.title}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
+                        {rec.action_suggestion && (
+                          <p className="text-sm text-primary mt-2 font-medium">💡 {rec.action_suggestion}</p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Analytics KPIs */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <Eye className="h-4 w-4" />
+                  <span className="text-sm">Sidevisninger</span>
+                </div>
+                <p className="text-2xl font-semibold text-foreground">{analytics?.page_views ?? "—"}</p>
+                <p className="text-xs text-muted-foreground">Sidste {analytics ? `${Math.round((new Date(analytics.period_end).getTime() - new Date(analytics.period_start).getTime()) / 86400000)} dage` : "7 dage"}</p>
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <ShoppingCart className="h-4 w-4" />
+                  <span className="text-sm">Tilf. til kurv / Køb</span>
+                </div>
+                <p className="text-2xl font-semibold text-foreground">
+                  {analytics ? `${analytics.add_to_carts} / ${analytics.purchases}` : "—"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Konverteringsrate: {analytics ? `${analytics.conversion_rate.toFixed(1)}%` : "—"}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <TrendingUp className="h-4 w-4" />
+                  <span className="text-sm">Google Position</span>
+                </div>
+                <p className="text-2xl font-semibold text-foreground">{analytics?.avg_position ? analytics.avg_position.toFixed(1) : "—"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {analytics?.impressions ? `${analytics.impressions} visninger i Google` : "Ingen GSC data"}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <MousePointerClick className="h-4 w-4" />
+                  <span className="text-sm">CTR (Google)</span>
+                </div>
+                <p className="text-2xl font-semibold text-foreground">{analytics?.ctr ? `${analytics.ctr.toFixed(1)}%` : "—"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {analytics?.clicks ? `${analytics.clicks} klik fra Google` : "Ingen data"}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {!analytics && recommendations.length === 0 && (
+            <Card className="shadow-sm">
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <TrendingUp className="h-8 w-8 mx-auto mb-3 opacity-40" />
+                <p>Ingen performance-data endnu.</p>
+                <p className="text-sm mt-1">Kør analytics-synkroniseringen for at hente data fra Google.</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
         <TabsContent value="changelog" className="space-y-4 mt-4">
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
