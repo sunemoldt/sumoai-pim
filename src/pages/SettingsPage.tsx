@@ -2,12 +2,15 @@ import { usePriceSettings, useWebhookConfigs, WebhookConfig } from "@/hooks/use-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Copy } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, Loader2, KeyRound } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import WebhookFormDialog from "@/components/WebhookFormDialog";
 
 export default function SettingsPage() {
@@ -15,7 +18,12 @@ export default function SettingsPage() {
   const { data: webhooks = [] } = useWebhookConfigs();
   const [formOpen, setFormOpen] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<WebhookConfig | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
   const qc = useQueryClient();
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -42,12 +50,74 @@ export default function SettingsPage() {
     toast({ title: "MCP URL kopieret" });
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Fejl", description: "Adgangskoderne matcher ikke", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast({ title: "Fejl", description: "Adgangskoden skal være mindst 8 tegn", variant: "destructive" });
+      return;
+    }
+    setChangingPassword(true);
+    // Verify current password by re-signing in
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user?.email ?? "",
+      password: currentPassword,
+    });
+    if (signInError) {
+      toast({ title: "Fejl", description: "Nuværende adgangskode er forkert", variant: "destructive" });
+      setChangingPassword(false);
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      toast({ title: "Fejl", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Adgangskode opdateret" });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    }
+    setChangingPassword(false);
+  };
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Indstillinger</h1>
         <p className="text-sm text-muted-foreground mt-1">Administrer avanceprocenter, webhooks og MCP</p>
       </div>
+
+      {/* Change Password */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-medium flex items-center gap-2">
+            <KeyRound className="h-4 w-4" /> Skift adgangskode
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleChangePassword} className="space-y-4 max-w-sm">
+            <div className="space-y-2">
+              <Label htmlFor="current-pw">Nuværende adgangskode</Label>
+              <Input id="current-pw" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-pw">Ny adgangskode</Label>
+              <Input id="new-pw" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-pw">Bekræft ny adgangskode</Label>
+              <Input id="confirm-pw" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+            </div>
+            <Button type="submit" disabled={changingPassword}>
+              {changingPassword ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Opdater adgangskode
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       {/* Markup settings */}
       <Card className="shadow-sm">
