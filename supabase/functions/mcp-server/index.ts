@@ -9,14 +9,42 @@ const supabase = createClient(supabaseUrl, serviceKey);
 
 const BASE_URL = `${supabaseUrl}/functions/v1/mcp-server`;
 
-// ── In-memory OAuth stores ──
-const registeredClients = new Map<string, any>();
-const authCodes = new Map<string, { client_id: string; redirect_uri: string; code_challenge?: string; expires: number }>();
-
+// ── Helpers for self-contained signed OAuth codes ──
 function generateId(): string {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
   return encodeBase64(bytes).replace(/[+/=]/g, "x");
+}
+
+async function signCode(payload: Record<string, string>): Promise<string> {
+  const data = JSON.stringify({ ...payload, exp: Date.now() + 5 * 60 * 1000 });
+  const encoded = encodeBase64(new TextEncoder().encode(data));
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(mcpApiKey), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = encodeBase64(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(encoded))));
+  return `${encoded}.${sig}`.replace(/[+/=]/g, "x");
+}
+
+async function verifyCode(code: string): Promise<Record<string, string> | null> {
+  // Restore base64 chars
+  const restored = code.replace(/x/g, "=");
+  const dotIdx = restored.lastIndexOf(".");
+  if (dotIdx === -1) return null;
+  // Can't reliably split on dot after base64 restore, use original
+  const parts = code.split(".");
+  if (parts.length < 2) return null;
+  const encodedPart = parts.slice(0, -1).join(".");
+  const sigPart = parts[parts.length - 1];
+  
+  // Re-derive the encoded and sig with proper base64
+  const encodedRestored = encodedPart.replace(/x/g, "=");
+  const sigRestored = sigPart.replace(/x/g, "=");
+  
+  try {
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(mcpApiKey), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+    // We need to verify against the original encoded string (before x replacement)
+    // Actually let's simplify: just use a delimiter that won't conflict
+  } catch { return null; }
+  return null;
 }
 
 function jsonResponse(data: any, status = 200) {
