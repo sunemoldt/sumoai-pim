@@ -167,104 +167,89 @@ export default function ProductListPage() {
           />
         </div>
 
-        <div className="overflow-x-auto pb-2">
-          <div className="flex min-w-max items-center gap-3">
-            <div className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
-              <Filter className="h-4 w-4" />
-              <span>Filtre:</span>
-            </div>
-
-            <Select value={stockFilter} onValueChange={(v) => setStockFilter(v as StockFilter)}>
-              <SelectTrigger className="h-9 w-[180px] shrink-0 text-sm">
-                <SelectValue placeholder="Lagerstatus" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alle lagerstatus</SelectItem>
-                <SelectItem value="instock">På lager</SelectItem>
-                <SelectItem value="outofstock">Udsolgt</SelectItem>
-                <SelectItem value="backorder">Restordre tilladt</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={brandFilter} onValueChange={setBrandFilter}>
-              <SelectTrigger className="h-9 w-[200px] shrink-0 text-sm">
-                <SelectValue placeholder="Brand" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alle brands</SelectItem>
-                {brands.map((b) => (
-                  <SelectItem key={b} value={b}>{b}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="h-9 w-[220px] shrink-0 text-sm">
-                <SelectValue placeholder="Kategori" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alle kategorier</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={marginFilter} onValueChange={(v) => setMarginFilter(v as MarginFilter)}>
-              <SelectTrigger className="h-9 w-[180px] shrink-0 text-sm">
-                <SelectValue placeholder="Avance" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alle avancer</SelectItem>
-                <SelectItem value="low">Lav (&lt;10%)</SelectItem>
-                <SelectItem value="medium">Medium (10-20%)</SelectItem>
-                <SelectItem value="good">God (&gt;20%)</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={priceFilter} onValueChange={(v) => setPriceFilter(v as PriceFilter)}>
-              <SelectTrigger className="h-9 w-[180px] shrink-0 text-sm">
-                <SelectValue placeholder="Pris" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alle priser</SelectItem>
-                <SelectItem value="has_price">Har pris</SelectItem>
-                <SelectItem value="no_price">Mangler pris</SelectItem>
-                <SelectItem value="on_sale">På tilbud</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-              <SelectTrigger className="h-9 w-[220px] shrink-0 text-sm">
-                <SelectValue placeholder="Leverandør" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alle leverandører</SelectItem>
-                {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-              <SelectTrigger className="h-9 w-[180px] shrink-0 text-sm">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alle statusser</SelectItem>
-                <SelectItem value="on_stock">På lager</SelectItem>
-                <SelectItem value="out_of_stock">Udsolgt</SelectItem>
-                <SelectItem value="no_data">Ingen data</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {activeFilterCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 shrink-0 gap-1 text-sm">
-                <X className="h-3.5 w-3.5" />
-                Ryd filtre ({activeFilterCount})
-              </Button>
-            )}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
+            <Filter className="h-4 w-4" />
           </div>
+
+          <Select value={stockFilter} onValueChange={(v) => setStockFilter(v as StockFilter)}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue placeholder="Lagerstatus" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle lagerstatus</SelectItem>
+              <SelectItem value="instock">På lager</SelectItem>
+              <SelectItem value="outofstock">Udsolgt</SelectItem>
+              <SelectItem value="backorder">Restordre</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={brandFilter} onValueChange={setBrandFilter}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue placeholder="Brand" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle brands</SelectItem>
+              {brands.map((b) => (
+                <SelectItem key={b} value={b}>{b}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue placeholder="Kategori" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle kategorier</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={marginFilter} onValueChange={(v) => setMarginFilter(v as MarginFilter)}>
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="Avance" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle avancer</SelectItem>
+              <SelectItem value="low">Lav (&lt;10%)</SelectItem>
+              <SelectItem value="medium">Medium (10-20%)</SelectItem>
+              <SelectItem value="good">God (&gt;20%)</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue placeholder="Leverandør" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle leverandører</SelectItem>
+              {suppliers.map((s) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+            <SelectTrigger className="h-8 w-[130px] text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle statusser</SelectItem>
+              <SelectItem value="on_stock">På lager</SelectItem>
+              <SelectItem value="out_of_stock">Udsolgt</SelectItem>
+              <SelectItem value="no_data">Ingen data</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {activeFilterCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1 text-xs">
+              <X className="h-3 w-3" />
+              Ryd ({activeFilterCount})
+            </Button>
+          )}
         </div>
       </div>
 
