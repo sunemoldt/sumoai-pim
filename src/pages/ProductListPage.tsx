@@ -317,7 +317,7 @@ export default function ProductListPage() {
             <tbody className="[&_tr:last-child]:border-0">
               {isLoading ? (
                 <tr className="border-b">
-                  <td colSpan={12} className="py-8 text-center text-muted-foreground">Indlæser...</td>
+                  <td colSpan={14} className="py-8 text-center text-muted-foreground">Indlæser...</td>
                 </tr>
               ) : sorted.length === 0 ? (
                 <tr className="border-b">
