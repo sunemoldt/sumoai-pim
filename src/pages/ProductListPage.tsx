@@ -100,9 +100,19 @@ export default function ProductListPage() {
         const rB = cB ? getRecommendedPriceInclVat(cB.purchase_price, b.custom_markup_percentage ?? globalMarkup) : 0;
         return dir * (rA - rB);
       }
+      if (sortField === "conversion_rate") {
+        const aConv = analyticsMap?.get(a.id)?.conversion_rate ?? 0;
+        const bConv = analyticsMap?.get(b.id)?.conversion_rate ?? 0;
+        return dir * (aConv - bConv);
+      }
+      if (sortField === "page_views") {
+        const aViews = analyticsMap?.get(a.id)?.page_views ?? 0;
+        const bViews = analyticsMap?.get(b.id)?.page_views ?? 0;
+        return dir * (aViews - bViews);
+      }
       return 0;
     });
-  }, [filtered, sortField, sortDir, globalMarkup]);
+  }, [filtered, sortField, sortDir, globalMarkup, analyticsMap]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
