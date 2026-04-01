@@ -12,6 +12,7 @@ import SupplierListPage from "@/pages/SupplierListPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ImportPage from "@/pages/ImportPage";
 import LoginPage from "@/pages/LoginPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "@/pages/NotFound";
 import { Loader2 } from "lucide-react";
 
