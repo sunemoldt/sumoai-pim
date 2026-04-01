@@ -100,15 +100,15 @@ export default function ProductListPage() {
         const rB = cB ? getRecommendedPriceInclVat(cB.purchase_price, b.custom_markup_percentage ?? globalMarkup) : 0;
         return dir * (rA - rB);
       }
-      if (sortField === "conversion_rate") {
-        const aConv = analyticsMap?.get(a.id)?.conversion_rate ?? 0;
-        const bConv = analyticsMap?.get(b.id)?.conversion_rate ?? 0;
-        return dir * (aConv - bConv);
+      if (sortField === "purchases") {
+        const aP = analyticsMap?.get(a.id)?.purchases ?? 0;
+        const bP = analyticsMap?.get(b.id)?.purchases ?? 0;
+        return dir * (aP - bP);
       }
-      if (sortField === "page_views") {
-        const aViews = analyticsMap?.get(a.id)?.page_views ?? 0;
-        const bViews = analyticsMap?.get(b.id)?.page_views ?? 0;
-        return dir * (aViews - bViews);
+      if (sortField === "orders") {
+        const aO = analyticsMap?.get(a.id)?.clicks ?? 0; // clicks stores orders_count
+        const bO = analyticsMap?.get(b.id)?.clicks ?? 0;
+        return dir * (aO - bO);
       }
       return 0;
     });
