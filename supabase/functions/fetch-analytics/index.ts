@@ -61,6 +61,21 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Auth check
+  const authHeader = req.headers.get("authorization");
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  if (authHeader && !authHeader.includes(supabaseServiceKey)) {
+    const anonClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: authError } = await anonClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
   try {
     const wcStoreUrl = Deno.env.get("WC_STORE_URL");
     const wcKey = Deno.env.get("WC_CONSUMER_KEY");
