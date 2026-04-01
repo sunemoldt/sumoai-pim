@@ -461,8 +461,7 @@ export default function ProductListPage() {
           </tbody>
         </table>
       </div>
-      </div>
     </div>
-  </div>
+    </div>
   );
 }
