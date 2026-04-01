@@ -150,19 +150,30 @@ serve(async (req) => {
     if (!ga4PropertyId) throw new Error("GA4_PROPERTY_ID not configured");
     if (!gscSiteUrl) throw new Error("GSC_SITE_URL not configured");
 
+    console.log(`Raw secret type: ${typeof serviceAccountJson}, length: ${serviceAccountJson.length}, first100: ${serviceAccountJson.substring(0, 100)}`);
+    
     let serviceAccount: any;
-    try {
-      serviceAccount = JSON.parse(serviceAccountJson);
-      // Handle double-encoded JSON (string within string)
-      if (typeof serviceAccount === "string") {
-        serviceAccount = JSON.parse(serviceAccount);
+    let raw = serviceAccountJson.trim();
+    // Try multiple levels of JSON parsing (could be double/triple encoded)
+    for (let i = 0; i < 3; i++) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed === "object" && parsed !== null && parsed.private_key) {
+          serviceAccount = parsed;
+          break;
+        } else if (typeof parsed === "string") {
+          raw = parsed;
+        } else {
+          serviceAccount = parsed;
+          break;
+        }
+      } catch {
+        break;
       }
-    } catch (e) {
-      throw new Error(`Failed to parse GCP_SERVICE_ACCOUNT_JSON: ${e.message}. First 50 chars: ${serviceAccountJson.substring(0, 50)}`);
     }
     
-    if (!serviceAccount.private_key) {
-      throw new Error(`Service account JSON is missing 'private_key'. Keys found: ${Object.keys(serviceAccount).join(", ")}`);
+    if (!serviceAccount || !serviceAccount.private_key) {
+      throw new Error(`Service account missing 'private_key'. Type: ${typeof serviceAccount}, keys: ${serviceAccount ? Object.keys(serviceAccount).join(",") : "null"}, rawStart: ${serviceAccountJson.substring(0, 200)}`);
     }
     
     console.log(`Service account loaded for: ${serviceAccount.client_email}`);
