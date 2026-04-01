@@ -386,6 +386,20 @@ export default function ProductListPage() {
                       <td className="px-2 py-1.5 align-middle text-muted-foreground hidden xl:table-cell whitespace-nowrap">
                         {format(new Date(product.updated_at), "d. MMM yyyy", { locale: da })}
                       </td>
+                      <td className="px-2 py-1.5 align-middle">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`/products/${product.id}`, "_blank");
+                          }}
+                          title="Åbn i nyt vindue"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      </td>
                     </tr>
                   );
                 })
