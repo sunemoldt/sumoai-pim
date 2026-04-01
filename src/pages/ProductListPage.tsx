@@ -14,7 +14,7 @@ type StockFilter = "all" | "instock" | "outofstock" | "backorder";
 type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
-type SortField = "title" | "stock_quantity" | "updated_at" | "recommended" | "purchases" | "orders";
+type SortField = "title" | "stock_quantity" | "updated_at" | "recommended" | "page_views" | "conversion_rate";
 type SortDir = "asc" | "desc";
 
 export default function ProductListPage() {
