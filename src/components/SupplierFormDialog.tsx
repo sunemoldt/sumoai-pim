@@ -124,11 +124,11 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
 
           {feedType !== "manual" && (
             <div className="space-y-2">
-              <Label>Feed URL</Label>
+              <Label>{feedType === "ftp" ? "FTP URL" : "Feed URL"}</Label>
               <Input
                 value={feedUrl}
                 onChange={(e) => setFeedUrl(e.target.value)}
-                placeholder="https://leverandor.dk/feed.csv"
+                placeholder={feedType === "ftp" ? "ftp://bruger:kode@server.dk/prisfil.csv" : "https://leverandor.dk/feed.csv"}
               />
               <div className="text-xs text-muted-foreground">eller upload en fil:</div>
               <label className="flex items-center gap-2 cursor-pointer">
