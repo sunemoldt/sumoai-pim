@@ -97,12 +97,13 @@ async function handleAuthorize(url: URL) {
   const state = url.searchParams.get("state") || "";
   const client_id = url.searchParams.get("client_id") || "";
   const code_challenge = url.searchParams.get("code_challenge") || "";
+  const code_challenge_method = url.searchParams.get("code_challenge_method") || "S256";
 
   if (!redirect_uri) {
     return jsonResponse({ error: "invalid_request", error_description: "redirect_uri required" }, 400);
   }
 
-  const code = await createSignedCode({ client_id, redirect_uri, code_challenge });
+  const code = await createSignedCode({ client_id, redirect_uri, code_challenge, code_challenge_method });
 
   const redir = new URL(redirect_uri);
   redir.searchParams.set("code", code);
