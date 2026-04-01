@@ -557,7 +557,19 @@ mcpServer.tool("sync_analytics", {
 const transport = new StreamableHttpTransport();
 const httpHandler = transport.bind(mcpServer);
 
+// Only route non-OAuth paths to MCP handler
+const OAUTH_PATHS = ["/.well-known/", "/register", "/authorize", "/token"];
+
 app.all("/*", async (c) => {
+  const path = new URL(c.req.url).pathname;
+  // Remove the /mcp-server prefix if present (Supabase strips it, but just in case)
+  const cleanPath = path.replace(/^\/mcp-server/, "");
+  
+  if (OAUTH_PATHS.some(p => cleanPath.startsWith(p))) {
+    // Should have been handled by specific routes above — return 404 if somehow missed
+    return c.json({ error: "not_found" }, 404);
+  }
+  
   return await httpHandler(c.req.raw);
 });
 
