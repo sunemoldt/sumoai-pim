@@ -150,7 +150,33 @@ serve(async (req) => {
     if (!ga4PropertyId) throw new Error("GA4_PROPERTY_ID not configured");
     if (!gscSiteUrl) throw new Error("GSC_SITE_URL not configured");
 
-    const serviceAccount = JSON.parse(serviceAccountJson);
+    console.log(`Raw secret type: ${typeof serviceAccountJson}, length: ${serviceAccountJson.length}, first100: ${serviceAccountJson.substring(0, 100)}`);
+    
+    let serviceAccount: any;
+    let raw = serviceAccountJson.trim();
+    // Try multiple levels of JSON parsing (could be double/triple encoded)
+    for (let i = 0; i < 3; i++) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed === "object" && parsed !== null && parsed.private_key) {
+          serviceAccount = parsed;
+          break;
+        } else if (typeof parsed === "string") {
+          raw = parsed;
+        } else {
+          serviceAccount = parsed;
+          break;
+        }
+      } catch {
+        break;
+      }
+    }
+    
+    if (!serviceAccount || !serviceAccount.private_key) {
+      throw new Error(`Service account missing 'private_key'. Type: ${typeof serviceAccount}, keys: ${serviceAccount ? Object.keys(serviceAccount).join(",") : "null"}, rawStart: ${serviceAccountJson.substring(0, 200)}`);
+    }
+    
+    console.log(`Service account loaded for: ${serviceAccount.client_email}`);
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Get analysis period from settings
