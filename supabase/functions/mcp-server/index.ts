@@ -6,7 +6,32 @@ const app = new Hono();
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const mcpApiKey = Deno.env.get("MCP_API_KEY");
 const supabase = createClient(supabaseUrl, serviceKey);
+
+// Auth middleware: require MCP_API_KEY or valid JWT
+app.use("/*", async (c, next) => {
+  const authHeader = c.req.header("Authorization") ?? "";
+
+  // Option 1: API key via Bearer token
+  if (mcpApiKey && authHeader === `Bearer ${mcpApiKey}`) {
+    return next();
+  }
+
+  // Option 2: Valid Supabase JWT
+  if (authHeader.startsWith("Bearer ")) {
+    const token = authHeader.replace("Bearer ", "");
+    const anonClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data, error } = await anonClient.auth.getUser(token);
+    if (!error && data?.user) {
+      return next();
+    }
+  }
+
+  return c.json({ error: "Unauthorized" }, 401);
+});
 
 const mcpServer = new McpServer({
   name: "comtek-pim",
