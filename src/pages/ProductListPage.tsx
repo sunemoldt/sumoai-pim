@@ -392,14 +392,14 @@ export default function ProductListPage() {
                       const productRecs = recommendations.filter(r => r.master_product_id === product.id);
                       const hasWarning = productRecs.some(r => r.severity === "critical");
                       const hasTip = productRecs.some(r => r.severity === "info" || r.severity === "warning");
-                      const purchases = analytics?.purchases ?? 0;
-                      const orders = analytics?.clicks ?? 0; // clicks stores orders_count
+                      const pageViews = analytics?.page_views ?? 0;
+                      const convRate = analytics?.conversion_rate ?? 0;
                       return (
                         <>
                           <td className="px-2 py-1.5 align-middle text-right font-mono">
                             <div className="flex items-center justify-end gap-1">
                               {analytics ? (
-                                <span className={purchases > 0 ? "text-success" : "text-muted-foreground"}>{purchases}</span>
+                                <span className={pageViews > 0 ? "text-foreground" : "text-muted-foreground"}>{pageViews}</span>
                               ) : "—"}
                               {hasWarning && (
                                 <TooltipProvider>
@@ -419,8 +419,10 @@ export default function ProductListPage() {
                               )}
                             </div>
                           </td>
-                          <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
-                            {analytics ? orders : "—"}
+                          <td className="px-2 py-1.5 align-middle text-right font-mono">
+                            {analytics ? (
+                              <span className={convRate > 0 ? "text-success" : "text-muted-foreground"}>{convRate.toFixed(1)}%</span>
+                            ) : "—"}
                           </td>
                         </>
                       );
