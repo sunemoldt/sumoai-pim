@@ -298,7 +298,7 @@ Deno.serve(async (req: Request) => {
   const path = url.pathname.replace(/^\/mcp-server/, "");
 
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type, accept, mcp-session-id, x-client-info, apikey", "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS" } });
+    return new Response(null, { headers: corsHeaders });
   }
 
   // OAuth routes (no auth)
@@ -309,6 +309,6 @@ Deno.serve(async (req: Request) => {
   if (path === "/token" && req.method === "POST") return handleToken(req);
 
   // MCP routes (auth required)
-  if (!isAuthorized(req)) return jsonResponse({ error: "Unauthorized" }, 401);
+  if (!isAuthorized(req)) return unauthorizedResponse();
   return mcpHandler(req);
 });
