@@ -21,6 +21,8 @@ export default function ProductDetailPage() {
   const { data: product, isLoading } = useMasterProduct(id!);
   const { data: priceSettings = [] } = usePriceSettings();
   const { data: changeLog = [] } = useProductChangeLog(id!);
+  const { data: analytics } = useProductAnalytics(id!);
+  const { data: recommendations = [] } = useProductRecommendations(id!);
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [markupInput, setMarkupInput] = useState<string | null>(null);
