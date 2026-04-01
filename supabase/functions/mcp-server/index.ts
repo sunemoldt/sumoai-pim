@@ -505,7 +505,7 @@ Deno.serve(async (req: Request) => {
   if (path === "/.well-known/oauth-protected-resource") {
     return withLoggedResponse(req, path, handleProtectedResource(), { route: "oauth-protected-resource" });
   }
-  if (path === "/.well-known/oauth-authorization-server") {
+  if (path === "/.well-known/oauth-authorization-server" || path === "/.well-known/openid-configuration") {
     return withLoggedResponse(req, path, handleAuthServerMetadata(), { route: "oauth-authorization-server" });
   }
   if (path === "/register" && req.method === "POST") {
