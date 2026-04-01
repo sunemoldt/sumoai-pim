@@ -288,8 +288,12 @@ export default function ProductListPage() {
                 <span className="inline-flex items-center justify-end">Anbefalet<SortIcon field="recommended" /></span>
               </th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Konv. (7d)</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Besøg ÷ salg</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("conversion_rate")}>
+                <span className="inline-flex items-center justify-end">Konv. (30d)<SortIcon field="conversion_rate" /></span>
+              </th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("page_views")}>
+                <span className="inline-flex items-center justify-end">Besøg<SortIcon field="page_views" /></span>
+              </th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
                 <span className="inline-flex items-center">Redigeret<SortIcon field="updated_at" /></span>
