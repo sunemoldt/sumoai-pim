@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useMasterProduct, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog } from "@/hooks/use-products";
+import { useMasterProduct, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog, useProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
