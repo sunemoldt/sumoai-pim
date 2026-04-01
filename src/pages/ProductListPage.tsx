@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { useMasterProducts, useSuppliers, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,7 @@ import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 type StockFilter = "all" | "instock" | "outofstock" | "backorder";
@@ -18,7 +18,41 @@ type SortField = "title" | "stock_quantity" | "updated_at" | "recommended" | "pa
 type SortDir = "asc" | "desc";
 
 export default function ProductListPage() {
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Persist filters in URL search params so back-navigation preserves them
+  const search = searchParams.get("q") ?? "";
+  const stockFilter = (searchParams.get("stock") ?? "all") as StockFilter;
+  const brandFilter = searchParams.get("brand") ?? "all";
+  const categoryFilter = searchParams.get("category") ?? "all";
+  const marginFilter = (searchParams.get("margin") ?? "all") as MarginFilter;
+  const priceFilter = (searchParams.get("price") ?? "all") as PriceFilter;
+  const supplierFilter = searchParams.get("supplier") ?? "all";
+  const statusFilter = (searchParams.get("status") ?? "all") as StatusFilter;
+  const sortField = (searchParams.get("sort") ?? "title") as SortField;
+  const sortDir = (searchParams.get("dir") ?? "asc") as SortDir;
+
+  const setParam = useCallback((key: string, value: string) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (value === "all" || value === "" || (key === "sort" && value === "title") || (key === "dir" && value === "asc")) {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const setSearch = (v: string) => setParam("q", v);
+  const setStockFilter = (v: StockFilter) => setParam("stock", v);
+  const setBrandFilter = (v: string) => setParam("brand", v);
+  const setCategoryFilter = (v: string) => setParam("category", v);
+  const setMarginFilter = (v: MarginFilter) => setParam("margin", v);
+  const setPriceFilter = (v: PriceFilter) => setParam("price", v);
+  const setSupplierFilter = (v: string) => setParam("supplier", v);
+  const setStatusFilter = (v: StatusFilter) => setParam("status", v);
+
   const { data: products = [], isLoading } = useMasterProducts(search || undefined);
   const { data: priceSettings = [] } = usePriceSettings();
   const { data: suppliers = [] } = useSuppliers();
@@ -26,15 +60,7 @@ export default function ProductListPage() {
   const { data: recommendations = [] } = useProductRecommendations();
   const navigate = useNavigate();
 
-  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
-  const [brandFilter, setBrandFilter] = useState<string>("all");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [marginFilter, setMarginFilter] = useState<MarginFilter>("all");
-  const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
-  const [supplierFilter, setSupplierFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [sortField, setSortField] = useState<SortField>("title");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
