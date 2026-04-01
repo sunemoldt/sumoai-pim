@@ -24,6 +24,31 @@ async function wcFetch(storeUrl: string, endpoint: string, key: string, secret: 
   return JSON.parse(body);
 }
 
+async function fetchIAWPAnalytics(
+  storeUrl: string,
+  key: string,
+  secret: string,
+  periodDays: number
+): Promise<Map<string, { views: number; visitors: number; sessions: number }>> {
+  const result = new Map<string, { views: number; visitors: number; sessions: number }>();
+  try {
+    const data = await wcFetch(storeUrl, "custom/v1/product-analytics", key, secret, {
+      days: String(periodDays),
+    });
+    console.log(`IAWP returned ${data.length} products with view data`);
+    for (const item of data) {
+      result.set(String(item.product_id), {
+        views: item.views || 0,
+        visitors: item.visitors || 0,
+        sessions: item.sessions || 0,
+      });
+    }
+  } catch (e) {
+    console.error(`Could not fetch IAWP analytics: ${e.message}`);
+  }
+  return result;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -80,61 +105,13 @@ serve(async (req) => {
 
     console.log(`Products in DB: ${products.length}, with WC IDs: ${wcIdToProduct.size}`);
 
-    // Try WC Analytics API first (provides richer per-product stats)
-    let productStats: any[] = [];
-    let usedEndpoint = "";
+    // Fetch WC sales stats and IAWP page views in parallel
+    const [salesResult, iawpViews] = await Promise.all([
+      fetchWCSalesStats(wcStoreUrl, wcKey, wcSecret, startStr, endStr),
+      fetchIAWPAnalytics(wcStoreUrl, wcKey, wcSecret, periodDays),
+    ]);
 
-    try {
-      // WC Analytics reports/products - gives items_sold, net_revenue, orders_count per product
-      const stats = await wcFetch(wcStoreUrl, "wc-analytics/reports/products", wcKey, wcSecret, {
-        after: `${startStr}T00:00:00`,
-        before: `${endStr}T23:59:59`,
-        per_page: "100",
-        orderby: "items_sold",
-        order: "desc",
-      });
-      productStats = stats;
-      usedEndpoint = "wc-analytics/reports/products";
-      console.log(`WC Analytics returned ${stats.length} products`);
-    } catch (e) {
-      console.log(`WC Analytics endpoint failed, trying classic: ${e.message}`);
-      // Fallback to classic top_sellers
-      try {
-        const topSellers = await wcFetch(wcStoreUrl, "wc/v3/reports/top_sellers", wcKey, wcSecret, {
-          date_min: startStr,
-          date_max: endStr,
-          per_page: "100",
-        });
-        productStats = topSellers.map((t: any) => ({
-          product_id: t.product_id,
-          items_sold: t.quantity,
-          net_revenue: 0,
-          orders_count: 0,
-        }));
-        usedEndpoint = "wc/v3/reports/top_sellers";
-        console.log(`Classic top_sellers returned ${topSellers.length} items`);
-      } catch (e2) {
-        console.error(`Both WC endpoints failed: ${e2.message}`);
-        throw new Error(`Could not fetch WC stats: ${e2.message}`);
-      }
-    }
-
-    // Also fetch recent orders to calculate page-level engagement approximation
-    // WooCommerce doesn't track page views, but we can count unique orders per product
-    let orderCount = 0;
-    try {
-      // Get total orders in period for conversion context
-      const orders = await wcFetch(wcStoreUrl, "wc/v3/orders", wcKey, wcSecret, {
-        after: `${startStr}T00:00:00`,
-        before: `${endStr}T23:59:59`,
-        per_page: "1",
-        status: "completed,processing",
-      });
-      // WooCommerce returns total in headers, but we can use the array
-      orderCount = orders.length;
-    } catch (e) {
-      console.log(`Could not fetch orders: ${e.message}`);
-    }
+    const { productStats, usedEndpoint } = salesResult;
 
     // Map WC stats to our products
     const statsByProductId = new Map<string, { items_sold: number; net_revenue: number; orders_count: number }>();
@@ -150,28 +127,46 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Matched ${statsByProductId.size} products with sales data`);
+    // Map IAWP views to our products
+    const viewsByProductId = new Map<string, { views: number; visitors: number; sessions: number }>();
+    for (const [wcId, viewData] of iawpViews) {
+      const product = wcIdToProduct.get(wcId);
+      if (product) {
+        const existing = viewsByProductId.get(product.id) || { views: 0, visitors: 0, sessions: 0 };
+        existing.views += viewData.views;
+        existing.visitors += viewData.visitors;
+        existing.sessions += viewData.sessions;
+        viewsByProductId.set(product.id, existing);
+      }
+    }
+
+    console.log(`Matched ${statsByProductId.size} products with sales data, ${viewsByProductId.size} with view data`);
 
     // Batch upsert analytics
     const analyticsRows = [];
     const recommendations: any[] = [];
 
     for (const product of products) {
-      if (!product.webshop_product_id) continue; // Skip products not in webshop
+      if (!product.webshop_product_id) continue;
 
       const stats = statsByProductId.get(product.id);
+      const views = viewsByProductId.get(product.id);
       const purchases = stats?.items_sold || 0;
       const ordersCount = stats?.orders_count || 0;
+      const pageViews = views?.views || 0;
+
+      // Calculate conversion rate: purchases / page_views
+      const conversionRate = pageViews > 0 ? Math.round((purchases / pageViews) * 10000) / 100 : 0;
 
       analyticsRows.push({
         master_product_id: product.id,
         period_start: startStr,
         period_end: endStr,
-        page_views: 0, // WooCommerce doesn't track this
+        page_views: pageViews,
         add_to_carts: 0,
         purchases,
-        conversion_rate: 0,
-        impressions: 0,
+        conversion_rate: conversionRate,
+        impressions: views?.sessions || 0,
         clicks: ordersCount,
         avg_position: 0,
         ctr: 0,
@@ -188,7 +183,7 @@ serve(async (req) => {
           title: "Populært produkt med lavt lager",
           description: `Produktet har solgt ${purchases} stk. de sidste ${periodDays} dage, men lagerbeholdningen er kun ${product.stock_quantity ?? 0} stk.`,
           action_suggestion: "Bestil varen hjem hos den billigste leverandør hurtigst muligt.",
-          data: { purchases, stock: product.stock_quantity },
+          data: { purchases, stock: product.stock_quantity, page_views: pageViews, conversion_rate: conversionRate },
         });
       }
     }
@@ -250,6 +245,7 @@ serve(async (req) => {
         endpoint_used: usedEndpoint,
         analytics_updated: upsertedCount,
         products_with_sales: statsByProductId.size,
+        products_with_views: viewsByProductId.size,
         recommendations_created: recommendations.length,
         period: { start: startStr, end: endStr, days: periodDays },
       }),
@@ -263,3 +259,44 @@ serve(async (req) => {
     );
   }
 });
+
+// Extracted: fetch WC sales statistics
+async function fetchWCSalesStats(
+  wcStoreUrl: string,
+  wcKey: string,
+  wcSecret: string,
+  startStr: string,
+  endStr: string
+): Promise<{ productStats: any[]; usedEndpoint: string }> {
+  try {
+    const stats = await wcFetch(wcStoreUrl, "wc-analytics/reports/products", wcKey, wcSecret, {
+      after: `${startStr}T00:00:00`,
+      before: `${endStr}T23:59:59`,
+      per_page: "100",
+      orderby: "items_sold",
+      order: "desc",
+    });
+    console.log(`WC Analytics returned ${stats.length} products`);
+    return { productStats: stats, usedEndpoint: "wc-analytics/reports/products" };
+  } catch (e) {
+    console.log(`WC Analytics endpoint failed, trying classic: ${e.message}`);
+    try {
+      const topSellers = await wcFetch(wcStoreUrl, "wc/v3/reports/top_sellers", wcKey, wcSecret, {
+        date_min: startStr,
+        date_max: endStr,
+        per_page: "100",
+      });
+      const productStats = topSellers.map((t: any) => ({
+        product_id: t.product_id,
+        items_sold: t.quantity,
+        net_revenue: 0,
+        orders_count: 0,
+      }));
+      console.log(`Classic top_sellers returned ${topSellers.length} items`);
+      return { productStats, usedEndpoint: "wc/v3/reports/top_sellers" };
+    } catch (e2) {
+      console.error(`Both WC endpoints failed: ${e2.message}`);
+      throw new Error(`Could not fetch WC stats: ${e2.message}`);
+    }
+  }
+}
