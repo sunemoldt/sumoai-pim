@@ -290,13 +290,13 @@ export default function ProductListPage() {
           <tbody className="[&_tr:last-child]:border-0">
             {isLoading ? (
               <tr className="border-b">
-                <td colSpan={15} className="text-center py-8 text-muted-foreground">
+                <td colSpan={17} className="text-center py-8 text-muted-foreground">
                   Indlæser...
                 </td>
               </tr>
             ) : sorted.length === 0 ? (
               <tr className="border-b">
-                <td colSpan={15} className="text-center py-8 text-muted-foreground">
+                <td colSpan={17} className="text-center py-8 text-muted-foreground">
                   <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
                   Ingen produkter fundet
                 </td>
