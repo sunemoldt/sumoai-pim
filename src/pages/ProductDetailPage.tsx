@@ -241,6 +241,13 @@ export default function ProductDetailPage() {
           <TabsTrigger value="suppliers">Leverandører</TabsTrigger>
           <TabsTrigger value="comparison">Sammenligning</TabsTrigger>
           <TabsTrigger value="push" onClick={initPushFields}>Opdater shop</TabsTrigger>
+          <TabsTrigger value="performance">
+            <TrendingUp className="h-3.5 w-3.5 mr-1" />
+            Performance
+            {recommendations.length > 0 && (
+              <Badge variant="destructive" className="ml-1.5 text-[10px] px-1 py-0">{recommendations.length}</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
 
