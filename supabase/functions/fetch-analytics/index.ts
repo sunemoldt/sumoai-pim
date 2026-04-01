@@ -51,7 +51,7 @@ serve(async (req) => {
     const settingsMap: Record<string, string> = {};
     (settings || []).forEach((s: any) => { settingsMap[s.setting_key] = s.setting_value; });
 
-    const periodDays = parseInt(settingsMap["analysis_period_days"] || "7");
+    const periodDays = parseInt(settingsMap["analysis_period_days"] || "30");
     const minTraffic = parseInt(settingsMap["min_traffic_threshold"] || "50");
     const lowStockThreshold = parseInt(settingsMap["low_stock_threshold"] || "5");
 
