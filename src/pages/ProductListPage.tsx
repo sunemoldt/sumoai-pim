@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { useMasterProducts, useSuppliers, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,7 @@ import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
 type StockFilter = "all" | "instock" | "outofstock" | "backorder";
@@ -18,7 +18,41 @@ type SortField = "title" | "stock_quantity" | "updated_at" | "recommended" | "pa
 type SortDir = "asc" | "desc";
 
 export default function ProductListPage() {
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Persist filters in URL search params so back-navigation preserves them
+  const search = searchParams.get("q") ?? "";
+  const stockFilter = (searchParams.get("stock") ?? "all") as StockFilter;
+  const brandFilter = searchParams.get("brand") ?? "all";
+  const categoryFilter = searchParams.get("category") ?? "all";
+  const marginFilter = (searchParams.get("margin") ?? "all") as MarginFilter;
+  const priceFilter = (searchParams.get("price") ?? "all") as PriceFilter;
+  const supplierFilter = searchParams.get("supplier") ?? "all";
+  const statusFilter = (searchParams.get("status") ?? "all") as StatusFilter;
+  const sortField = (searchParams.get("sort") ?? "title") as SortField;
+  const sortDir = (searchParams.get("dir") ?? "asc") as SortDir;
+
+  const setParam = useCallback((key: string, value: string) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (value === "all" || value === "" || (key === "sort" && value === "title") || (key === "dir" && value === "asc")) {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const setSearch = (v: string) => setParam("q", v);
+  const setStockFilter = (v: StockFilter) => setParam("stock", v);
+  const setBrandFilter = (v: string) => setParam("brand", v);
+  const setCategoryFilter = (v: string) => setParam("category", v);
+  const setMarginFilter = (v: MarginFilter) => setParam("margin", v);
+  const setPriceFilter = (v: PriceFilter) => setParam("price", v);
+  const setSupplierFilter = (v: string) => setParam("supplier", v);
+  const setStatusFilter = (v: StatusFilter) => setParam("status", v);
+
   const { data: products = [], isLoading } = useMasterProducts(search || undefined);
   const { data: priceSettings = [] } = usePriceSettings();
   const { data: suppliers = [] } = useSuppliers();
@@ -26,17 +60,8 @@ export default function ProductListPage() {
   const { data: recommendations = [] } = useProductRecommendations();
   const navigate = useNavigate();
 
-  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
-  const [brandFilter, setBrandFilter] = useState<string>("all");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [marginFilter, setMarginFilter] = useState<MarginFilter>("all");
-  const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
-  const [supplierFilter, setSupplierFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [sortField, setSortField] = useState<SortField>("title");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
+
 
   const brands = useMemo(() => {
     const set = new Set(products.map((p) => p.brand).filter(Boolean) as string[]);
@@ -114,9 +139,12 @@ export default function ProductListPage() {
     });
   }, [filtered, sortField, sortDir, globalMarkup, analyticsMap]);
 
+  const setSortField = (v: SortField) => setParam("sort", v);
+  const setSortDir = (v: SortDir) => setParam("dir", v);
+
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
       setSortDir("asc");
@@ -283,16 +311,17 @@ export default function ProductListPage() {
                 <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
                   <span className="inline-flex items-center">Ændret<SortIcon field="updated_at" /></span>
                 </th>
+                <th className="h-9 px-2 w-8"></th>
               </tr>
             </thead>
             <tbody className="[&_tr:last-child]:border-0">
               {isLoading ? (
                 <tr className="border-b">
-                  <td colSpan={12} className="py-8 text-center text-muted-foreground">Indlæser...</td>
+                  <td colSpan={14} className="py-8 text-center text-muted-foreground">Indlæser...</td>
                 </tr>
               ) : sorted.length === 0 ? (
                 <tr className="border-b">
-                  <td colSpan={12} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={14} className="py-8 text-center text-muted-foreground">
                     <Package className="mx-auto mb-2 h-8 w-8 opacity-40" />
                     Ingen produkter fundet
                   </td>
@@ -356,6 +385,20 @@ export default function ProductListPage() {
                       </td>
                       <td className="px-2 py-1.5 align-middle text-muted-foreground hidden xl:table-cell whitespace-nowrap">
                         {format(new Date(product.updated_at), "d. MMM yyyy", { locale: da })}
+                      </td>
+                      <td className="px-2 py-1.5 align-middle">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(`/products/${product.id}`, "_blank");
+                          }}
+                          title="Åbn i nyt vindue"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
                       </td>
                     </tr>
                   );
