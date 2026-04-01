@@ -9,12 +9,90 @@ const BASE_URL = `${supabaseUrl}/functions/v1/mcp-server`;
 
 // ── Helpers ──
 function toHex(buf: ArrayBuffer): string {
-  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
 function fromHex(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
   return bytes;
+}
+
+function truncate(value: string | null, max = 160): string | null {
+  if (!value) return null;
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+function safeUrlHost(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).host;
+  } catch {
+    return "invalid";
+  }
+}
+
+function summarizeSecret(value: string | null): string | null {
+  if (!value) return null;
+  const [scheme, token] = value.split(/\s+/, 2);
+  if (!token) return `present(len=${value.length})`;
+  return `${scheme}(len=${token.length})`;
+}
+
+function logEvent(event: Record<string, unknown>) {
+  console.log(JSON.stringify({ source: "mcp-server", ...event }));
+}
+
+function logRequest(req: Request, path: string) {
+  const url = new URL(req.url);
+  logEvent({
+    event: "mcp_request",
+    method: req.method,
+    path,
+    queryKeys: [...url.searchParams.keys()],
+    headers: {
+      accept: truncate(req.headers.get("accept")),
+      contentType: truncate(req.headers.get("content-type")),
+      userAgent: truncate(req.headers.get("user-agent")),
+      origin: truncate(req.headers.get("origin")),
+      referer: truncate(req.headers.get("referer")),
+      authorization: summarizeSecret(req.headers.get("authorization")),
+      apikey: summarizeSecret(req.headers.get("apikey")),
+      mcpSessionId: truncate(req.headers.get("mcp-session-id")),
+      xClientInfo: truncate(req.headers.get("x-client-info")),
+    },
+  });
+}
+
+async function logRpcRequest(req: Request, path: string) {
+  if (req.method !== "POST" || (path !== "/" && path !== "")) return;
+  try {
+    const body = await req.clone().json();
+    const params = body?.params && typeof body.params === "object" ? body.params : null;
+    const args = params?.arguments && typeof params.arguments === "object" ? params.arguments : null;
+
+    logEvent({
+      event: "mcp_rpc_request",
+      jsonrpcMethod: typeof body?.method === "string" ? body.method : null,
+      toolName: body?.method === "tools/call" && typeof params?.name === "string" ? params.name : null,
+      paramKeys: params ? Object.keys(params).slice(0, 10) : [],
+      argumentKeys: args ? Object.keys(args).slice(0, 10) : [],
+    });
+  } catch {
+    // Ignore non-JSON bodies
+  }
+}
+
+function withLoggedResponse(req: Request, path: string, response: Response, extra: Record<string, unknown> = {}) {
+  logEvent({
+    event: "mcp_response",
+    method: req.method,
+    path,
+    status: response.status,
+    contentType: truncate(response.headers.get("content-type")),
+    ...extra,
+  });
+  return response;
 }
 
 async function createSignedCode(payload: Record<string, string>): Promise<string> {
@@ -37,7 +115,9 @@ async function verifySignedCode(code: string): Promise<Record<string, string> | 
     const payload = JSON.parse(new TextDecoder().decode(fromHex(dataHex)));
     if (Number(payload.exp) < Date.now()) return null;
     return payload;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 const corsHeaders = {
@@ -90,21 +170,34 @@ function handleAuthServerMetadata() {
 async function handleRegister(req: Request) {
   try {
     const body = await req.json();
+    const redirectUris = Array.isArray(body.redirect_uris)
+      ? body.redirect_uris.filter((value: unknown): value is string => typeof value === "string")
+      : [];
+
+    logEvent({
+      event: "oauth_register",
+      clientName: typeof body.client_name === "string" ? body.client_name : null,
+      redirectUriHosts: redirectUris.map((uri) => safeUrlHost(uri)),
+      requestedAuthMethod: typeof body.token_endpoint_auth_method === "string" ? body.token_endpoint_auth_method : null,
+    });
+
     const bytes = new Uint8Array(16);
     crypto.getRandomValues(bytes);
     const client_id = `client_${toHex(bytes.buffer)}`;
     crypto.getRandomValues(bytes);
     const client_secret = `secret_${toHex(bytes.buffer)}`;
+
     return jsonResponse({
       client_id,
       client_secret,
-      client_name: body.client_name || "Claude",
-      redirect_uris: body.redirect_uris || [],
+      client_name: typeof body.client_name === "string" ? body.client_name : "Claude",
+      redirect_uris: redirectUris,
       grant_types: ["authorization_code"],
       response_types: ["code"],
       token_endpoint_auth_method: "client_secret_post",
     }, 201);
   } catch {
+    logEvent({ event: "oauth_register_error", reason: "invalid_request" });
     return jsonResponse({ error: "invalid_request" }, 400);
   }
 }
@@ -115,6 +208,17 @@ async function handleAuthorize(url: URL) {
   const client_id = url.searchParams.get("client_id") || "";
   const code_challenge = url.searchParams.get("code_challenge") || "";
   const code_challenge_method = url.searchParams.get("code_challenge_method") || "S256";
+  const response_type = url.searchParams.get("response_type") || "";
+
+  logEvent({
+    event: "oauth_authorize",
+    clientIdPresent: Boolean(client_id),
+    redirectUriHost: safeUrlHost(redirect_uri),
+    responseType: response_type || null,
+    hasState: Boolean(state),
+    hasCodeChallenge: Boolean(code_challenge),
+    codeChallengeMethod: code_challenge_method,
+  });
 
   if (!redirect_uri) {
     return jsonResponse({ error: "invalid_request", error_description: "redirect_uri required" }, 400);
@@ -138,15 +242,29 @@ async function handleToken(req: Request) {
     body = await req.json();
   }
 
+  logEvent({
+    event: "oauth_token",
+    contentType: truncate(ct),
+    grantType: body.grant_type || null,
+    hasCode: Boolean(body.code),
+    hasCodeVerifier: Boolean(body.code_verifier),
+    hasClientId: Boolean(body.client_id),
+    hasClientSecret: Boolean(body.client_secret),
+    redirectUriHost: safeUrlHost(body.redirect_uri),
+  });
+
   if (body.grant_type !== "authorization_code") {
+    logEvent({ event: "oauth_token_error", reason: "unsupported_grant_type" });
     return jsonResponse({ error: "unsupported_grant_type" }, 400);
   }
   if (!body.code) {
+    logEvent({ event: "oauth_token_error", reason: "missing_code" });
     return jsonResponse({ error: "invalid_request" }, 400);
   }
 
   const payload = await verifySignedCode(body.code);
   if (!payload) {
+    logEvent({ event: "oauth_token_error", reason: "invalid_or_expired_code" });
     return jsonResponse({ error: "invalid_grant", error_description: "Invalid or expired code" }, 400);
   }
 
@@ -158,12 +276,21 @@ async function handleToken(req: Request) {
     } else {
       const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body.code_verifier));
       computed = btoa(String.fromCharCode(...new Uint8Array(hash)))
-        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
     }
     if (computed !== payload.code_challenge) {
+      logEvent({
+        event: "oauth_token_error",
+        reason: "pkce_failed",
+        codeChallengeMethod: payload.code_challenge_method || "S256",
+      });
       return jsonResponse({ error: "invalid_grant", error_description: "PKCE failed" }, 400);
     }
   }
+
+  logEvent({ event: "oauth_token_success", codeChallengeMethod: payload.code_challenge_method || null });
 
   return jsonResponse({
     access_token: mcpApiKey,
@@ -216,8 +343,11 @@ mcpServer.tool("update_product", {
   description: "Update fields on a product. Updatable: title, brand, category, sku, webshop_price, sale_price, stock_quantity, stock_status, image_url, short_description, long_description, meta_title, meta_description, backorders_allowed, custom_markup_percentage, attributes.",
   inputSchema: { type: "object" as const, properties: { product_id: { type: "string" as const }, updates: { type: "object" as const } }, required: ["product_id", "updates"] },
   handler: async ({ product_id, updates }: any) => {
-    const allowed = new Set(["title","brand","category","sku","webshop_price","sale_price","stock_quantity","stock_status","image_url","short_description","long_description","meta_title","meta_description","backorders_allowed","custom_markup_percentage","attributes"]);
-    const f: any = {}; for (const [k,v] of Object.entries(updates)) { if (allowed.has(k)) f[k] = v; }
+    const allowed = new Set(["title", "brand", "category", "sku", "webshop_price", "sale_price", "stock_quantity", "stock_status", "image_url", "short_description", "long_description", "meta_title", "meta_description", "backorders_allowed", "custom_markup_percentage", "attributes"]);
+    const f: any = {};
+    for (const [k, v] of Object.entries(updates)) {
+      if (allowed.has(k)) f[k] = v;
+    }
     if (!Object.keys(f).length) return { content: [{ type: "text" as const, text: "No valid fields" }] };
     const { data, error } = await supabase.from("master_products").update(f).eq("id", product_id).select(ALL).single();
     return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
@@ -225,66 +355,132 @@ mcpServer.tool("update_product", {
 });
 
 mcpServer.tool("list_suppliers", {
-  description: "List all suppliers.", inputSchema: { type: "object" as const, properties: {} },
-  handler: async () => { const { data, error } = await supabase.from("suppliers").select("*").order("name"); return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] }; },
+  description: "List all suppliers.",
+  inputSchema: { type: "object" as const, properties: {} },
+  handler: async () => {
+    const { data, error } = await supabase.from("suppliers").select("*").order("name");
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
 });
 
 mcpServer.tool("get_supplier", {
-  description: "Get supplier details with products.", inputSchema: { type: "object" as const, properties: { supplier_id: { type: "string" as const } }, required: ["supplier_id"] },
-  handler: async ({ supplier_id }: any) => { const { data, error } = await supabase.from("suppliers").select("*, supplier_products(*, master_products(title, ean, sku))").eq("id", supplier_id).single(); return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] }; },
+  description: "Get supplier details with products.",
+  inputSchema: { type: "object" as const, properties: { supplier_id: { type: "string" as const } }, required: ["supplier_id"] },
+  handler: async ({ supplier_id }: any) => {
+    const { data, error } = await supabase.from("suppliers").select("*, supplier_products(*, master_products(title, ean, sku))").eq("id", supplier_id).single();
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
 });
 
 mcpServer.tool("get_price_info", {
-  description: "Get price comparison across suppliers for a product.", inputSchema: { type: "object" as const, properties: { product_id: { type: "string" as const } }, required: ["product_id"] },
+  description: "Get price comparison across suppliers for a product.",
+  inputSchema: { type: "object" as const, properties: { product_id: { type: "string" as const } }, required: ["product_id"] },
   handler: async ({ product_id }: any) => {
     const { data: product } = await supabase.from("master_products").select(ALL).eq("id", product_id).single();
     const { data: sp } = await supabase.from("supplier_products").select("*, suppliers(name)").eq("master_product_id", product_id);
     const { data: s } = await supabase.from("price_settings").select("*").eq("scope", "global").maybeSingle();
     const m = s?.markup_percentage ?? 30;
-    return { content: [{ type: "text" as const, text: JSON.stringify({ product, markup_percentage: m, suppliers: (sp ?? []).map((x: any) => ({ supplier: x.suppliers?.name, purchase_price: x.purchase_price, recommended_price: Math.round(x.purchase_price*(1+m/100)*1.25*100)/100, in_stock: x.in_stock, stock_quantity: x.stock_quantity })) }, null, 2) }] };
+    return {
+      content: [{
+        type: "text" as const,
+        text: JSON.stringify({
+          product,
+          markup_percentage: m,
+          suppliers: (sp ?? []).map((x: any) => ({
+            supplier: x.suppliers?.name,
+            purchase_price: x.purchase_price,
+            recommended_price: Math.round(x.purchase_price * (1 + m / 100) * 1.25 * 100) / 100,
+            in_stock: x.in_stock,
+            stock_quantity: x.stock_quantity,
+          })),
+        }, null, 2),
+      }],
+    };
   },
 });
 
 mcpServer.tool("get_price_history", {
-  description: "Get price history for a supplier product.", inputSchema: { type: "object" as const, properties: { supplier_product_id: { type: "string" as const }, limit: { type: "number" as const } }, required: ["supplier_product_id"] },
-  handler: async ({ supplier_product_id, limit = 50 }: any) => { const { data, error } = await supabase.from("price_history").select("*").eq("supplier_product_id", supplier_product_id).order("recorded_at", { ascending: false }).limit(limit); return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] }; },
+  description: "Get price history for a supplier product.",
+  inputSchema: { type: "object" as const, properties: { supplier_product_id: { type: "string" as const }, limit: { type: "number" as const } }, required: ["supplier_product_id"] },
+  handler: async ({ supplier_product_id, limit = 50 }: any) => {
+    const { data, error } = await supabase.from("price_history").select("*").eq("supplier_product_id", supplier_product_id).order("recorded_at", { ascending: false }).limit(limit);
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
 });
 
 mcpServer.tool("get_change_log", {
-  description: "Get change log for a product.", inputSchema: { type: "object" as const, properties: { product_id: { type: "string" as const }, limit: { type: "number" as const } }, required: ["product_id"] },
-  handler: async ({ product_id, limit = 50 }: any) => { const { data, error } = await supabase.from("product_change_log").select("*").eq("master_product_id", product_id).order("created_at", { ascending: false }).limit(limit); return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] }; },
+  description: "Get change log for a product.",
+  inputSchema: { type: "object" as const, properties: { product_id: { type: "string" as const }, limit: { type: "number" as const } }, required: ["product_id"] },
+  handler: async ({ product_id, limit = 50 }: any) => {
+    const { data, error } = await supabase.from("product_change_log").select("*").eq("master_product_id", product_id).order("created_at", { ascending: false }).limit(limit);
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
 });
 
 mcpServer.tool("get_price_settings", {
-  description: "Get all markup/margin settings.", inputSchema: { type: "object" as const, properties: {} },
-  handler: async () => { const { data, error } = await supabase.from("price_settings").select("*").order("scope"); return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] }; },
+  description: "Get all markup/margin settings.",
+  inputSchema: { type: "object" as const, properties: {} },
+  handler: async () => {
+    const { data, error } = await supabase.from("price_settings").select("*").order("scope");
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
 });
 
 mcpServer.tool("get_import_logs", {
-  description: "Get import/sync logs.", inputSchema: { type: "object" as const, properties: { limit: { type: "number" as const } } },
-  handler: async ({ limit = 20 }: any) => { const { data, error } = await supabase.from("import_logs").select("*").order("started_at", { ascending: false }).limit(limit); return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] }; },
+  description: "Get import/sync logs.",
+  inputSchema: { type: "object" as const, properties: { limit: { type: "number" as const } } },
+  handler: async ({ limit = 20 }: any) => {
+    const { data, error } = await supabase.from("import_logs").select("*").order("started_at", { ascending: false }).limit(limit);
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
 });
 
 mcpServer.tool("get_webhooks", {
-  description: "Get all configured webhooks.", inputSchema: { type: "object" as const, properties: {} },
-  handler: async () => { const { data, error } = await supabase.from("webhook_configs").select("*").order("name"); return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] }; },
+  description: "Get all configured webhooks.",
+  inputSchema: { type: "object" as const, properties: {} },
+  handler: async () => {
+    const { data, error } = await supabase.from("webhook_configs").select("*").order("name");
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
 });
 
 mcpServer.tool("get_product_analytics", {
-  description: "Get performance analytics (GA4 + GSC) for products.", inputSchema: { type: "object" as const, properties: { product_id: { type: "string" as const }, limit: { type: "number" as const } } },
-  handler: async ({ product_id, limit = 50 }: any) => { let q = supabase.from("product_analytics").select("*").order("period_start", { ascending: false }).limit(limit); if (product_id) q = q.eq("master_product_id", product_id); const { data, error } = await q; return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] }; },
+  description: "Get performance analytics (GA4 + GSC) for products.",
+  inputSchema: { type: "object" as const, properties: { product_id: { type: "string" as const }, limit: { type: "number" as const } } },
+  handler: async ({ product_id, limit = 50 }: any) => {
+    let q = supabase.from("product_analytics").select("*").order("period_start", { ascending: false }).limit(limit);
+    if (product_id) q = q.eq("master_product_id", product_id);
+    const { data, error } = await q;
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
 });
 
 mcpServer.tool("get_recommendations", {
-  description: "Get active action recommendations.", inputSchema: { type: "object" as const, properties: { product_id: { type: "string" as const }, severity: { type: "string" as const } } },
-  handler: async ({ product_id, severity }: any) => { let q = supabase.from("product_recommendations").select("*").eq("is_dismissed", false).is("resolved_at", null).order("created_at", { ascending: false }); if (product_id) q = q.eq("master_product_id", product_id); if (severity) q = q.eq("severity", severity); const { data, error } = await q; return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] }; },
+  description: "Get active action recommendations.",
+  inputSchema: { type: "object" as const, properties: { product_id: { type: "string" as const }, severity: { type: "string" as const } } },
+  handler: async ({ product_id, severity }: any) => {
+    let q = supabase.from("product_recommendations").select("*").eq("is_dismissed", false).is("resolved_at", null).order("created_at", { ascending: false });
+    if (product_id) q = q.eq("master_product_id", product_id);
+    if (severity) q = q.eq("severity", severity);
+    const { data, error } = await q;
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
 });
 
 mcpServer.tool("sync_analytics", {
-  description: "Trigger analytics sync.", inputSchema: { type: "object" as const, properties: {} },
+  description: "Trigger analytics sync.",
+  inputSchema: { type: "object" as const, properties: {} },
   handler: async () => {
-    try { const res = await fetch(`${supabaseUrl}/functions/v1/fetch-analytics`, { method: "POST", headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" } }); const data = await res.json(); return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] }; }
-    catch (e: any) { return { content: [{ type: "text" as const, text: `Error: ${e.message}` }] }; }
+    try {
+      const res = await fetch(`${supabaseUrl}/functions/v1/fetch-analytics`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    } catch (e: any) {
+      return { content: [{ type: "text" as const, text: `Error: ${e.message}` }] };
+    }
   },
 });
 
@@ -295,20 +491,38 @@ const mcpHandler = transport.bind(mcpServer);
 // ── Main Handler ──
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
-  const path = url.pathname.replace(/^\/mcp-server/, "");
+  const rawPath = url.pathname.replace(/^\/mcp-server/, "");
+  const path = rawPath === "" ? "/" : rawPath;
+
+  logRequest(req, path);
+  await logRpcRequest(req, path);
 
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return withLoggedResponse(req, path, new Response(null, { headers: corsHeaders }), { route: "preflight" });
   }
 
   // OAuth routes (no auth)
-  if (path === "/.well-known/oauth-protected-resource") return handleProtectedResource();
-  if (path === "/.well-known/oauth-authorization-server") return handleAuthServerMetadata();
-  if (path === "/register" && req.method === "POST") return handleRegister(req);
-  if (path === "/authorize") return handleAuthorize(url);
-  if (path === "/token" && req.method === "POST") return handleToken(req);
+  if (path === "/.well-known/oauth-protected-resource") {
+    return withLoggedResponse(req, path, handleProtectedResource(), { route: "oauth-protected-resource" });
+  }
+  if (path === "/.well-known/oauth-authorization-server") {
+    return withLoggedResponse(req, path, handleAuthServerMetadata(), { route: "oauth-authorization-server" });
+  }
+  if (path === "/register" && req.method === "POST") {
+    return withLoggedResponse(req, path, await handleRegister(req), { route: "register" });
+  }
+  if (path === "/authorize") {
+    return withLoggedResponse(req, path, await handleAuthorize(url), { route: "authorize" });
+  }
+  if (path === "/token" && req.method === "POST") {
+    return withLoggedResponse(req, path, await handleToken(req), { route: "token" });
+  }
 
   // MCP routes (auth required)
-  if (!isAuthorized(req)) return unauthorizedResponse();
-  return mcpHandler(req);
+  if (!isAuthorized(req)) {
+    return withLoggedResponse(req, path, unauthorizedResponse(), { route: "mcp", authorized: false });
+  }
+
+  const response = await mcpHandler(req);
+  return withLoggedResponse(req, path, response, { route: "mcp", authorized: true });
 });
