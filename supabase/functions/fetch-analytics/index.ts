@@ -65,6 +65,7 @@ serve(async (req) => {
     const wcStoreUrl = Deno.env.get("WC_STORE_URL");
     const wcKey = Deno.env.get("WC_CONSUMER_KEY");
     const wcSecret = Deno.env.get("WC_CONSUMER_SECRET");
+    const iawpApiKey = Deno.env.get("IAWP_API_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
