@@ -26,15 +26,22 @@ async function wcFetch(storeUrl: string, endpoint: string, key: string, secret: 
 
 async function fetchIAWPAnalytics(
   storeUrl: string,
-  key: string,
-  secret: string,
+  apiKey: string,
   periodDays: number
 ): Promise<Map<string, { views: number; visitors: number; sessions: number }>> {
   const result = new Map<string, { views: number; visitors: number; sessions: number }>();
   try {
-    const data = await wcFetch(storeUrl, "custom/v1/product-analytics", key, secret, {
-      days: String(periodDays),
-    });
+    const url = new URL(`${storeUrl}/wp-json/custom/v1/product-analytics`);
+    url.searchParams.set("days", String(periodDays));
+    url.searchParams.set("api_key", apiKey);
+    console.log(`IAWP fetch: ${url.toString().replace(apiKey, "***")}`);
+    const res = await fetch(url.toString());
+    const body = await res.text();
+    if (!res.ok) {
+      console.error(`IAWP error ${res.status}: ${body}`);
+      throw new Error(`IAWP API error: ${res.status}`);
+    }
+    const data = JSON.parse(body);
     console.log(`IAWP returned ${data.length} products with view data`);
     for (const item of data) {
       result.set(String(item.product_id), {
