@@ -90,6 +90,35 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground mt-1">Administrer avanceprocenter, webhooks og MCP</p>
       </div>
 
+      {/* Change Password */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-medium flex items-center gap-2">
+            <KeyRound className="h-4 w-4" /> Skift adgangskode
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleChangePassword} className="space-y-4 max-w-sm">
+            <div className="space-y-2">
+              <Label htmlFor="current-pw">Nuværende adgangskode</Label>
+              <Input id="current-pw" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-pw">Ny adgangskode</Label>
+              <Input id="new-pw" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-pw">Bekræft ny adgangskode</Label>
+              <Input id="confirm-pw" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+            </div>
+            <Button type="submit" disabled={changingPassword}>
+              {changingPassword ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Opdater adgangskode
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
       {/* Markup settings */}
       <Card className="shadow-sm">
         <CardHeader className="pb-3">
