@@ -157,7 +157,7 @@ export default function ProductListPage() {
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="relative max-w-md">
+        <div className="relative w-full max-w-xl">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Søg på titel, EAN eller brand..."
@@ -167,202 +167,205 @@ export default function ProductListPage() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Filter className="h-4 w-4" />
-            <span>Filtre:</span>
+        <div className="overflow-x-auto pb-2">
+          <div className="flex min-w-max items-center gap-3">
+            <div className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
+              <Filter className="h-4 w-4" />
+              <span>Filtre:</span>
+            </div>
+
+            <Select value={stockFilter} onValueChange={(v) => setStockFilter(v as StockFilter)}>
+              <SelectTrigger className="h-9 w-[180px] shrink-0 text-sm">
+                <SelectValue placeholder="Lagerstatus" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle lagerstatus</SelectItem>
+                <SelectItem value="instock">På lager</SelectItem>
+                <SelectItem value="outofstock">Udsolgt</SelectItem>
+                <SelectItem value="backorder">Restordre tilladt</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={brandFilter} onValueChange={setBrandFilter}>
+              <SelectTrigger className="h-9 w-[200px] shrink-0 text-sm">
+                <SelectValue placeholder="Brand" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle brands</SelectItem>
+                {brands.map((b) => (
+                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="h-9 w-[220px] shrink-0 text-sm">
+                <SelectValue placeholder="Kategori" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle kategorier</SelectItem>
+                {categories.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={marginFilter} onValueChange={(v) => setMarginFilter(v as MarginFilter)}>
+              <SelectTrigger className="h-9 w-[180px] shrink-0 text-sm">
+                <SelectValue placeholder="Avance" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle avancer</SelectItem>
+                <SelectItem value="low">Lav (&lt;10%)</SelectItem>
+                <SelectItem value="medium">Medium (10-20%)</SelectItem>
+                <SelectItem value="good">God (&gt;20%)</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={priceFilter} onValueChange={(v) => setPriceFilter(v as PriceFilter)}>
+              <SelectTrigger className="h-9 w-[180px] shrink-0 text-sm">
+                <SelectValue placeholder="Pris" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle priser</SelectItem>
+                <SelectItem value="has_price">Har pris</SelectItem>
+                <SelectItem value="no_price">Mangler pris</SelectItem>
+                <SelectItem value="on_sale">På tilbud</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+              <SelectTrigger className="h-9 w-[220px] shrink-0 text-sm">
+                <SelectValue placeholder="Leverandør" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle leverandører</SelectItem>
+                {suppliers.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+              <SelectTrigger className="h-9 w-[180px] shrink-0 text-sm">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle statusser</SelectItem>
+                <SelectItem value="on_stock">På lager</SelectItem>
+                <SelectItem value="out_of_stock">Udsolgt</SelectItem>
+                <SelectItem value="no_data">Ingen data</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 shrink-0 gap-1 text-sm">
+                <X className="h-3.5 w-3.5" />
+                Ryd filtre ({activeFilterCount})
+              </Button>
+            )}
           </div>
-
-          <Select value={stockFilter} onValueChange={(v) => setStockFilter(v as StockFilter)}>
-            <SelectTrigger className="w-[150px] h-9 text-sm">
-              <SelectValue placeholder="Lagerstatus" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Alle lagerstatus</SelectItem>
-              <SelectItem value="instock">På lager</SelectItem>
-              <SelectItem value="outofstock">Udsolgt</SelectItem>
-              <SelectItem value="backorder">Restordre tilladt</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={brandFilter} onValueChange={setBrandFilter}>
-            <SelectTrigger className="w-[160px] h-9 text-sm">
-              <SelectValue placeholder="Brand" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Alle brands</SelectItem>
-              {brands.map((b) => (
-                <SelectItem key={b} value={b}>{b}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[180px] h-9 text-sm">
-              <SelectValue placeholder="Kategori" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Alle kategorier</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c} value={c}>{c}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={marginFilter} onValueChange={(v) => setMarginFilter(v as MarginFilter)}>
-            <SelectTrigger className="w-[150px] h-9 text-sm">
-              <SelectValue placeholder="Avance" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Alle avancer</SelectItem>
-              <SelectItem value="low">Lav (&lt;10%)</SelectItem>
-              <SelectItem value="medium">Medium (10-20%)</SelectItem>
-              <SelectItem value="good">God (&gt;20%)</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={priceFilter} onValueChange={(v) => setPriceFilter(v as PriceFilter)}>
-            <SelectTrigger className="w-[150px] h-9 text-sm">
-              <SelectValue placeholder="Pris" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Alle priser</SelectItem>
-              <SelectItem value="has_price">Har pris</SelectItem>
-              <SelectItem value="no_price">Mangler pris</SelectItem>
-              <SelectItem value="on_sale">På tilbud</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-            <SelectTrigger className="w-[170px] h-9 text-sm">
-              <SelectValue placeholder="Leverandør" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Alle leverandører</SelectItem>
-              {suppliers.map((s) => (
-                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="w-[150px] h-9 text-sm">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Alle statusser</SelectItem>
-              <SelectItem value="on_stock">På lager</SelectItem>
-              <SelectItem value="out_of_stock">Udsolgt</SelectItem>
-              <SelectItem value="no_data">Ingen data</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {activeFilterCount > 0 && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-sm gap-1">
-              <X className="h-3.5 w-3.5" />
-              Ryd filtre ({activeFilterCount})
-            </Button>
-          )}
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card shadow-sm overflow-auto">
-        <table className="w-full caption-bottom text-xs">
-          <thead className="[&_tr]:border-b">
-            <tr className="border-b bg-secondary/50">
-              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground w-10"></th>
-              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("title")}>
-                <span className="inline-flex items-center">Produkt<SortIcon field="title" /></span>
-              </th>
-              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">EAN</th>
-              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">SKU</th>
-              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Brand</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("stock_quantity")}>
-                <span className="inline-flex items-center justify-end">Eget<SortIcon field="stock_quantity" /></span>
-              </th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Lev.</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Indkøb</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Webshop</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Tilbud</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("recommended")}>
-                <span className="inline-flex items-center justify-end">Anbefalet<SortIcon field="recommended" /></span>
-              </th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("page_views")}>
-                <span className="inline-flex items-center justify-end">Besøg (30d)<SortIcon field="page_views" /></span>
-              </th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("conversion_rate")}>
-                <span className="inline-flex items-center justify-end">Konv. % (30d)<SortIcon field="conversion_rate" /></span>
-              </th>
-              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
-              <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
-                <span className="inline-flex items-center">Redigeret<SortIcon field="updated_at" /></span>
-              </th>
-              <th className="h-9 px-2 text-center align-middle font-medium text-muted-foreground w-10"></th>
-            </tr>
-          </thead>
-          <tbody className="[&_tr:last-child]:border-0">
-            {isLoading ? (
-              <tr className="border-b">
-                <td colSpan={17} className="text-center py-8 text-muted-foreground">
-                  Indlæser...
-                </td>
+      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1900px] caption-bottom text-xs whitespace-nowrap">
+            <thead className="[&_tr]:border-b">
+              <tr className="border-b bg-secondary/50">
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground w-10"></th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[280px] cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("title")}>
+                  <span className="inline-flex items-center">Produkt<SortIcon field="title" /></span>
+                </th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[140px]">EAN</th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[130px]">SKU</th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[130px]">Brand</th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("stock_quantity")}>
+                  <span className="inline-flex items-center justify-end">Eget<SortIcon field="stock_quantity" /></span>
+                </th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Lev.</th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Indkøb</th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Webshop</th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Tilbud</th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("recommended")}>
+                  <span className="inline-flex items-center justify-end">Anbefalet<SortIcon field="recommended" /></span>
+                </th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground min-w-[120px] cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("page_views")}>
+                  <span className="inline-flex items-center justify-end">Besøg (30d)<SortIcon field="page_views" /></span>
+                </th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground min-w-[130px] cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("conversion_rate")}>
+                  <span className="inline-flex items-center justify-end">Konv. % (30d)<SortIcon field="conversion_rate" /></span>
+                </th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[110px]">Status</th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[150px] cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
+                  <span className="inline-flex items-center">Redigeret<SortIcon field="updated_at" /></span>
+                </th>
+                <th className="h-9 px-2 text-center align-middle font-medium text-muted-foreground w-10"></th>
               </tr>
-            ) : sorted.length === 0 ? (
-              <tr className="border-b">
-                <td colSpan={17} className="text-center py-8 text-muted-foreground">
-                  <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
-                  Ingen produkter fundet
-                </td>
-              </tr>
-            ) : (
-              sorted.map((product) => {
-                const cheapest = getCheapestSupplier(product.supplier_products);
-                const cheapestPrice = cheapest?.purchase_price ?? null;
-                const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
-                const activePrice = product.sale_price ?? product.webshop_price;
-                const activePriceExVat = activePrice ? exVat(activePrice) : null;
-                const margin =
-                  activePriceExVat && cheapestPrice
-                    ? getMarginPercent(activePriceExVat, cheapestPrice)
-                    : null;
-                const allOutOfStock =
-                  product.supplier_products.length > 0 && product.supplier_products.every((sp) => !sp.in_stock);
+            </thead>
+            <tbody className="[&_tr:last-child]:border-0">
+              {isLoading ? (
+                <tr className="border-b">
+                  <td colSpan={17} className="py-8 text-center text-muted-foreground">
+                    Indlæser...
+                  </td>
+                </tr>
+              ) : sorted.length === 0 ? (
+                <tr className="border-b">
+                  <td colSpan={17} className="py-8 text-center text-muted-foreground">
+                    <Package className="mx-auto mb-2 h-8 w-8 opacity-40" />
+                    Ingen produkter fundet
+                  </td>
+                </tr>
+              ) : (
+                sorted.map((product) => {
+                  const cheapest = getCheapestSupplier(product.supplier_products);
+                  const cheapestPrice = cheapest?.purchase_price ?? null;
+                  const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
+                  const activePrice = product.sale_price ?? product.webshop_price;
+                  const activePriceExVat = activePrice ? exVat(activePrice) : null;
+                  const margin =
+                    activePriceExVat && cheapestPrice
+                      ? getMarginPercent(activePriceExVat, cheapestPrice)
+                      : null;
+                  const allOutOfStock =
+                    product.supplier_products.length > 0 && product.supplier_products.every((sp) => !sp.in_stock);
 
-                return (
-                  <tr
-                    key={product.id}
-                    className="border-b cursor-pointer hover:bg-accent/50 transition-colors"
-                    onClick={() => navigate(`/products/${product.id}`)}
-                  >
-                    <td className="px-2 py-1.5 align-middle">
-                      {product.image_url ? (
-                        <img src={product.image_url} alt="" className="h-7 w-7 rounded object-cover" />
-                      ) : (
-                        <div className="h-7 w-7 rounded bg-secondary flex items-center justify-center">
-                          <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-2 py-1.5 align-middle font-medium text-foreground max-w-[160px] truncate">{product.title}</td>
-                    <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono">{product.ean}</td>
-                    <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono">{product.sku ?? "—"}</td>
-                    <td className="px-2 py-1.5 align-middle text-muted-foreground">{product.brand ?? "—"}</td>
-                    <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
-                      {product.stock_quantity ?? "—"}
-                    </td>
-                    <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
-                      {product.supplier_products.length > 0
-                        ? product.supplier_products.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0) || "—"
-                        : "—"}
-                    </td>
-                    <td className="px-2 py-1.5 align-middle text-right font-mono">
-                      {cheapestPrice !== null ? (
-                        <span className="text-foreground">{formatPrice(cheapestPrice)}</span>
-                      ) : "—"}
-                    </td>
-                    <td className="px-2 py-1.5 align-middle text-right font-mono text-foreground">
-                      {product.webshop_price ? formatPrice(product.webshop_price) : "—"}
+                  return (
+                    <tr
+                      key={product.id}
+                      className="border-b cursor-pointer transition-colors hover:bg-accent/50"
+                      onClick={() => navigate(`/products/${product.id}`)}
+                    >
+                      <td className="px-2 py-1.5 align-middle">
+                        {product.image_url ? (
+                          <img src={product.image_url} alt="" className="h-7 w-7 rounded object-cover" />
+                        ) : (
+                          <div className="flex h-7 w-7 items-center justify-center rounded bg-secondary">
+                            <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                          </div>
+                        )}
+                      </td>
+                      <td className="min-w-[280px] max-w-[340px] px-2 py-1.5 align-middle font-medium text-foreground truncate">{product.title}</td>
+                      <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono">{product.ean}</td>
+                      <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono">{product.sku ?? "—"}</td>
+                      <td className="px-2 py-1.5 align-middle text-muted-foreground">{product.brand ?? "—"}</td>
+                      <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
+                        {product.stock_quantity ?? "—"}
+                      </td>
+                      <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
+                        {product.supplier_products.length > 0
+                          ? product.supplier_products.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0) || "—"
+                          : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 align-middle text-right font-mono">
+                        {cheapestPrice !== null ? (
+                          <span className="text-foreground">{formatPrice(cheapestPrice)}</span>
+                        ) : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 align-middle text-right font-mono text-foreground">
+                        {product.webshop_price ? formatPrice(product.webshop_price) : "—"}
                     </td>
                     <td className="px-2 py-1.5 align-middle text-right font-mono">
                       {product.sale_price ? (
@@ -458,6 +461,8 @@ export default function ProductListPage() {
           </tbody>
         </table>
       </div>
+      </div>
     </div>
+  </div>
   );
 }
