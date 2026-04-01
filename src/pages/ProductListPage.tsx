@@ -139,9 +139,12 @@ export default function ProductListPage() {
     });
   }, [filtered, sortField, sortDir, globalMarkup, analyticsMap]);
 
+  const setSortField = (v: SortField) => setParam("sort", v);
+  const setSortDir = (v: SortDir) => setParam("dir", v);
+
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
       setSortDir("asc");
