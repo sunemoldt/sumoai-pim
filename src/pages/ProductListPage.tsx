@@ -392,12 +392,15 @@ export default function ProductListPage() {
                       const productRecs = recommendations.filter(r => r.master_product_id === product.id);
                       const hasWarning = productRecs.some(r => r.severity === "critical");
                       const hasTip = productRecs.some(r => r.severity === "info" || r.severity === "warning");
-                      const visitsNoSale = analytics ? analytics.page_views - analytics.purchases : null;
+                      const purchases = analytics?.purchases ?? 0;
+                      const orders = analytics?.clicks ?? 0; // clicks stores orders_count
                       return (
                         <>
                           <td className="px-2 py-1.5 align-middle text-right font-mono">
                             <div className="flex items-center justify-end gap-1">
-                              {analytics ? `${analytics.conversion_rate.toFixed(1)}%` : "—"}
+                              {analytics ? (
+                                <span className={purchases > 0 ? "text-success" : "text-muted-foreground"}>{purchases}</span>
+                              ) : "—"}
                               {hasWarning && (
                                 <TooltipProvider>
                                   <Tooltip>
@@ -416,10 +419,8 @@ export default function ProductListPage() {
                               )}
                             </div>
                           </td>
-                          <td className="px-2 py-1.5 align-middle text-right font-mono">
-                            {visitsNoSale !== null && visitsNoSale > 0 ? (
-                              <span className={visitsNoSale > 50 ? "text-destructive" : "text-muted-foreground"}>{visitsNoSale}</span>
-                            ) : analytics ? "0" : "—"}
+                          <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
+                            {analytics ? orders : "—"}
                           </td>
                         </>
                       );
