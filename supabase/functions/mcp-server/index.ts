@@ -97,12 +97,13 @@ async function handleAuthorize(url: URL) {
   const state = url.searchParams.get("state") || "";
   const client_id = url.searchParams.get("client_id") || "";
   const code_challenge = url.searchParams.get("code_challenge") || "";
+  const code_challenge_method = url.searchParams.get("code_challenge_method") || "S256";
 
   if (!redirect_uri) {
     return jsonResponse({ error: "invalid_request", error_description: "redirect_uri required" }, 400);
   }
 
-  const code = await createSignedCode({ client_id, redirect_uri, code_challenge });
+  const code = await createSignedCode({ client_id, redirect_uri, code_challenge, code_challenge_method });
 
   const redir = new URL(redirect_uri);
   redir.searchParams.set("code", code);
@@ -134,9 +135,14 @@ async function handleToken(req: Request) {
 
   // PKCE verification
   if (payload.code_challenge && body.code_verifier) {
-    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body.code_verifier));
-    const computed = btoa(String.fromCharCode(...new Uint8Array(hash)))
-      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    let computed: string;
+    if (payload.code_challenge_method === "plain") {
+      computed = body.code_verifier;
+    } else {
+      const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body.code_verifier));
+      computed = btoa(String.fromCharCode(...new Uint8Array(hash)))
+        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    }
     if (computed !== payload.code_challenge) {
       return jsonResponse({ error: "invalid_grant", error_description: "PKCE failed" }, 400);
     }
