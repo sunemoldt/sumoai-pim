@@ -116,7 +116,7 @@ serve(async (req) => {
     // Fetch WC sales stats and IAWP page views in parallel
     const [salesResult, iawpViews] = await Promise.all([
       fetchWCSalesStats(wcStoreUrl, wcKey, wcSecret, startStr, endStr),
-      fetchIAWPAnalytics(wcStoreUrl, wcKey, wcSecret, periodDays),
+      iawpApiKey ? fetchIAWPAnalytics(wcStoreUrl, iawpApiKey, periodDays) : Promise.resolve(new Map()),
     ]);
 
     const { productStats, usedEndpoint } = salesResult;
