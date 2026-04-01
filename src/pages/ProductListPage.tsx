@@ -288,13 +288,11 @@ export default function ProductListPage() {
             <tbody className="[&_tr:last-child]:border-0">
               {isLoading ? (
                 <tr className="border-b">
-                  <td colSpan={17} className="py-8 text-center text-muted-foreground">
-                    Indlæser...
-                  </td>
+                  <td colSpan={12} className="py-8 text-center text-muted-foreground">Indlæser...</td>
                 </tr>
               ) : sorted.length === 0 ? (
                 <tr className="border-b">
-                  <td colSpan={17} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={12} className="py-8 text-center text-muted-foreground">
                     <Package className="mx-auto mb-2 h-8 w-8 opacity-40" />
                     Ingen produkter fundet
                   </td>
@@ -306,19 +304,14 @@ export default function ProductListPage() {
                   const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
                   const activePrice = product.sale_price ?? product.webshop_price;
                   const activePriceExVat = activePrice ? exVat(activePrice) : null;
-                  const margin =
-                    activePriceExVat && cheapestPrice
-                      ? getMarginPercent(activePriceExVat, cheapestPrice)
-                      : null;
-                  const allOutOfStock =
-                    product.supplier_products.length > 0 && product.supplier_products.every((sp) => !sp.in_stock);
+                  const margin = activePriceExVat && cheapestPrice ? getMarginPercent(activePriceExVat, cheapestPrice) : null;
+                  const allOutOfStock = product.supplier_products.length > 0 && product.supplier_products.every((sp) => !sp.in_stock);
+                  const analytics = analyticsMap?.get(product.id);
+                  const pageViews = analytics?.page_views ?? 0;
+                  const convRate = analytics?.conversion_rate ?? 0;
 
                   return (
-                    <tr
-                      key={product.id}
-                      className="border-b cursor-pointer transition-colors hover:bg-accent/50"
-                      onClick={() => navigate(`/products/${product.id}`)}
-                    >
+                    <tr key={product.id} className="border-b cursor-pointer transition-colors hover:bg-accent/50" onClick={() => navigate(`/products/${product.id}`)}>
                       <td className="px-2 py-1.5 align-middle">
                         {product.image_url ? (
                           <img src={product.image_url} alt="" className="h-7 w-7 rounded object-cover" />
@@ -328,121 +321,50 @@ export default function ProductListPage() {
                           </div>
                         )}
                       </td>
-                      <td className="min-w-[280px] max-w-[340px] px-2 py-1.5 align-middle font-medium text-foreground truncate">{product.title}</td>
-                      <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono">{product.ean}</td>
-                      <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono">{product.sku ?? "—"}</td>
-                      <td className="px-2 py-1.5 align-middle text-muted-foreground">{product.brand ?? "—"}</td>
-                      <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
-                        {product.stock_quantity ?? "—"}
-                      </td>
-                      <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
-                        {product.supplier_products.length > 0
-                          ? product.supplier_products.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0) || "—"
-                          : "—"}
-                      </td>
+                      <td className="max-w-[240px] px-2 py-1.5 align-middle font-medium text-foreground truncate">{product.title}</td>
+                      <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono text-[11px]">{product.ean}</td>
+                      <td className="px-2 py-1.5 align-middle text-muted-foreground hidden xl:table-cell">{product.brand ?? "—"}</td>
+                      <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">{product.stock_quantity ?? "—"}</td>
                       <td className="px-2 py-1.5 align-middle text-right font-mono">
-                        {cheapestPrice !== null ? (
-                          <span className="text-foreground">{formatPrice(cheapestPrice)}</span>
-                        ) : "—"}
+                        {cheapestPrice !== null ? <span className="text-foreground">{formatPrice(cheapestPrice)}</span> : "—"}
                       </td>
                       <td className="px-2 py-1.5 align-middle text-right font-mono text-foreground">
-                        {product.webshop_price ? formatPrice(product.webshop_price) : "—"}
-                    </td>
-                    <td className="px-2 py-1.5 align-middle text-right font-mono">
-                      {product.sale_price ? (
-                        <span className="text-warning">{formatPrice(product.sale_price)}</span>
-                      ) : "—"}
-                    </td>
-                    <td className="px-2 py-1.5 align-middle text-right font-mono text-primary">{formatPrice(recommendedPriceInclVat)}</td>
-                    <td className="px-2 py-1.5 align-middle text-right">
-                      {margin !== null ? (
-                        <Badge
-                          variant="outline"
-                          className={
-                            margin < 10
-                              ? "text-destructive border-destructive/30 text-xs"
-                              : margin < 20
-                              ? "text-warning border-warning/30 text-xs"
-                              : "text-success border-success/30 text-xs"
-                          }
-                        >
-                          {margin.toFixed(1)}%
-                        </Badge>
-                      ) : "—"}
-                    </td>
-                    {/* Analytics columns */}
-                    {(() => {
-                      const analytics = analyticsMap?.get(product.id);
-                      const productRecs = recommendations.filter(r => r.master_product_id === product.id);
-                      const hasWarning = productRecs.some(r => r.severity === "critical");
-                      const hasTip = productRecs.some(r => r.severity === "info" || r.severity === "warning");
-                      const pageViews = analytics?.page_views ?? 0;
-                      const convRate = analytics?.conversion_rate ?? 0;
-                      return (
-                        <>
-                          <td className="px-2 py-1.5 align-middle text-right font-mono">
-                            <div className="flex items-center justify-end gap-1">
-                              {analytics ? (
-                                <span className={pageViews > 0 ? "text-foreground" : "text-muted-foreground"}>{pageViews}</span>
-                              ) : "—"}
-                              {hasWarning && (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger><AlertTriangle className="h-3.5 w-3.5 text-destructive" /></TooltipTrigger>
-                                    <TooltipContent><p>{productRecs.find(r => r.severity === "critical")?.title}</p></TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                              {!hasWarning && hasTip && (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger><Lightbulb className="h-3.5 w-3.5 text-warning" /></TooltipTrigger>
-                                    <TooltipContent><p>{productRecs[0]?.title}</p></TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-2 py-1.5 align-middle text-right font-mono">
-                            {analytics ? (
-                              <span className={convRate > 0 ? "text-success" : "text-muted-foreground"}>{convRate.toFixed(1)}%</span>
-                            ) : "—"}
-                          </td>
-                        </>
-                      );
-                    })()}
-                    <td className="px-2 py-1.5 align-middle">
-                      {allOutOfStock ? (
-                        <Badge variant="destructive" className="text-xs">Udsolgt</Badge>
-                      ) : product.supplier_products.length > 0 ? (
-                        <Badge variant="outline" className="text-success border-success/30 text-xs">På lager</Badge>
-                      ) : (
-                        <Badge variant="secondary" className="text-xs">Ingen data</Badge>
-                      )}
-                    </td>
-                    <td className="px-2 py-1.5 align-middle text-muted-foreground whitespace-nowrap">
-                      {format(new Date(product.updated_at), "d. MMM yyyy HH:mm", { locale: da })}
-                    </td>
-                    <td className="px-2 py-1.5 align-middle text-center">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(`/products/${product.id}`, '_blank');
-                        }}
-                        className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                        title="Åbn i ny fane"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                        {product.sale_price ? <span className="text-warning">{formatPrice(product.sale_price)}</span> : product.webshop_price ? formatPrice(product.webshop_price) : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 align-middle text-right font-mono text-primary">{formatPrice(recommendedPriceInclVat)}</td>
+                      <td className="px-2 py-1.5 align-middle text-right">
+                        {margin !== null ? (
+                          <Badge variant="outline" className={margin < 10 ? "text-destructive border-destructive/30 text-xs" : margin < 20 ? "text-warning border-warning/30 text-xs" : "text-success border-success/30 text-xs"}>
+                            {margin.toFixed(1)}%
+                          </Badge>
+                        ) : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 align-middle text-right font-mono">
+                        {analytics ? <span className={pageViews > 0 ? "text-foreground" : "text-muted-foreground"}>{pageViews}</span> : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 align-middle text-right font-mono">
+                        {analytics ? <span className={convRate > 0 ? "text-success" : "text-muted-foreground"}>{convRate.toFixed(1)}%</span> : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 align-middle">
+                        {allOutOfStock ? (
+                          <Badge variant="destructive" className="text-xs">Udsolgt</Badge>
+                        ) : product.supplier_products.length > 0 ? (
+                          <Badge variant="outline" className="text-success border-success/30 text-xs">På lager</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">Ingen data</Badge>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5 align-middle text-muted-foreground hidden xl:table-cell whitespace-nowrap">
+                        {format(new Date(product.updated_at), "d. MMM yyyy", { locale: da })}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
     </div>
   );
 }
