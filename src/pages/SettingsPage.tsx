@@ -171,7 +171,7 @@ export default function SettingsPage() {
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">Tilgængelige MCP-tools:</p>
             <div className="flex flex-wrap gap-1">
-              {["list_products", "search_products", "get_product", "list_suppliers", "get_price_info"].map((t) => (
+              {["list_products", "search_products", "get_product", "update_product", "list_suppliers", "get_supplier", "get_price_info", "get_price_history", "get_change_log", "get_price_settings", "get_import_logs", "get_webhooks"].map((t) => (
                 <Badge key={t} variant="secondary" className="font-mono text-xs">{t}</Badge>
               ))}
             </div>
