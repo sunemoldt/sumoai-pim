@@ -1,19 +1,175 @@
 import { Hono } from "hono";
 import { McpServer, StreamableHttpTransport } from "mcp-lite";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 
 const app = new Hono();
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const mcpApiKey = Deno.env.get("MCP_API_KEY");
+const mcpApiKey = Deno.env.get("MCP_API_KEY")!;
 const supabase = createClient(supabaseUrl, serviceKey);
 
-// Auth middleware: require MCP_API_KEY or valid JWT
-app.use("/*", async (c, next) => {
+// Base URL for this edge function
+const BASE_URL = `${supabaseUrl}/functions/v1/mcp-server`;
+
+// ──────────────────────────────────────────────
+// In-memory stores for OAuth (ephemeral, fine for edge function)
+// ──────────────────────────────────────────────
+const registeredClients = new Map<string, { client_id: string; client_secret: string; redirect_uris: string[] }>();
+const authCodes = new Map<string, { client_id: string; redirect_uri: string; code_challenge?: string; expires: number }>();
+
+function generateId(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return encodeBase64(bytes).replace(/[+/=]/g, "x");
+}
+
+// ──────────────────────────────────────────────
+// OAuth 2.1 Endpoints (before auth middleware)
+// ──────────────────────────────────────────────
+
+// RFC 9728: Protected Resource Metadata
+app.get("/.well-known/oauth-protected-resource", (c) => {
+  return c.json({
+    resource: BASE_URL,
+    authorization_servers: [BASE_URL],
+    bearer_methods_supported: ["header"],
+  });
+});
+
+// RFC 8414: Authorization Server Metadata  
+app.get("/.well-known/oauth-authorization-server", (c) => {
+  return c.json({
+    issuer: BASE_URL,
+    authorization_endpoint: `${BASE_URL}/authorize`,
+    token_endpoint: `${BASE_URL}/token`,
+    registration_endpoint: `${BASE_URL}/register`,
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code"],
+    token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
+    code_challenge_methods_supported: ["S256", "plain"],
+    scopes_supported: ["mcp:tools"],
+  });
+});
+
+// RFC 7591: Dynamic Client Registration
+app.post("/register", async (c) => {
+  try {
+    const body = await c.req.json();
+    const client_id = `client_${generateId()}`;
+    const client_secret = `secret_${generateId()}`;
+    const redirect_uris = body.redirect_uris || [];
+
+    registeredClients.set(client_id, { client_id, client_secret, redirect_uris });
+
+    return c.json({
+      client_id,
+      client_secret,
+      client_name: body.client_name || "Claude",
+      redirect_uris,
+      grant_types: ["authorization_code"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "client_secret_post",
+    }, 201);
+  } catch {
+    return c.json({ error: "invalid_request" }, 400);
+  }
+});
+
+// Authorization endpoint — auto-approves (single-tenant PIM)
+app.get("/authorize", (c) => {
+  const client_id = c.req.query("client_id") || "";
+  const redirect_uri = c.req.query("redirect_uri") || "";
+  const state = c.req.query("state") || "";
+  const code_challenge = c.req.query("code_challenge");
+
+  if (!redirect_uri) {
+    return c.json({ error: "invalid_request", error_description: "redirect_uri required" }, 400);
+  }
+
+  // Generate authorization code
+  const code = `code_${generateId()}`;
+  authCodes.set(code, {
+    client_id,
+    redirect_uri,
+    code_challenge,
+    expires: Date.now() + 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Auto-approve: redirect back with code
+  const url = new URL(redirect_uri);
+  url.searchParams.set("code", code);
+  if (state) url.searchParams.set("state", state);
+
+  return c.redirect(url.toString(), 302);
+});
+
+// Token endpoint — exchange code for access token
+app.post("/token", async (c) => {
+  let body: Record<string, string>;
+  const contentType = c.req.header("content-type") || "";
+  
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    const text = await c.req.text();
+    body = Object.fromEntries(new URLSearchParams(text));
+  } else {
+    body = await c.req.json();
+  }
+
+  const { grant_type, code, redirect_uri, code_verifier } = body;
+
+  if (grant_type !== "authorization_code") {
+    return c.json({ error: "unsupported_grant_type" }, 400);
+  }
+
+  if (!code) {
+    return c.json({ error: "invalid_request", error_description: "code required" }, 400);
+  }
+
+  const stored = authCodes.get(code);
+  if (!stored || stored.expires < Date.now()) {
+    authCodes.delete(code);
+    return c.json({ error: "invalid_grant", error_description: "code expired or invalid" }, 400);
+  }
+
+  // Verify PKCE if code_challenge was used
+  if (stored.code_challenge && code_verifier) {
+    const encoder = new TextEncoder();
+    const hash = await crypto.subtle.digest("SHA-256", encoder.encode(code_verifier));
+    const computed = encodeBase64(new Uint8Array(hash))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    if (computed !== stored.code_challenge) {
+      return c.json({ error: "invalid_grant", error_description: "PKCE verification failed" }, 400);
+    }
+  }
+
+  // Clean up used code
+  authCodes.delete(code);
+
+  // Issue access token = the MCP_API_KEY itself (so Bearer validation works)
+  return c.json({
+    access_token: mcpApiKey,
+    token_type: "Bearer",
+    expires_in: 86400 * 365, // effectively never expires
+    scope: "mcp:tools",
+  });
+});
+
+// ──────────────────────────────────────────────
+// Auth middleware for MCP endpoints only
+// ──────────────────────────────────────────────
+const authMiddleware = async (c: any, next: any) => {
+  const path = new URL(c.req.url).pathname;
+  // Skip auth for OAuth endpoints
+  const oauthPaths = ["/.well-known/", "/register", "/authorize", "/token"];
+  if (oauthPaths.some(p => path.includes(p))) {
+    return next();
+  }
+
   const authHeader = c.req.header("Authorization") ?? "";
 
-  // Option 1: API key via Bearer token
+  // Option 1: API key via Bearer token (from OAuth flow or direct)
   if (mcpApiKey && authHeader === `Bearer ${mcpApiKey}`) {
     return next();
   }
@@ -31,7 +187,13 @@ app.use("/*", async (c, next) => {
   }
 
   return c.json({ error: "Unauthorized" }, 401);
-});
+};
+
+app.use("/*", authMiddleware);
+
+// ──────────────────────────────────────────────
+// MCP Server & Tools
+// ──────────────────────────────────────────────
 
 const mcpServer = new McpServer({
   name: "comtek-pim",
@@ -389,6 +551,9 @@ mcpServer.tool("sync_analytics", {
   },
 });
 
+// ──────────────────────────────────────────────
+// Transport & Serve
+// ──────────────────────────────────────────────
 const transport = new StreamableHttpTransport();
 const httpHandler = transport.bind(mcpServer);
 
