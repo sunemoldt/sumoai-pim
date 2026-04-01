@@ -22,6 +22,8 @@ export default function ProductListPage() {
   const { data: products = [], isLoading } = useMasterProducts(search || undefined);
   const { data: priceSettings = [] } = usePriceSettings();
   const { data: suppliers = [] } = useSuppliers();
+  const { data: analyticsMap } = useAllProductAnalytics();
+  const { data: recommendations = [] } = useProductRecommendations();
   const navigate = useNavigate();
 
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
