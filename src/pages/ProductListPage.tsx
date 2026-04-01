@@ -270,38 +270,34 @@ export default function ProductListPage() {
 
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1900px] caption-bottom text-xs whitespace-nowrap">
+          <table className="w-full caption-bottom text-xs">
             <thead className="[&_tr]:border-b">
               <tr className="border-b bg-secondary/50">
-                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground w-10"></th>
-                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[280px] cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("title")}>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground w-8"></th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("title")}>
                   <span className="inline-flex items-center">Produkt<SortIcon field="title" /></span>
                 </th>
-                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[140px]">EAN</th>
-                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[130px]">SKU</th>
-                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[130px]">Brand</th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">EAN</th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell">Brand</th>
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("stock_quantity")}>
-                  <span className="inline-flex items-center justify-end">Eget<SortIcon field="stock_quantity" /></span>
+                  <span className="inline-flex items-center justify-end">Lager<SortIcon field="stock_quantity" /></span>
                 </th>
-                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Lev.</th>
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Indkøb</th>
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Webshop</th>
-                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Tilbud</th>
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("recommended")}>
-                  <span className="inline-flex items-center justify-end">Anbefalet<SortIcon field="recommended" /></span>
+                  <span className="inline-flex items-center justify-end">Anbef.<SortIcon field="recommended" /></span>
                 </th>
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
-                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground min-w-[120px] cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("page_views")}>
-                  <span className="inline-flex items-center justify-end">Besøg (30d)<SortIcon field="page_views" /></span>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("page_views")}>
+                  <span className="inline-flex items-center justify-end">Besøg<SortIcon field="page_views" /></span>
                 </th>
-                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground min-w-[130px] cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("conversion_rate")}>
-                  <span className="inline-flex items-center justify-end">Konv. % (30d)<SortIcon field="conversion_rate" /></span>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("conversion_rate")}>
+                  <span className="inline-flex items-center justify-end">Konv.%<SortIcon field="conversion_rate" /></span>
                 </th>
-                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[110px]">Status</th>
-                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground min-w-[150px] cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
-                  <span className="inline-flex items-center">Redigeret<SortIcon field="updated_at" /></span>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
+                  <span className="inline-flex items-center">Ændret<SortIcon field="updated_at" /></span>
                 </th>
-                <th className="h-9 px-2 text-center align-middle font-medium text-muted-foreground w-10"></th>
               </tr>
             </thead>
             <tbody className="[&_tr:last-child]:border-0">
