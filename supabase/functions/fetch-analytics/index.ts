@@ -6,23 +6,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// WooCommerce API helper with Basic Auth
 async function wcFetch(storeUrl: string, endpoint: string, key: string, secret: string, params: Record<string, string> = {}) {
-  const url = new URL(`${storeUrl}/wp-json/wc/v3/${endpoint}`);
+  const url = new URL(`${storeUrl}/wp-json/${endpoint}`);
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, v);
   }
-
   const auth = btoa(`${key}:${secret}`);
+  console.log(`WC fetch: ${url.toString()}`);
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Basic ${auth}` },
   });
-
+  const body = await res.text();
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`WooCommerce API error (${endpoint}): ${res.status} ${err}`);
+    console.error(`WC error ${res.status}: ${body}`);
+    throw new Error(`WC API error (${endpoint}): ${res.status}`);
   }
-  return await res.json();
+  return JSON.parse(body);
 }
 
 serve(async (req) => {
@@ -43,16 +42,14 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get analysis period from settings
+    // Get settings
     const { data: settings } = await supabase
       .from("analytics_settings")
       .select("setting_key, setting_value");
-
     const settingsMap: Record<string, string> = {};
     (settings || []).forEach((s: any) => { settingsMap[s.setting_key] = s.setting_value; });
 
     const periodDays = parseInt(settingsMap["analysis_period_days"] || "30");
-    const minTraffic = parseInt(settingsMap["min_traffic_threshold"] || "50");
     const lowStockThreshold = parseInt(settingsMap["low_stock_threshold"] || "5");
 
     const endDate = new Date();
@@ -61,22 +58,9 @@ serve(async (req) => {
     const startStr = startDate.toISOString().split("T")[0];
     const endStr = endDate.toISOString().split("T")[0];
 
-    console.log(`Fetching WooCommerce stats for ${startStr} to ${endStr}`);
+    console.log(`Period: ${startStr} to ${endStr} (${periodDays} days)`);
 
-    // Fetch top sellers from WooCommerce reports
-    const topSellers = await wcFetch(wcStoreUrl, "reports/top_sellers", wcKey, wcSecret, {
-      date_min: startStr,
-      date_max: endStr,
-      per_page: "100",
-    });
-
-    // Fetch sales report for the period
-    const salesReport = await wcFetch(wcStoreUrl, "reports/sales", wcKey, wcSecret, {
-      date_min: startStr,
-      date_max: endStr,
-    });
-
-    // Get all products from our DB with their webshop IDs
+    // Get products from our DB
     const { data: products } = await supabase
       .from("master_products")
       .select("id, title, sku, ean, stock_quantity, webshop_price, sale_price, webshop_product_id, webshop_parent_id");
@@ -87,60 +71,115 @@ serve(async (req) => {
       });
     }
 
-    // Build webshop_product_id → master product map
+    // Build WC product ID → master product map
     const wcIdToProduct = new Map<string, any>();
     for (const p of products) {
-      if (p.webshop_product_id) {
-        wcIdToProduct.set(p.webshop_product_id, p);
-      }
-      // Also map parent IDs for variations
-      if (p.webshop_parent_id) {
-        wcIdToProduct.set(p.webshop_parent_id, p);
+      if (p.webshop_product_id) wcIdToProduct.set(p.webshop_product_id, p);
+      if (p.webshop_parent_id) wcIdToProduct.set(p.webshop_parent_id, p);
+    }
+
+    console.log(`Products in DB: ${products.length}, with WC IDs: ${wcIdToProduct.size}`);
+
+    // Try WC Analytics API first (provides richer per-product stats)
+    let productStats: any[] = [];
+    let usedEndpoint = "";
+
+    try {
+      // WC Analytics reports/products - gives items_sold, net_revenue, orders_count per product
+      const stats = await wcFetch(wcStoreUrl, "wc-analytics/reports/products", wcKey, wcSecret, {
+        after: `${startStr}T00:00:00`,
+        before: `${endStr}T23:59:59`,
+        per_page: "100",
+        orderby: "items_sold",
+        order: "desc",
+      });
+      productStats = stats;
+      usedEndpoint = "wc-analytics/reports/products";
+      console.log(`WC Analytics returned ${stats.length} products`);
+    } catch (e) {
+      console.log(`WC Analytics endpoint failed, trying classic: ${e.message}`);
+      // Fallback to classic top_sellers
+      try {
+        const topSellers = await wcFetch(wcStoreUrl, "wc/v3/reports/top_sellers", wcKey, wcSecret, {
+          date_min: startStr,
+          date_max: endStr,
+          per_page: "100",
+        });
+        productStats = topSellers.map((t: any) => ({
+          product_id: t.product_id,
+          items_sold: t.quantity,
+          net_revenue: 0,
+          orders_count: 0,
+        }));
+        usedEndpoint = "wc/v3/reports/top_sellers";
+        console.log(`Classic top_sellers returned ${topSellers.length} items`);
+      } catch (e2) {
+        console.error(`Both WC endpoints failed: ${e2.message}`);
+        throw new Error(`Could not fetch WC stats: ${e2.message}`);
       }
     }
 
-    // Process top sellers data
-    const statsByProduct = new Map<string, { purchases: number; revenue: number }>();
-    for (const item of topSellers || []) {
-      const wcId = String(item.product_id);
+    // Also fetch recent orders to calculate page-level engagement approximation
+    // WooCommerce doesn't track page views, but we can count unique orders per product
+    let orderCount = 0;
+    try {
+      // Get total orders in period for conversion context
+      const orders = await wcFetch(wcStoreUrl, "wc/v3/orders", wcKey, wcSecret, {
+        after: `${startStr}T00:00:00`,
+        before: `${endStr}T23:59:59`,
+        per_page: "1",
+        status: "completed,processing",
+      });
+      // WooCommerce returns total in headers, but we can use the array
+      orderCount = orders.length;
+    } catch (e) {
+      console.log(`Could not fetch orders: ${e.message}`);
+    }
+
+    // Map WC stats to our products
+    const statsByProductId = new Map<string, { items_sold: number; net_revenue: number; orders_count: number }>();
+    for (const stat of productStats) {
+      const wcId = String(stat.product_id);
       const product = wcIdToProduct.get(wcId);
       if (product) {
-        const existing = statsByProduct.get(product.id) || { purchases: 0, revenue: 0 };
-        existing.purchases += item.quantity || 0;
-        // top_sellers doesn't always have revenue, calculate from what we have
-        statsByProduct.set(product.id, existing);
+        const existing = statsByProductId.get(product.id) || { items_sold: 0, net_revenue: 0, orders_count: 0 };
+        existing.items_sold += stat.items_sold || 0;
+        existing.net_revenue += parseFloat(stat.net_revenue || "0");
+        existing.orders_count += stat.orders_count || 0;
+        statsByProductId.set(product.id, existing);
       }
     }
 
-    // Upsert analytics data
-    let upsertedCount = 0;
+    console.log(`Matched ${statsByProductId.size} products with sales data`);
+
+    // Batch upsert analytics
+    const analyticsRows = [];
     const recommendations: any[] = [];
 
     for (const product of products) {
-      const stats = statsByProduct.get(product.id);
-      const purchases = stats?.purchases || 0;
+      if (!product.webshop_product_id) continue; // Skip products not in webshop
 
-      const { error } = await supabase
-        .from("product_analytics")
-        .upsert({
-          master_product_id: product.id,
-          period_start: startStr,
-          period_end: endStr,
-          page_views: 0,
-          add_to_carts: 0,
-          purchases,
-          conversion_rate: 0,
-          impressions: 0,
-          clicks: 0,
-          avg_position: 0,
-          ctr: 0,
-          matched_url: null,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "master_product_id,period_start,period_end" });
+      const stats = statsByProductId.get(product.id);
+      const purchases = stats?.items_sold || 0;
+      const ordersCount = stats?.orders_count || 0;
 
-      if (!error) upsertedCount++;
+      analyticsRows.push({
+        master_product_id: product.id,
+        period_start: startStr,
+        period_end: endStr,
+        page_views: 0, // WooCommerce doesn't track this
+        add_to_carts: 0,
+        purchases,
+        conversion_rate: 0,
+        impressions: 0,
+        clicks: ordersCount,
+        avg_position: 0,
+        ctr: 0,
+        matched_url: null,
+        updated_at: new Date().toISOString(),
+      });
 
-      // Recommendation: Popular product with low stock
+      // Recommendations
       if (purchases > 0 && (product.stock_quantity ?? 0) <= lowStockThreshold) {
         recommendations.push({
           master_product_id: product.id,
@@ -152,23 +191,23 @@ serve(async (req) => {
           data: { purchases, stock: product.stock_quantity },
         });
       }
+    }
 
-      // Recommendation: No sales but has price (might need attention)
-      if (purchases === 0 && product.webshop_price && product.webshop_product_id) {
-        // Only flag products that are actually live in the shop
-        recommendations.push({
-          master_product_id: product.id,
-          recommendation_type: "high_traffic_no_sales",
-          severity: "info",
-          title: "Ingen salg i perioden",
-          description: `Produktet har ikke haft salg de sidste ${periodDays} dage. Overvej at justere prisen eller synligheden.`,
-          action_suggestion: product.webshop_price
-            ? `Overvej at sænke prisen fra ${product.webshop_price} DKK.`
-            : "Tilføj en konkurrencedygtig pris til produktet.",
-          data: { purchases: 0, current_price: product.webshop_price },
-        });
+    // Upsert in batches of 50
+    let upsertedCount = 0;
+    for (let i = 0; i < analyticsRows.length; i += 50) {
+      const batch = analyticsRows.slice(i, i + 50);
+      const { error } = await supabase
+        .from("product_analytics")
+        .upsert(batch, { onConflict: "master_product_id,period_start,period_end" });
+      if (error) {
+        console.error(`Upsert batch error: ${error.message}`);
+      } else {
+        upsertedCount += batch.length;
       }
     }
+
+    console.log(`Upserted ${upsertedCount} analytics rows`);
 
     // Clear old recommendations and insert new
     if (recommendations.length > 0) {
@@ -177,19 +216,17 @@ serve(async (req) => {
         .delete()
         .is("resolved_at", null)
         .eq("is_dismissed", false);
-
       await supabase
         .from("product_recommendations")
         .insert(recommendations);
     }
 
-    // Fire webhooks for new recommendations
+    // Fire webhooks
     if (recommendations.length > 0) {
       const { data: webhooks } = await supabase
         .from("webhook_configs")
         .select("*")
         .eq("is_active", true);
-
       for (const webhook of webhooks || []) {
         const eventTypes = webhook.event_types || [];
         const matchingRecs = recommendations.filter((r: any) => eventTypes.includes(r.recommendation_type));
@@ -198,14 +235,10 @@ serve(async (req) => {
             await fetch(webhook.url, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                event: "product_recommendations",
-                recommendations: matchingRecs,
-                timestamp: new Date().toISOString(),
-              }),
+              body: JSON.stringify({ event: "product_recommendations", recommendations: matchingRecs, timestamp: new Date().toISOString() }),
             });
           } catch (e) {
-            console.error(`Webhook ${webhook.name} failed:`, e);
+            console.error(`Webhook failed: ${e}`);
           }
         }
       }
@@ -214,11 +247,11 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
+        endpoint_used: usedEndpoint,
         analytics_updated: upsertedCount,
+        products_with_sales: statsByProductId.size,
         recommendations_created: recommendations.length,
-        period: { start: startStr, end: endStr },
-        top_sellers_count: topSellers?.length || 0,
-        total_products: products.length,
+        period: { start: startStr, end: endStr, days: periodDays },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

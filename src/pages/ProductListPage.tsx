@@ -14,7 +14,7 @@ type StockFilter = "all" | "instock" | "outofstock" | "backorder";
 type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
-type SortField = "title" | "stock_quantity" | "updated_at" | "recommended" | "conversion_rate" | "page_views";
+type SortField = "title" | "stock_quantity" | "updated_at" | "recommended" | "purchases" | "orders";
 type SortDir = "asc" | "desc";
 
 export default function ProductListPage() {
@@ -100,15 +100,15 @@ export default function ProductListPage() {
         const rB = cB ? getRecommendedPriceInclVat(cB.purchase_price, b.custom_markup_percentage ?? globalMarkup) : 0;
         return dir * (rA - rB);
       }
-      if (sortField === "conversion_rate") {
-        const aConv = analyticsMap?.get(a.id)?.conversion_rate ?? 0;
-        const bConv = analyticsMap?.get(b.id)?.conversion_rate ?? 0;
-        return dir * (aConv - bConv);
+      if (sortField === "purchases") {
+        const aP = analyticsMap?.get(a.id)?.purchases ?? 0;
+        const bP = analyticsMap?.get(b.id)?.purchases ?? 0;
+        return dir * (aP - bP);
       }
-      if (sortField === "page_views") {
-        const aViews = analyticsMap?.get(a.id)?.page_views ?? 0;
-        const bViews = analyticsMap?.get(b.id)?.page_views ?? 0;
-        return dir * (aViews - bViews);
+      if (sortField === "orders") {
+        const aO = analyticsMap?.get(a.id)?.clicks ?? 0; // clicks stores orders_count
+        const bO = analyticsMap?.get(b.id)?.clicks ?? 0;
+        return dir * (aO - bO);
       }
       return 0;
     });
@@ -288,11 +288,11 @@ export default function ProductListPage() {
                 <span className="inline-flex items-center justify-end">Anbefalet<SortIcon field="recommended" /></span>
               </th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("conversion_rate")}>
-                <span className="inline-flex items-center justify-end">Konv. (30d)<SortIcon field="conversion_rate" /></span>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("purchases")}>
+                <span className="inline-flex items-center justify-end">Solgt (30d)<SortIcon field="purchases" /></span>
               </th>
-              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("page_views")}>
-                <span className="inline-flex items-center justify-end">Besøg<SortIcon field="page_views" /></span>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("orders")}>
+                <span className="inline-flex items-center justify-end">Ordrer (30d)<SortIcon field="orders" /></span>
               </th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
@@ -392,12 +392,15 @@ export default function ProductListPage() {
                       const productRecs = recommendations.filter(r => r.master_product_id === product.id);
                       const hasWarning = productRecs.some(r => r.severity === "critical");
                       const hasTip = productRecs.some(r => r.severity === "info" || r.severity === "warning");
-                      const visitsNoSale = analytics ? analytics.page_views - analytics.purchases : null;
+                      const purchases = analytics?.purchases ?? 0;
+                      const orders = analytics?.clicks ?? 0; // clicks stores orders_count
                       return (
                         <>
                           <td className="px-2 py-1.5 align-middle text-right font-mono">
                             <div className="flex items-center justify-end gap-1">
-                              {analytics ? `${analytics.conversion_rate.toFixed(1)}%` : "—"}
+                              {analytics ? (
+                                <span className={purchases > 0 ? "text-success" : "text-muted-foreground"}>{purchases}</span>
+                              ) : "—"}
                               {hasWarning && (
                                 <TooltipProvider>
                                   <Tooltip>
@@ -416,10 +419,8 @@ export default function ProductListPage() {
                               )}
                             </div>
                           </td>
-                          <td className="px-2 py-1.5 align-middle text-right font-mono">
-                            {visitsNoSale !== null && visitsNoSale > 0 ? (
-                              <span className={visitsNoSale > 50 ? "text-destructive" : "text-muted-foreground"}>{visitsNoSale}</span>
-                            ) : analytics ? "0" : "—"}
+                          <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
+                            {analytics ? orders : "—"}
                           </td>
                         </>
                       );
