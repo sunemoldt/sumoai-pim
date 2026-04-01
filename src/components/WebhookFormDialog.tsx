@@ -21,6 +21,9 @@ const EVENT_OPTIONS = [
   { value: "product.stock_changed", label: "Lager ændret" },
   { value: "supplier.synced", label: "Leverandør synkroniseret" },
   { value: "import.completed", label: "Import fuldført" },
+  { value: "high_traffic_no_sales", label: "⚠️ Høj trafik, nul salg" },
+  { value: "high_traffic_low_stock", label: "⚠️ Høj trafik, lavt lager" },
+  { value: "good_position_bad_ctr", label: "💡 God placering, lav CTR" },
 ];
 
 const PLATFORM_OPTIONS = [

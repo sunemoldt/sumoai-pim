@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      analytics_settings: {
+        Row: {
+          created_at: string
+          id: string
+          setting_key: string
+          setting_value: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          setting_key: string
+          setting_value: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          setting_key?: string
+          setting_value?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       import_logs: {
         Row: {
           completed_at: string | null
@@ -196,6 +220,68 @@ export type Database = {
         }
         Relationships: []
       }
+      product_analytics: {
+        Row: {
+          add_to_carts: number | null
+          avg_position: number | null
+          clicks: number | null
+          conversion_rate: number | null
+          created_at: string
+          ctr: number | null
+          id: string
+          impressions: number | null
+          master_product_id: string
+          matched_url: string | null
+          page_views: number | null
+          period_end: string
+          period_start: string
+          purchases: number | null
+          updated_at: string
+        }
+        Insert: {
+          add_to_carts?: number | null
+          avg_position?: number | null
+          clicks?: number | null
+          conversion_rate?: number | null
+          created_at?: string
+          ctr?: number | null
+          id?: string
+          impressions?: number | null
+          master_product_id: string
+          matched_url?: string | null
+          page_views?: number | null
+          period_end: string
+          period_start: string
+          purchases?: number | null
+          updated_at?: string
+        }
+        Update: {
+          add_to_carts?: number | null
+          avg_position?: number | null
+          clicks?: number | null
+          conversion_rate?: number | null
+          created_at?: string
+          ctr?: number | null
+          id?: string
+          impressions?: number | null
+          master_product_id?: string
+          matched_url?: string | null
+          page_views?: number | null
+          period_end?: string
+          period_start?: string
+          purchases?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_analytics_master_product_id_fkey"
+            columns: ["master_product_id"]
+            isOneToOne: false
+            referencedRelation: "master_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_change_log: {
         Row: {
           change_type: string
@@ -230,6 +316,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "product_change_log_master_product_id_fkey"
+            columns: ["master_product_id"]
+            isOneToOne: false
+            referencedRelation: "master_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_recommendations: {
+        Row: {
+          action_suggestion: string | null
+          created_at: string
+          data: Json | null
+          description: string
+          id: string
+          is_dismissed: boolean
+          master_product_id: string
+          recommendation_type: string
+          resolved_at: string | null
+          severity: string
+          title: string
+        }
+        Insert: {
+          action_suggestion?: string | null
+          created_at?: string
+          data?: Json | null
+          description: string
+          id?: string
+          is_dismissed?: boolean
+          master_product_id: string
+          recommendation_type: string
+          resolved_at?: string | null
+          severity?: string
+          title: string
+        }
+        Update: {
+          action_suggestion?: string | null
+          created_at?: string
+          data?: Json | null
+          description?: string
+          id?: string
+          is_dismissed?: boolean
+          master_product_id?: string
+          recommendation_type?: string
+          resolved_at?: string | null
+          severity?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_recommendations_master_product_id_fkey"
             columns: ["master_product_id"]
             isOneToOne: false
             referencedRelation: "master_products"

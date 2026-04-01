@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useMasterProduct, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog } from "@/hooks/use-products";
+import { useMasterProduct, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog, useProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History, TrendingUp, AlertTriangle, Lightbulb, Eye, ShoppingCart, MousePointerClick } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,6 +21,8 @@ export default function ProductDetailPage() {
   const { data: product, isLoading } = useMasterProduct(id!);
   const { data: priceSettings = [] } = usePriceSettings();
   const { data: changeLog = [] } = useProductChangeLog(id!);
+  const { data: analytics } = useProductAnalytics(id!);
+  const { data: recommendations = [] } = useProductRecommendations(id!);
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [markupInput, setMarkupInput] = useState<string | null>(null);
@@ -239,6 +241,13 @@ export default function ProductDetailPage() {
           <TabsTrigger value="suppliers">Leverandører</TabsTrigger>
           <TabsTrigger value="comparison">Sammenligning</TabsTrigger>
           <TabsTrigger value="push" onClick={initPushFields}>Opdater shop</TabsTrigger>
+          <TabsTrigger value="performance">
+            <TrendingUp className="h-3.5 w-3.5 mr-1" />
+            Performance
+            {recommendations.length > 0 && (
+              <Badge variant="destructive" className="ml-1.5 text-[10px] px-1 py-0">{recommendations.length}</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
 
@@ -788,6 +797,99 @@ export default function ProductDetailPage() {
               </Button>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="performance" className="space-y-4 mt-4">
+          {/* Recommendations */}
+          {recommendations.length > 0 && (
+            <div className="space-y-3">
+              {recommendations.map((rec) => (
+                <Card key={rec.id} className={`shadow-sm border-l-4 ${
+                  rec.severity === "critical" ? "border-l-destructive" : 
+                  rec.severity === "warning" ? "border-l-warning" : "border-l-primary"
+                }`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      {rec.severity === "critical" ? (
+                        <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                      ) : (
+                        <Lightbulb className="h-5 w-5 text-warning mt-0.5 shrink-0" />
+                      )}
+                      <div>
+                        <p className="font-medium text-foreground">{rec.title}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
+                        {rec.action_suggestion && (
+                          <p className="text-sm text-primary mt-2 font-medium">💡 {rec.action_suggestion}</p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Analytics KPIs */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <Eye className="h-4 w-4" />
+                  <span className="text-sm">Sidevisninger</span>
+                </div>
+                <p className="text-2xl font-semibold text-foreground">{analytics?.page_views ?? "—"}</p>
+                <p className="text-xs text-muted-foreground">Sidste {analytics ? `${Math.round((new Date(analytics.period_end).getTime() - new Date(analytics.period_start).getTime()) / 86400000)} dage` : "7 dage"}</p>
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <ShoppingCart className="h-4 w-4" />
+                  <span className="text-sm">Tilf. til kurv / Køb</span>
+                </div>
+                <p className="text-2xl font-semibold text-foreground">
+                  {analytics ? `${analytics.add_to_carts} / ${analytics.purchases}` : "—"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Konverteringsrate: {analytics ? `${analytics.conversion_rate.toFixed(1)}%` : "—"}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <TrendingUp className="h-4 w-4" />
+                  <span className="text-sm">Google Position</span>
+                </div>
+                <p className="text-2xl font-semibold text-foreground">{analytics?.avg_position ? analytics.avg_position.toFixed(1) : "—"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {analytics?.impressions ? `${analytics.impressions} visninger i Google` : "Ingen GSC data"}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                  <MousePointerClick className="h-4 w-4" />
+                  <span className="text-sm">CTR (Google)</span>
+                </div>
+                <p className="text-2xl font-semibold text-foreground">{analytics?.ctr ? `${analytics.ctr.toFixed(1)}%` : "—"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {analytics?.clicks ? `${analytics.clicks} klik fra Google` : "Ingen data"}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {!analytics && recommendations.length === 0 && (
+            <Card className="shadow-sm">
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <TrendingUp className="h-8 w-8 mx-auto mb-3 opacity-40" />
+                <p>Ingen performance-data endnu.</p>
+                <p className="text-sm mt-1">Kør analytics-synkroniseringen for at hente data fra Google.</p>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="changelog" className="space-y-4 mt-4">

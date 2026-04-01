@@ -317,6 +317,69 @@ mcpServer.tool({
   },
 });
 
+// Tool: Get product analytics
+mcpServer.tool({
+  name: "get_product_analytics",
+  description: "Get performance analytics (GA4 + GSC) for a product or all products. Includes page views, conversions, Google position, CTR.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      product_id: { type: "string", description: "Optional: specific product ID. Omit for all." },
+      limit: { type: "number", description: "Max results (default 50)" },
+    },
+  },
+  handler: async ({ product_id, limit = 50 }: { product_id?: string; limit?: number }) => {
+    let query = supabase.from("product_analytics").select("*").order("period_start", { ascending: false }).limit(limit);
+    if (product_id) query = query.eq("master_product_id", product_id);
+    const { data, error } = await query;
+    if (error) return { content: [{ type: "text" as const, text: `Error: ${error.message}` }] };
+    return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+  },
+});
+
+// Tool: Get product recommendations
+mcpServer.tool({
+  name: "get_recommendations",
+  description: "Get active action recommendations (e.g. high traffic no sales, low stock alerts, SEO tips).",
+  inputSchema: {
+    type: "object",
+    properties: {
+      product_id: { type: "string", description: "Optional: filter by product ID" },
+      severity: { type: "string", description: "Optional: filter by severity (critical, warning, info)" },
+    },
+  },
+  handler: async ({ product_id, severity }: { product_id?: string; severity?: string }) => {
+    let query = supabase.from("product_recommendations").select("*").eq("is_dismissed", false).is("resolved_at", null).order("created_at", { ascending: false });
+    if (product_id) query = query.eq("master_product_id", product_id);
+    if (severity) query = query.eq("severity", severity);
+    const { data, error } = await query;
+    if (error) return { content: [{ type: "text" as const, text: `Error: ${error.message}` }] };
+    return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+  },
+});
+
+// Tool: Trigger analytics sync
+mcpServer.tool({
+  name: "sync_analytics",
+  description: "Trigger a manual sync of Google Analytics 4 and Search Console data.",
+  inputSchema: { type: "object", properties: {} },
+  handler: async () => {
+    try {
+      const res = await fetch(`${supabaseUrl}/functions/v1/fetch-analytics`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${serviceKey}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const data = await res.json();
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    } catch (e: any) {
+      return { content: [{ type: "text" as const, text: `Error: ${e.message}` }] };
+    }
+  },
+});
+
 const transport = new StreamableHttpTransport();
 
 app.all("/*", async (c) => {

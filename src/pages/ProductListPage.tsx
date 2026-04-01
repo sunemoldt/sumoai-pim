@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
-import { useMasterProducts, useSuppliers, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat } from "@/hooks/use-products";
+import { useMasterProducts, useSuppliers, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
@@ -21,6 +22,8 @@ export default function ProductListPage() {
   const { data: products = [], isLoading } = useMasterProducts(search || undefined);
   const { data: priceSettings = [] } = usePriceSettings();
   const { data: suppliers = [] } = useSuppliers();
+  const { data: analyticsMap } = useAllProductAnalytics();
+  const { data: recommendations = [] } = useProductRecommendations();
   const navigate = useNavigate();
 
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
@@ -275,6 +278,8 @@ export default function ProductListPage() {
                 <span className="inline-flex items-center justify-end">Anbefalet<SortIcon field="recommended" /></span>
               </th>
               <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Konv. (7d)</th>
+              <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Besøg ÷ salg</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">Status</th>
               <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
                 <span className="inline-flex items-center">Redigeret<SortIcon field="updated_at" /></span>
@@ -285,13 +290,13 @@ export default function ProductListPage() {
           <tbody className="[&_tr:last-child]:border-0">
             {isLoading ? (
               <tr className="border-b">
-                <td colSpan={15} className="text-center py-8 text-muted-foreground">
+                <td colSpan={17} className="text-center py-8 text-muted-foreground">
                   Indlæser...
                 </td>
               </tr>
             ) : sorted.length === 0 ? (
               <tr className="border-b">
-                <td colSpan={15} className="text-center py-8 text-muted-foreground">
+                <td colSpan={17} className="text-center py-8 text-muted-foreground">
                   <Package className="mx-auto h-8 w-8 mb-2 opacity-40" />
                   Ingen produkter fundet
                 </td>
@@ -367,6 +372,44 @@ export default function ProductListPage() {
                         </Badge>
                       ) : "—"}
                     </td>
+                    {/* Analytics columns */}
+                    {(() => {
+                      const analytics = analyticsMap?.get(product.id);
+                      const productRecs = recommendations.filter(r => r.master_product_id === product.id);
+                      const hasWarning = productRecs.some(r => r.severity === "critical");
+                      const hasTip = productRecs.some(r => r.severity === "info" || r.severity === "warning");
+                      const visitsNoSale = analytics ? analytics.page_views - analytics.purchases : null;
+                      return (
+                        <>
+                          <td className="px-2 py-1.5 align-middle text-right font-mono">
+                            <div className="flex items-center justify-end gap-1">
+                              {analytics ? `${analytics.conversion_rate.toFixed(1)}%` : "—"}
+                              {hasWarning && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger><AlertTriangle className="h-3.5 w-3.5 text-destructive" /></TooltipTrigger>
+                                    <TooltipContent><p>{productRecs.find(r => r.severity === "critical")?.title}</p></TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                              {!hasWarning && hasTip && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger><Lightbulb className="h-3.5 w-3.5 text-warning" /></TooltipTrigger>
+                                    <TooltipContent><p>{productRecs[0]?.title}</p></TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-2 py-1.5 align-middle text-right font-mono">
+                            {visitsNoSale !== null && visitsNoSale > 0 ? (
+                              <span className={visitsNoSale > 50 ? "text-destructive" : "text-muted-foreground"}>{visitsNoSale}</span>
+                            ) : analytics ? "0" : "—"}
+                          </td>
+                        </>
+                      );
+                    })()}
                     <td className="px-2 py-1.5 align-middle">
                       {allOutOfStock ? (
                         <Badge variant="destructive" className="text-xs">Udsolgt</Badge>
