@@ -372,6 +372,44 @@ export default function ProductListPage() {
                         </Badge>
                       ) : "—"}
                     </td>
+                    {/* Analytics columns */}
+                    {(() => {
+                      const analytics = analyticsMap?.get(product.id);
+                      const productRecs = recommendations.filter(r => r.master_product_id === product.id);
+                      const hasWarning = productRecs.some(r => r.severity === "critical");
+                      const hasTip = productRecs.some(r => r.severity === "info" || r.severity === "warning");
+                      const visitsNoSale = analytics ? analytics.page_views - analytics.purchases : null;
+                      return (
+                        <>
+                          <td className="px-2 py-1.5 align-middle text-right font-mono">
+                            <div className="flex items-center justify-end gap-1">
+                              {analytics ? `${analytics.conversion_rate.toFixed(1)}%` : "—"}
+                              {hasWarning && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger><AlertTriangle className="h-3.5 w-3.5 text-destructive" /></TooltipTrigger>
+                                    <TooltipContent><p>{productRecs.find(r => r.severity === "critical")?.title}</p></TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                              {!hasWarning && hasTip && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger><Lightbulb className="h-3.5 w-3.5 text-warning" /></TooltipTrigger>
+                                    <TooltipContent><p>{productRecs[0]?.title}</p></TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-2 py-1.5 align-middle text-right font-mono">
+                            {visitsNoSale !== null && visitsNoSale > 0 ? (
+                              <span className={visitsNoSale > 50 ? "text-destructive" : "text-muted-foreground"}>{visitsNoSale}</span>
+                            ) : analytics ? "0" : "—"}
+                          </td>
+                        </>
+                      );
+                    })()}
                     <td className="px-2 py-1.5 align-middle">
                       {allOutOfStock ? (
                         <Badge variant="destructive" className="text-xs">Udsolgt</Badge>
