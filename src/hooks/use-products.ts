@@ -147,6 +147,98 @@ export function getCheapestSupplier(
 // Danish VAT rate
 export const VAT_RATE = 0.25;
 
+// Analytics types
+export type ProductAnalytics = {
+  id: string;
+  master_product_id: string;
+  period_start: string;
+  period_end: string;
+  page_views: number;
+  add_to_carts: number;
+  purchases: number;
+  conversion_rate: number;
+  impressions: number;
+  clicks: number;
+  avg_position: number;
+  ctr: number;
+  matched_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProductRecommendation = {
+  id: string;
+  master_product_id: string;
+  recommendation_type: string;
+  severity: string;
+  title: string;
+  description: string;
+  action_suggestion: string | null;
+  is_dismissed: boolean;
+  data: Record<string, any>;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+export function useProductAnalytics(productId: string) {
+  return useQuery({
+    queryKey: ["product_analytics", productId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("product_analytics")
+        .select("*")
+        .eq("master_product_id", productId)
+        .order("period_start", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return (data?.[0] ?? null) as ProductAnalytics | null;
+    },
+    enabled: !!productId,
+  });
+}
+
+export function useAllProductAnalytics() {
+  return useQuery({
+    queryKey: ["all_product_analytics"],
+    queryFn: async () => {
+      // Get latest period analytics for all products
+      const { data, error } = await supabase
+        .from("product_analytics")
+        .select("*")
+        .order("period_start", { ascending: false });
+      if (error) throw error;
+      // Deduplicate: keep only latest per product
+      const byProduct = new Map<string, ProductAnalytics>();
+      for (const row of data as ProductAnalytics[]) {
+        if (!byProduct.has(row.master_product_id)) {
+          byProduct.set(row.master_product_id, row);
+        }
+      }
+      return byProduct;
+    },
+  });
+}
+
+export function useProductRecommendations(productId?: string) {
+  return useQuery({
+    queryKey: ["product_recommendations", productId],
+    queryFn: async () => {
+      let query = supabase
+        .from("product_recommendations")
+        .select("*")
+        .eq("is_dismissed", false)
+        .is("resolved_at", null)
+        .order("created_at", { ascending: false });
+      if (productId) {
+        query = query.eq("master_product_id", productId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as ProductRecommendation[];
+    },
+  });
+}
+
 // Utility: remove VAT from an incl-VAT price
 export function exVat(priceInclVat: number): number {
   return Math.round((priceInclVat / (1 + VAT_RATE)) * 100) / 100;
