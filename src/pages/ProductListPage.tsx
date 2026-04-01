@@ -311,6 +311,7 @@ export default function ProductListPage() {
                 <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("updated_at")}>
                   <span className="inline-flex items-center">Ændret<SortIcon field="updated_at" /></span>
                 </th>
+                <th className="h-9 px-2 w-8"></th>
               </tr>
             </thead>
             <tbody className="[&_tr:last-child]:border-0">
