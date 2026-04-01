@@ -50,6 +50,39 @@ export default function SettingsPage() {
     toast({ title: "MCP URL kopieret" });
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Fejl", description: "Adgangskoderne matcher ikke", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast({ title: "Fejl", description: "Adgangskoden skal være mindst 8 tegn", variant: "destructive" });
+      return;
+    }
+    setChangingPassword(true);
+    // Verify current password by re-signing in
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user?.email ?? "",
+      password: currentPassword,
+    });
+    if (signInError) {
+      toast({ title: "Fejl", description: "Nuværende adgangskode er forkert", variant: "destructive" });
+      setChangingPassword(false);
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      toast({ title: "Fejl", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Adgangskode opdateret" });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    }
+    setChangingPassword(false);
+  };
+
   return (
     <div className="space-y-8">
       <div>
