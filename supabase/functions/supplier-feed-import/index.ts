@@ -91,25 +91,67 @@ Deno.serve(async (req) => {
       .single();
     if (supErr || !supplier) throw new Error("Supplier not found");
 
-    if (!supplier.feed_url) throw new Error("No feed URL configured");
-
     const mapping = (supplier.column_mapping ?? {}) as Record<string, string>;
-    if (!mapping.ean) throw new Error("EAN mapping not configured");
-    if (!mapping.purchase_price) throw new Error("Purchase price mapping not configured");
 
-    const delimiter = mapping._delimiter || ";";
-
-    // Fetch feed
-    const res = await fetch(supplier.feed_url);
-    if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
-    const text = await res.text();
-
-    // Parse
     let feedRows: Record<string, string>[];
-    if (supplier.feed_type === "xml") {
+
+    if (supplier.feed_type === "api") {
+      // Aurdel API: build URL from stored credentials
+      const apiDb = mapping._api_database;
+      const apiCust = mapping._api_customer_id;
+      const apiComp = mapping._api_company_id;
+      const apiKeyVal = mapping._api_key;
+      const apiLang = mapping._api_language || "da";
+      if (!apiDb || !apiCust || !apiComp) throw new Error("API credentials not configured (database, customerid, companyid)");
+
+      const params = new URLSearchParams({
+        database: apiDb,
+        customerid: apiCust,
+        companyid: apiComp,
+        language: apiLang,
+      });
+      if (apiKeyVal) params.set("apikey", apiKeyVal);
+
+      const apiUrl = `https://api.aurdel.com/Prices/getPrice?${params.toString()}`;
+      const res = await fetch(apiUrl);
+      if (!res.ok) throw new Error(`API returned status ${res.status}`);
+      const text = await res.text();
       feedRows = parseXml(text);
     } else {
-      feedRows = parseCsv(text, delimiter);
+      if (!supplier.feed_url) throw new Error("No feed URL configured");
+      if (!mapping.ean) throw new Error("EAN mapping not configured");
+      if (!mapping.purchase_price) throw new Error("Purchase price mapping not configured");
+
+      const delimiter = mapping._delimiter || ";";
+
+      const res = await fetch(supplier.feed_url);
+      if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
+      const text = await res.text();
+
+      if (supplier.feed_type === "xml") {
+        feedRows = parseXml(text);
+      } else {
+        feedRows = parseCsv(text, delimiter);
+      }
+    }
+
+    // For API type, auto-detect EAN/price mapping from Aurdel XML if not set
+    if (supplier.feed_type === "api" && (!mapping.ean || !mapping.purchase_price) && feedRows.length > 0) {
+      const sampleKeys = Object.keys(feedRows[0]);
+      console.log("API feed sample keys:", sampleKeys.join(", "));
+      // Common Aurdel field names
+      const eanField = sampleKeys.find(k => /ean|barcode|gtin/i.test(k));
+      const priceField = sampleKeys.find(k => /price|pris/i.test(k));
+      if (!eanField) throw new Error(`Could not auto-detect EAN field. Available fields: ${sampleKeys.join(", ")}`);
+      if (!priceField) throw new Error(`Could not auto-detect price field. Available fields: ${sampleKeys.join(", ")}`);
+      mapping.ean = eanField;
+      mapping.purchase_price = priceField;
+      // Also try stock
+      const stockField = sampleKeys.find(k => /stock|lager|qty|quantity|antal/i.test(k));
+      if (stockField) mapping.stock_quantity = stockField;
+    } else if (supplier.feed_type !== "api") {
+      if (!mapping.ean) throw new Error("EAN mapping not configured");
+      if (!mapping.purchase_price) throw new Error("Purchase price mapping not configured");
     }
 
     if (feedRows.length === 0) throw new Error("No rows found in feed");

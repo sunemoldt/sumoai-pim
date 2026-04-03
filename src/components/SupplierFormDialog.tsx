@@ -155,7 +155,41 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
             </Select>
           </div>
 
-          {feedType !== "manual" && (
+          {feedType === "api" && (
+            <div className="space-y-3">
+              <div className="text-xs text-muted-foreground">Aurdel API-indstillinger</div>
+              <div className="space-y-2">
+                <Label htmlFor="apiDatabase">Database</Label>
+                <Input id="apiDatabase" value={apiDatabase} onChange={(e) => setApiDatabase(e.target.value)} placeholder="f.eks. W" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="apiCustomerId">Customer ID</Label>
+                <Input id="apiCustomerId" value={apiCustomerId} onChange={(e) => setApiCustomerId(e.target.value)} placeholder="Dit kunde-ID" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="apiCompanyId">Company ID</Label>
+                <Input id="apiCompanyId" value={apiCompanyId} onChange={(e) => setApiCompanyId(e.target.value)} placeholder="f.eks. SE (2 tegn)" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="apiKey">API Key / Password</Label>
+                <Input id="apiKey" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Din API-nøgle" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="apiLanguage">Sprog</Label>
+                <Select value={apiLanguage} onValueChange={setApiLanguage}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="da">Dansk</SelectItem>
+                    <SelectItem value="sv">Svensk</SelectItem>
+                    <SelectItem value="no">Norsk</SelectItem>
+                    <SelectItem value="en">Engelsk</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {feedType !== "manual" && feedType !== "api" && (
             <div className="space-y-2">
               <Label>{feedType === "ftp" ? "FTP URL" : "Feed URL"}</Label>
               <Input
