@@ -357,8 +357,8 @@ export default function ProductListPage() {
                 </tr>
               ) : (
                 sorted.map((product) => {
-                  const cheapest = getCheapestSupplier(product.supplier_products);
-                  const cheapestPrice = cheapest?.purchase_price ?? null;
+                  const cheapestAny = getCheapestSupplierAny(product.supplier_products);
+                  const cheapestPrice = cheapestAny?.purchase_price ?? null;
                   const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
                   const activePrice = product.sale_price ?? product.webshop_price;
                   const activePriceExVat = activePrice ? exVat(activePrice) : null;
