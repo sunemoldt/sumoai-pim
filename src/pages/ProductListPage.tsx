@@ -327,7 +327,9 @@ export default function ProductListPage() {
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("recommended")}>
                   <span className="inline-flex items-center justify-end">Anbef.<SortIcon field="recommended" /></span>
                 </th>
-                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("margin")}>
+                  <span className="inline-flex items-center justify-end">Avance<SortIcon field="margin" /></span>
+                </th>
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("page_views")}>
                   <span className="inline-flex items-center justify-end">Besøg<SortIcon field="page_views" /></span>
                 </th>
