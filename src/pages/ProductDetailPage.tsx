@@ -180,7 +180,12 @@ export default function ProductDetailPage() {
             <p className="text-sm text-muted-foreground">Billigste indkøbspris</p>
             <p className="text-2xl font-semibold text-foreground mt-1">{formatPrice(cheapestPrice)}</p>
             <p className="text-xs text-muted-foreground mt-0.5">ex. moms</p>
-            {cheapest?.suppliers && <p className="text-xs text-muted-foreground">{cheapest.suppliers.name}</p>}
+            {cheapestAny?.suppliers && (
+              <p className="text-xs text-muted-foreground">
+                {cheapestAny.suppliers.name}
+                {!cheapestAny.in_stock && <Badge variant="outline" className="ml-1.5 text-[10px] px-1 py-0 text-warning border-warning/30">Ikke på lager</Badge>}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card className="shadow-sm">
