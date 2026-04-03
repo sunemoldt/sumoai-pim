@@ -29,7 +29,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
   const [isActive, setIsActive] = useState(true);
 
   // API-specific fields (stored in column_mapping)
-  const [apiDatabase, setApiDatabase] = useState("");
+  const [apiDatabase, setApiDatabase] = useState("item,stock");
   const [apiCustomerId, setApiCustomerId] = useState("");
   const [apiCompanyId, setApiCompanyId] = useState("");
   const [apiKey, setApiKey] = useState("");
