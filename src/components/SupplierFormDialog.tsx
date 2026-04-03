@@ -54,7 +54,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setFeedUrl("");
       setFeedSchedule("manual");
       setIsActive(true);
-      setApiDatabase("");
+      setApiDatabase("item,stock");
       setApiCustomerId("");
       setApiCompanyId("");
       setApiKey("");
