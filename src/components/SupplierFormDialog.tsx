@@ -28,6 +28,13 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
   const [feedSchedule, setFeedSchedule] = useState("manual");
   const [isActive, setIsActive] = useState(true);
 
+  // API-specific fields (stored in column_mapping)
+  const [apiDatabase, setApiDatabase] = useState("");
+  const [apiCustomerId, setApiCustomerId] = useState("");
+  const [apiCompanyId, setApiCompanyId] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [apiLanguage, setApiLanguage] = useState("da");
+
   useEffect(() => {
     if (supplier) {
       setName(supplier.name);
@@ -35,12 +42,23 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setFeedUrl(supplier.feed_url ?? "");
       setFeedSchedule(supplier.feed_schedule ?? "manual");
       setIsActive(supplier.is_active);
+      const cm = (supplier.column_mapping ?? {}) as Record<string, string>;
+      setApiDatabase(cm._api_database ?? "");
+      setApiCustomerId(cm._api_customer_id ?? "");
+      setApiCompanyId(cm._api_company_id ?? "");
+      setApiKey(cm._api_key ?? "");
+      setApiLanguage(cm._api_language ?? "da");
     } else {
       setName("");
       setFeedType("csv");
       setFeedUrl("");
       setFeedSchedule("manual");
       setIsActive(true);
+      setApiDatabase("");
+      setApiCustomerId("");
+      setApiCompanyId("");
+      setApiKey("");
+      setApiLanguage("da");
     }
   }, [supplier, open]);
 
@@ -70,12 +88,26 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
     }
     setSaving(true);
     try {
+      // Merge API credentials into column_mapping
+      const existingMapping = supplier ? ((supplier.column_mapping ?? {}) as Record<string, string>) : {};
+      const columnMapping = feedType === "api"
+        ? {
+            ...existingMapping,
+            _api_database: apiDatabase.trim(),
+            _api_customer_id: apiCustomerId.trim(),
+            _api_company_id: apiCompanyId.trim(),
+            _api_key: apiKey.trim(),
+            _api_language: apiLanguage,
+          }
+        : existingMapping;
+
       const row = {
         name: name.trim(),
         feed_type: feedType,
-        feed_url: feedUrl.trim() || null,
+        feed_url: feedType === "api" ? "https://api.aurdel.com/Prices/getPrice" : (feedUrl.trim() || null),
         feed_schedule: feedSchedule,
         is_active: isActive,
+        column_mapping: columnMapping,
       };
 
       if (supplier) {
@@ -117,12 +149,47 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
                 <SelectItem value="csv">CSV</SelectItem>
                 <SelectItem value="xml">XML</SelectItem>
                 <SelectItem value="ftp">FTP (CSV/XML)</SelectItem>
+                <SelectItem value="api">API</SelectItem>
                 <SelectItem value="manual">Manuel</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {feedType !== "manual" && (
+          {feedType === "api" && (
+            <div className="space-y-3">
+              <div className="text-xs text-muted-foreground">Aurdel API-indstillinger</div>
+              <div className="space-y-2">
+                <Label htmlFor="apiDatabase">Database</Label>
+                <Input id="apiDatabase" value={apiDatabase} onChange={(e) => setApiDatabase(e.target.value)} placeholder="f.eks. W" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="apiCustomerId">Customer ID</Label>
+                <Input id="apiCustomerId" value={apiCustomerId} onChange={(e) => setApiCustomerId(e.target.value)} placeholder="Dit kunde-ID" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="apiCompanyId">Company ID</Label>
+                <Input id="apiCompanyId" value={apiCompanyId} onChange={(e) => setApiCompanyId(e.target.value)} placeholder="f.eks. SE (2 tegn)" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="apiKey">API Key / Password</Label>
+                <Input id="apiKey" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Din API-nøgle" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="apiLanguage">Sprog</Label>
+                <Select value={apiLanguage} onValueChange={setApiLanguage}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="da">Dansk</SelectItem>
+                    <SelectItem value="sv">Svensk</SelectItem>
+                    <SelectItem value="no">Norsk</SelectItem>
+                    <SelectItem value="en">Engelsk</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {feedType !== "manual" && feedType !== "api" && (
             <div className="space-y-2">
               <Label>{feedType === "ftp" ? "FTP URL" : "Feed URL"}</Label>
               <Input
