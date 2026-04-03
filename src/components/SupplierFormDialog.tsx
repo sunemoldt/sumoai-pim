@@ -159,8 +159,15 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
             <div className="space-y-3">
               <div className="text-xs text-muted-foreground">Aurdel API-indstillinger</div>
               <div className="space-y-2">
-                <Label htmlFor="apiDatabase">Database</Label>
-                <Input id="apiDatabase" value={apiDatabase} onChange={(e) => setApiDatabase(e.target.value)} placeholder="f.eks. W" />
+                <Label htmlFor="apiDatabase">Database(r)</Label>
+                <Select value={apiDatabase} onValueChange={setApiDatabase}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="item">Item (produkter & priser)</SelectItem>
+                    <SelectItem value="stock">Stock (lagerdata)</SelectItem>
+                    <SelectItem value="item,stock">Begge (item + stock)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="apiCustomerId">Customer ID</Label>
