@@ -1,0 +1,2 @@
+ALTER TABLE public.suppliers DROP CONSTRAINT IF EXISTS suppliers_feed_type_check;
+ALTER TABLE public.suppliers ADD CONSTRAINT suppliers_feed_type_check CHECK (feed_type IN ('csv', 'xml', 'ftp', 'api', 'manual'));
