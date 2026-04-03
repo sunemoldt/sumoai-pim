@@ -261,7 +261,6 @@ export default function ProductDetailPage() {
       <Tabs defaultValue="details" className="w-full">
         <TabsList>
           <TabsTrigger value="details">Produktdetaljer</TabsTrigger>
-          <TabsTrigger value="seo">SEO / Meta</TabsTrigger>
           <TabsTrigger value="attributes">Attributter</TabsTrigger>
           <TabsTrigger value="pricing">Avance</TabsTrigger>
           <TabsTrigger value="suppliers">Leverandører</TabsTrigger>
@@ -274,6 +273,7 @@ export default function ProductDetailPage() {
               <Badge variant="destructive" className="ml-1.5 text-[10px] px-1 py-0">{recommendations.length}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="seo">SEO</TabsTrigger>
           <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
 
@@ -352,7 +352,8 @@ export default function ProductDetailPage() {
         <TabsContent value="seo" className="space-y-4 mt-4">
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-medium">Meta / SEO</CardTitle>
+              <CardTitle className="text-base font-medium">SEO</CardTitle>
+              <p className="text-xs text-muted-foreground">Data fra Rank Math SEO plugin</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
