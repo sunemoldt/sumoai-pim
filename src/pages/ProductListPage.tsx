@@ -309,13 +309,21 @@ export default function ProductListPage() {
                 <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("title")}>
                   <span className="inline-flex items-center">Produkt<SortIcon field="title" /></span>
                 </th>
-                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">EAN</th>
-                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell">Brand</th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("ean")}>
+                  <span className="inline-flex items-center">EAN<SortIcon field="ean" /></span>
+                </th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("brand")}>
+                  <span className="inline-flex items-center">Brand<SortIcon field="brand" /></span>
+                </th>
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("stock_quantity")}>
                   <span className="inline-flex items-center justify-end">Lager<SortIcon field="stock_quantity" /></span>
                 </th>
-                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Indkøb</th>
-                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Webshop</th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("purchase_price")}>
+                  <span className="inline-flex items-center justify-end">Indkøb<SortIcon field="purchase_price" /></span>
+                </th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("webshop_price")}>
+                  <span className="inline-flex items-center justify-end">Webshop<SortIcon field="webshop_price" /></span>
+                </th>
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("recommended")}>
                   <span className="inline-flex items-center justify-end">Anbef.<SortIcon field="recommended" /></span>
                 </th>
