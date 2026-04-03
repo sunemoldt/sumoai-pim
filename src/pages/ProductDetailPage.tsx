@@ -120,10 +120,10 @@ export default function ProductDetailPage() {
     }
   };
 
-  // Pre-compute cheapest for init (before early returns)
+  // Pre-compute cheapest for init — use ANY supplier (regardless of stock) for pricing
   const cheapestPriceForInit = (() => {
     if (!product) return null;
-    const c = getCheapestSupplier(product.supplier_products);
+    const c = getCheapestSupplierAny(product.supplier_products);
     return c?.purchase_price ?? null;
   })();
 
