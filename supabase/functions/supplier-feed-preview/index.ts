@@ -72,9 +72,9 @@ Deno.serve(async (req) => {
       }
 
       const mapping = (supplier.column_mapping ?? {}) as Record<string, string>;
-      const apiDbStr = mapping._api_database || "item,stock";
+      // Always use "item" database for preview – it contains EAN, price, stock, descriptions
       const params = new URLSearchParams({
-        database: apiDbStr,
+        database: "item",
         customerid: mapping._api_customer_id || "",
         companyid: mapping._api_company_id || "",
         language: mapping._api_language || "da",
@@ -86,7 +86,16 @@ Deno.serve(async (req) => {
 
       const apiBaseUrl = supplier.feed_url || feed_url || "https://api.aurdel.com/Prices/getPrice";
       const apiUrl = `${apiBaseUrl}?${params.toString()}`;
-      const res = await fetch(apiUrl);
+
+      // Aurdel "item" database can be slow – allow up to 55 seconds
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 55000);
+      let res: Response;
+      try {
+        res = await fetch(apiUrl, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
       const text = await res.text();
 
       if (!res.ok) {
