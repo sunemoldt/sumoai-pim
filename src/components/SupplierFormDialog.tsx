@@ -28,6 +28,13 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
   const [feedSchedule, setFeedSchedule] = useState("manual");
   const [isActive, setIsActive] = useState(true);
 
+  // API-specific fields (stored in column_mapping)
+  const [apiDatabase, setApiDatabase] = useState("");
+  const [apiCustomerId, setApiCustomerId] = useState("");
+  const [apiCompanyId, setApiCompanyId] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [apiLanguage, setApiLanguage] = useState("da");
+
   useEffect(() => {
     if (supplier) {
       setName(supplier.name);
