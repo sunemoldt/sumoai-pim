@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History, TrendingUp, AlertTriangle, Lightbulb, Eye, ShoppingCart, MousePointerClick } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History, TrendingUp, AlertTriangle, Lightbulb, Eye, ShoppingCart, MousePointerClick, ExternalLink } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -359,8 +359,24 @@ export default function ProductDetailPage() {
         <TabsContent value="seo" className="space-y-4 mt-4">
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-medium">SEO</CardTitle>
-              <p className="text-xs text-muted-foreground">Data fra Rank Math SEO plugin</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-medium">SEO</CardTitle>
+                  <p className="text-xs text-muted-foreground">Data fra Rank Math SEO plugin</p>
+                </div>
+                {product.webshop_product_id && (
+                  <a
+                    href={`https://www.comtek.dk/?p=${product.webshop_product_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Se produkt i webshoppen
+                  </a>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">

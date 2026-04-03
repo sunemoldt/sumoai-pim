@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from "react";
-import { useMasterProducts, useSuppliers, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
+import { useMasterProducts, useSuppliers, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -14,7 +14,7 @@ type StockFilter = "all" | "instock" | "outofstock" | "backorder";
 type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
-type SortField = "title" | "stock_quantity" | "updated_at" | "recommended" | "page_views" | "conversion_rate";
+type SortField = "title" | "ean" | "brand" | "stock_quantity" | "purchase_price" | "webshop_price" | "recommended" | "margin" | "page_views" | "conversion_rate" | "updated_at";
 type SortDir = "asc" | "desc";
 
 export default function ProductListPage() {
@@ -116,14 +116,34 @@ export default function ProductListPage() {
     const dir = sortDir === "asc" ? 1 : -1;
     return [...filtered].sort((a, b) => {
       if (sortField === "title") return dir * a.title.localeCompare(b.title, "da");
+      if (sortField === "ean") return dir * a.ean.localeCompare(b.ean);
+      if (sortField === "brand") return dir * (a.brand ?? "").localeCompare(b.brand ?? "", "da");
       if (sortField === "stock_quantity") return dir * ((a.stock_quantity ?? 0) - (b.stock_quantity ?? 0));
-      if (sortField === "updated_at") return dir * (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime());
+      if (sortField === "purchase_price") {
+        const cA = getCheapestSupplierAny(a.supplier_products)?.purchase_price ?? 0;
+        const cB = getCheapestSupplierAny(b.supplier_products)?.purchase_price ?? 0;
+        return dir * (cA - cB);
+      }
+      if (sortField === "webshop_price") {
+        const pA = a.sale_price ?? a.webshop_price ?? 0;
+        const pB = b.sale_price ?? b.webshop_price ?? 0;
+        return dir * (pA - pB);
+      }
       if (sortField === "recommended") {
-        const cA = getCheapestSupplier(a.supplier_products);
-        const cB = getCheapestSupplier(b.supplier_products);
+        const cA = getCheapestSupplierAny(a.supplier_products);
+        const cB = getCheapestSupplierAny(b.supplier_products);
         const rA = cA ? getRecommendedPriceInclVat(cA.purchase_price, a.custom_markup_percentage ?? globalMarkup) : 0;
         const rB = cB ? getRecommendedPriceInclVat(cB.purchase_price, b.custom_markup_percentage ?? globalMarkup) : 0;
         return dir * (rA - rB);
+      }
+      if (sortField === "margin") {
+        const cA = getCheapestSupplierAny(a.supplier_products)?.purchase_price;
+        const cB = getCheapestSupplierAny(b.supplier_products)?.purchase_price;
+        const apA = a.sale_price ?? a.webshop_price;
+        const apB = b.sale_price ?? b.webshop_price;
+        const mA = apA && cA ? getMarginPercent(exVat(apA), cA) : -999;
+        const mB = apB && cB ? getMarginPercent(exVat(apB), cB) : -999;
+        return dir * (mA - mB);
       }
       if (sortField === "page_views") {
         const aV = analyticsMap?.get(a.id)?.page_views ?? 0;
@@ -135,6 +155,7 @@ export default function ProductListPage() {
         const bC = analyticsMap?.get(b.id)?.conversion_rate ?? 0;
         return dir * (aC - bC);
       }
+      if (sortField === "updated_at") return dir * (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime());
       return 0;
     });
   }, [filtered, sortField, sortDir, globalMarkup, analyticsMap]);
@@ -288,17 +309,27 @@ export default function ProductListPage() {
                 <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("title")}>
                   <span className="inline-flex items-center">Produkt<SortIcon field="title" /></span>
                 </th>
-                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground">EAN</th>
-                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell">Brand</th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("ean")}>
+                  <span className="inline-flex items-center">EAN<SortIcon field="ean" /></span>
+                </th>
+                <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("brand")}>
+                  <span className="inline-flex items-center">Brand<SortIcon field="brand" /></span>
+                </th>
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("stock_quantity")}>
                   <span className="inline-flex items-center justify-end">Lager<SortIcon field="stock_quantity" /></span>
                 </th>
-                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Indkøb</th>
-                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Webshop</th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("purchase_price")}>
+                  <span className="inline-flex items-center justify-end">Indkøb<SortIcon field="purchase_price" /></span>
+                </th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("webshop_price")}>
+                  <span className="inline-flex items-center justify-end">Webshop<SortIcon field="webshop_price" /></span>
+                </th>
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("recommended")}>
                   <span className="inline-flex items-center justify-end">Anbef.<SortIcon field="recommended" /></span>
                 </th>
-                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground">Avance</th>
+                <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("margin")}>
+                  <span className="inline-flex items-center justify-end">Avance<SortIcon field="margin" /></span>
+                </th>
                 <th className="h-9 px-2 text-right align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("page_views")}>
                   <span className="inline-flex items-center justify-end">Besøg<SortIcon field="page_views" /></span>
                 </th>
@@ -326,8 +357,8 @@ export default function ProductListPage() {
                 </tr>
               ) : (
                 sorted.map((product) => {
-                  const cheapest = getCheapestSupplier(product.supplier_products);
-                  const cheapestPrice = cheapest?.purchase_price ?? null;
+                  const cheapestAny = getCheapestSupplierAny(product.supplier_products);
+                  const cheapestPrice = cheapestAny?.purchase_price ?? null;
                   const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
                   const activePrice = product.sale_price ?? product.webshop_price;
                   const activePriceExVat = activePrice ? exVat(activePrice) : null;
