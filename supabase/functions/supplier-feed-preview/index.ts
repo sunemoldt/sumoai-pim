@@ -10,35 +10,66 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Auth check
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+    return new Response(JSON.stringify({ error: "Server configuration error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   const authHeader = req.headers.get("authorization");
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+
+  const supabase = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
   if (authError || !user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
   try {
-    const { feed_url, feed_type, delimiter = ";", supplier_id } = await req.json();
+    const body = await req.json();
+    const feed_url = typeof body.feed_url === "string" ? body.feed_url : "";
+    const feed_type = typeof body.feed_type === "string" ? body.feed_type : "csv";
+    const delimiter = typeof body.delimiter === "string" && body.delimiter ? body.delimiter : ";";
+    const supplier_id = typeof body.supplier_id === "string" ? body.supplier_id : "";
 
-    // For API-type suppliers, fetch columns from the API using stored credentials
-    if (feed_type === "api" && supplier_id) {
-      const adminClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    if (feed_type === "api") {
+      if (!supplier_id) {
+        return new Response(JSON.stringify({ error: "supplier_id is required for api feeds" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const adminClient = createClient(supabaseUrl, serviceRoleKey);
       const { data: supplier, error: supErr } = await adminClient
         .from("suppliers")
-        .select("column_mapping")
+        .select("feed_url, column_mapping")
         .eq("id", supplier_id)
         .single();
-      if (supErr || !supplier) throw new Error("Supplier not found");
+
+      if (supErr || !supplier) {
+        throw new Error("Supplier not found");
+      }
 
       const mapping = (supplier.column_mapping ?? {}) as Record<string, string>;
       const apiDbStr = mapping._api_database || "item";
@@ -49,16 +80,28 @@ Deno.serve(async (req) => {
         companyid: mapping._api_company_id || "",
         language: mapping._api_language || "da",
       });
-      if (mapping._api_key) params.set("apikey", mapping._api_key);
 
-      const apiUrl = `https://api.aurdel.com/Prices/getPrice?${params.toString()}`;
+      if (mapping._api_key) {
+        params.set("apikey", mapping._api_key);
+      }
+
+      const apiBaseUrl = supplier.feed_url || feed_url || "https://api.aurdel.com/Prices/getPrice";
+      const apiUrl = `${apiBaseUrl}?${params.toString()}`;
       const res = await fetch(apiUrl);
-      if (!res.ok) throw new Error(`API returned status ${res.status}`);
       const text = await res.text();
 
-      // Extract field names from first <item>
+      if (!res.ok) {
+        const errorSnippet = text.trim().slice(0, 200);
+        throw new Error(
+          errorSnippet
+            ? `Failed to fetch API feed: ${res.status} ${errorSnippet}`
+            : `Failed to fetch API feed: ${res.status}`,
+        );
+      }
+
       const itemMatch = text.match(/<item\s+id="[^"]*">([\s\S]*?)<\/item>/i);
       const columns: string[] = ["supplier_sku (item id)"];
+
       if (itemMatch) {
         const inner = itemMatch[1];
         if (/<ean>/i.test(inner)) columns.push("ean");
@@ -81,8 +124,16 @@ Deno.serve(async (req) => {
     }
 
     const res = await fetch(feed_url);
-    if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
     const text = await res.text();
+
+    if (!res.ok) {
+      const errorSnippet = text.trim().slice(0, 200);
+      throw new Error(
+        errorSnippet
+          ? `Failed to fetch feed: ${res.status} ${errorSnippet}`
+          : `Failed to fetch feed: ${res.status}`,
+      );
+    }
 
     let columns: string[] = [];
 
