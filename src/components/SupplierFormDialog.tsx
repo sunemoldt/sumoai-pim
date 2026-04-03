@@ -149,6 +149,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
                 <SelectItem value="csv">CSV</SelectItem>
                 <SelectItem value="xml">XML</SelectItem>
                 <SelectItem value="ftp">FTP (CSV/XML)</SelectItem>
+                <SelectItem value="api">API</SelectItem>
                 <SelectItem value="manual">Manuel</SelectItem>
               </SelectContent>
             </Select>
