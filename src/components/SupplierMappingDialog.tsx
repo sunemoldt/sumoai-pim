@@ -54,7 +54,12 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("supplier-feed-preview", {
-        body: { feed_url: supplier.feed_url, feed_type: supplier.feed_type, delimiter },
+        body: {
+          feed_url: supplier.feed_url,
+          feed_type: supplier.feed_type,
+          delimiter,
+          supplier_id: supplier.id,
+        },
       });
       if (error) throw error;
       if (data?.columns) {
