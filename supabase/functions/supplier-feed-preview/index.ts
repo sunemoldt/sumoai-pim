@@ -71,11 +71,9 @@ Deno.serve(async (req) => {
         throw new Error("Supplier not found");
       }
 
-      const mapping = (supplier.column_mapping ?? {}) as Record<string, string>;
-      const apiDbStr = mapping._api_database || "item";
-      const firstDb = apiDbStr.split(",")[0].trim();
+      const apiDbStr = mapping._api_database || "item,stock";
       const params = new URLSearchParams({
-        database: firstDb,
+        database: apiDbStr,
         customerid: mapping._api_customer_id || "",
         companyid: mapping._api_company_id || "",
         language: mapping._api_language || "da",
