@@ -43,7 +43,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setFeedSchedule(supplier.feed_schedule ?? "manual");
       setIsActive(supplier.is_active);
       const cm = (supplier.column_mapping ?? {}) as Record<string, string>;
-      setApiDatabase(cm._api_database ?? "");
+      setApiDatabase(cm._api_database ?? "item,stock");
       setApiCustomerId(cm._api_customer_id ?? "");
       setApiCompanyId(cm._api_company_id ?? "");
       setApiKey(cm._api_key ?? "");
