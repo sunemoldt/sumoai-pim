@@ -179,7 +179,7 @@ export default function DashboardPage() {
       )}
 
       {view === "overview" && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-3">
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-medium">Produkter med lav avance</CardTitle>
@@ -214,6 +214,27 @@ export default function DashboardPage() {
                   Vis alle {outOfStockProducts.length} →
                 </button>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <Eye className="h-4 w-4 text-muted-foreground" />
+                Mest besøgte (30 dage)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {topVisitedProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">Ingen besøgsdata endnu</p>
+              ) : renderProductList(topVisitedProducts, (p) => {
+                const pv = (p as typeof topVisitedProducts[0]).pageViews;
+                return (
+                  <Badge variant="outline" className="ml-2 shrink-0">
+                    {pv} besøg
+                  </Badge>
+                );
+              })}
             </CardContent>
           </Card>
         </div>
