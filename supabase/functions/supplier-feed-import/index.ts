@@ -27,7 +27,6 @@ function parseCsv(text: string, delimiter: string): Record<string, string>[] {
 function parseXml(text: string): Record<string, string>[] {
   // Simple XML parser for product feeds - finds repeating elements
   const rows: Record<string, string>[] = [];
-  // Try to find product-like elements
   const productTags = ["product", "item", "row", "Product", "Item", "Row"];
   let tag = "";
   for (const t of productTags) {
@@ -51,6 +50,52 @@ function parseXml(text: string): Record<string, string>[] {
     if (Object.keys(row).length > 0) rows.push(row);
   }
   return rows;
+}
+
+/** Aurdel-specific XML parser for their item/stock database format */
+function parseAurdelItemXml(text: string): Record<string, string>[] {
+  const rows: Record<string, string>[] = [];
+  const itemRegex = /<item\s+id="([^"]*)">([\s\S]*?)<\/item>/gi;
+  let match;
+  while ((match = itemRegex.exec(text)) !== null) {
+    const sku = match[1];
+    const inner = match[2];
+    const row: Record<string, string> = { supplier_sku: sku };
+
+    // EAN
+    const eanMatch = inner.match(/<ean>([^<]*)<\/ean>/i);
+    if (eanMatch) row.ean = eanMatch[1].trim();
+
+    // Price (net)
+    const netMatch = inner.match(/<net[^>]*>([^<]*)<\/net>/i);
+    if (netMatch) row.purchase_price = netMatch[1].trim().replace(",", ".");
+
+    // Stock quantity (attribute)
+    const stockMatch = inner.match(/<stock\s+quantity="([^"]*)"/i);
+    if (stockMatch) row.stock_quantity = stockMatch[1].trim();
+
+    // Short description (may have CDATA)
+    const shortDesc = inner.match(/<short>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/short>/i);
+    if (shortDesc) row.short_description = shortDesc[1].trim();
+
+    // Manufacturer
+    const mfgMatch = inner.match(/<manufacturer[^>]*><description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
+    if (mfgMatch) row.manufacturer = mfgMatch[1].trim();
+
+    if (row.ean || row.purchase_price) rows.push(row);
+  }
+  return rows;
+}
+
+/** Aurdel stock-only XML parser: <item id="SKU"><stock quantity="N"/></item> */
+function parseAurdelStockXml(text: string): Map<string, string> {
+  const stockMap = new Map<string, string>();
+  const itemRegex = /<item\s+id="([^"]*)">\s*<stock\s+quantity="([^"]*)"/gi;
+  let match;
+  while ((match = itemRegex.exec(text)) !== null) {
+    stockMap.set(match[1], match[2]);
+  }
+  return stockMap;
 }
 
 Deno.serve(async (req) => {
@@ -106,7 +151,9 @@ Deno.serve(async (req) => {
       if (!apiCust || !apiComp) throw new Error("API credentials not configured (customerid, companyid)");
 
       feedRows = [];
-      const stockData = new Map<string, Record<string, string>>();
+
+      // First pass: fetch all databases
+      let stockMap = new Map<string, string>(); // SKU -> quantity
 
       for (const db of apiDbs) {
         const params = new URLSearchParams({
@@ -122,40 +169,35 @@ Deno.serve(async (req) => {
         const res = await fetch(apiUrl);
         if (!res.ok) throw new Error(`API returned status ${res.status} for database=${db}`);
         const text = await res.text();
-        const rows = parseXml(text);
-        console.log(`Database ${db}: ${rows.length} rows`);
 
-        if (db === "stock" && apiDbs.length > 1) {
-          // Store stock data to merge with item data
-          for (const row of rows) {
-            const ean = Object.entries(row).find(([k]) => /ean|barcode|gtin/i.test(k))?.[1];
-            if (ean) stockData.set(ean.trim(), row);
-          }
+        if (db === "stock") {
+          stockMap = parseAurdelStockXml(text);
+          console.log(`Stock database: ${stockMap.size} SKUs with stock data`);
         } else {
+          const rows = parseAurdelItemXml(text);
+          console.log(`Item database: ${rows.length} items parsed`);
           feedRows.push(...rows);
         }
       }
 
-      // Merge stock data into item rows if both databases were fetched
-      if (stockData.size > 0 && feedRows.length > 0) {
-        const sampleKeys = Object.keys(feedRows[0]);
-        const eanKey = sampleKeys.find(k => /ean|barcode|gtin/i.test(k));
-        if (eanKey) {
-          for (const row of feedRows) {
-            const ean = row[eanKey]?.trim();
-            if (ean && stockData.has(ean)) {
-              const stock = stockData.get(ean)!;
-              // Merge stock fields into the item row (stock fields take priority for stock-related data)
-              for (const [k, v] of Object.entries(stock)) {
-                if (/stock|lager|qty|quantity|antal|available/i.test(k) && !row[k]) {
-                  row[k] = v;
-                }
-              }
-            }
+      // Merge stock data into item rows by SKU
+      if (stockMap.size > 0 && feedRows.length > 0) {
+        let merged = 0;
+        for (const row of feedRows) {
+          const sku = row.supplier_sku;
+          if (sku && stockMap.has(sku)) {
+            row.stock_quantity = stockMap.get(sku)!;
+            merged++;
           }
         }
-        console.log(`Merged stock data for ${stockData.size} EANs`);
+        console.log(`Merged stock data for ${merged} items by SKU`);
       }
+
+      // Set auto-mapping for Aurdel format
+      mapping.ean = "ean";
+      mapping.purchase_price = "purchase_price";
+      mapping.stock_quantity = "stock_quantity";
+      mapping.sku = "supplier_sku";
     } else {
       if (!supplier.feed_url) throw new Error("No feed URL configured");
       if (!mapping.ean) throw new Error("EAN mapping not configured");
@@ -172,23 +214,7 @@ Deno.serve(async (req) => {
       } else {
         feedRows = parseCsv(text, delimiter);
       }
-    }
 
-    // For API type, auto-detect EAN/price mapping from Aurdel XML if not set
-    if (supplier.feed_type === "api" && (!mapping.ean || !mapping.purchase_price) && feedRows.length > 0) {
-      const sampleKeys = Object.keys(feedRows[0]);
-      console.log("API feed sample keys:", sampleKeys.join(", "));
-      // Common Aurdel field names
-      const eanField = sampleKeys.find(k => /ean|barcode|gtin/i.test(k));
-      const priceField = sampleKeys.find(k => /price|pris/i.test(k));
-      if (!eanField) throw new Error(`Could not auto-detect EAN field. Available fields: ${sampleKeys.join(", ")}`);
-      if (!priceField) throw new Error(`Could not auto-detect price field. Available fields: ${sampleKeys.join(", ")}`);
-      mapping.ean = eanField;
-      mapping.purchase_price = priceField;
-      // Also try stock
-      const stockField = sampleKeys.find(k => /stock|lager|qty|quantity|antal/i.test(k));
-      if (stockField) mapping.stock_quantity = stockField;
-    } else if (supplier.feed_type !== "api") {
       if (!mapping.ean) throw new Error("EAN mapping not configured");
       if (!mapping.purchase_price) throw new Error("Purchase price mapping not configured");
     }
