@@ -215,12 +215,43 @@ Deno.serve(async (req) => {
       .single();
     const logId = logEntry?.id;
 
+    // Pre-fetch existing master products for diff detection
+    const { data: existingProducts } = await supabase
+      .from("master_products")
+      .select("ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, title, brand, category");
+    const existingByEan = new Map<string, typeof existingProducts extends (infer T)[] | null ? T : never>();
+    for (const ep of existingProducts ?? []) {
+      existingByEan.set(ep.ean, ep);
+    }
+
+    const changeLogs: { master_product_id?: string; change_type: string; field_name: string; old_value: string | null; new_value: string | null; source: string; _ean?: string }[] = [];
+
     // Upsert in batches
     let imported = 0;
     const errors: string[] = [];
 
     for (let i = 0; i < dedupedRows.length; i += 50) {
       const batch = dedupedRows.slice(i, i + 50);
+
+      // Detect changes before upsert
+      for (const row of batch) {
+        const existing = existingByEan.get(row.ean);
+        if (existing) {
+          const fields: [string, any, any, string][] = [
+            ["webshop_price", existing.webshop_price, row.webshop_price, "price_update"],
+            ["sale_price", existing.sale_price, row.sale_price, "price_update"],
+            ["stock_quantity", existing.stock_quantity, row.stock_quantity, "stock_update"],
+            ["stock_status", existing.stock_status, row.stock_status, "stock_update"],
+            ["backorders_allowed", existing.backorders_allowed, row.backorders_allowed, "stock_update"],
+          ];
+          for (const [field, oldVal, newVal, changeType] of fields) {
+            if (String(oldVal ?? "null") !== String(newVal ?? "null")) {
+              changeLogs.push({ change_type: changeType, field_name: field, old_value: String(oldVal ?? "null"), new_value: String(newVal ?? "null"), source: "wc-import", _ean: row.ean });
+            }
+          }
+        }
+      }
+
       const { error } = await supabase
         .from("master_products")
         .upsert(batch, { onConflict: "ean" });
@@ -230,6 +261,28 @@ Deno.serve(async (req) => {
       } else {
         imported += batch.length;
       }
+    }
+
+    // Resolve EANs to IDs for change logs, then insert
+    if (changeLogs.length > 0) {
+      const { data: eanIds } = await supabase
+        .from("master_products")
+        .select("id, ean");
+      const eanIdMap = new Map<string, string>();
+      for (const e of eanIds ?? []) eanIdMap.set(e.ean, e.id);
+
+      const resolvedLogs = changeLogs
+        .map((l) => {
+          const id = eanIdMap.get(l._ean!);
+          if (!id) return null;
+          return { master_product_id: id, change_type: l.change_type, field_name: l.field_name, old_value: l.old_value, new_value: l.new_value, source: l.source };
+        })
+        .filter(Boolean);
+
+      for (let i = 0; i < resolvedLogs.length; i += 500) {
+        await supabase.from("product_change_log").insert(resolvedLogs.slice(i, i + 500));
+      }
+      console.log(`Logged ${resolvedLogs.length} changes from WC import`);
     }
 
     // Update import log
