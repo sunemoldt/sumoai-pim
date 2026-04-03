@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useMasterProduct, getCheapestSupplier, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog, useProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
+import { useMasterProduct, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog, useProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -120,10 +120,10 @@ export default function ProductDetailPage() {
     }
   };
 
-  // Pre-compute cheapest for init (before early returns)
+  // Pre-compute cheapest for init — use ANY supplier (regardless of stock) for pricing
   const cheapestPriceForInit = (() => {
     if (!product) return null;
-    const c = getCheapestSupplier(product.supplier_products);
+    const c = getCheapestSupplierAny(product.supplier_products);
     return c?.purchase_price ?? null;
   })();
 
@@ -146,7 +146,9 @@ export default function ProductDetailPage() {
   }
 
   const cheapest = getCheapestSupplier(product.supplier_products);
-  const cheapestPrice = cheapest?.purchase_price ?? null;
+  const cheapestAny = getCheapestSupplierAny(product.supplier_products);
+  // Use cheapest from ANY supplier for pricing recommendations
+  const cheapestPrice = cheapestAny?.purchase_price ?? null;
   const recommendedPriceExVat = cheapestPrice ? getRecommendedPrice(cheapestPrice, effectiveMarkup) : null;
   const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, effectiveMarkup) : null;
   const currentPrice = product.sale_price ?? product.webshop_price;
@@ -178,7 +180,12 @@ export default function ProductDetailPage() {
             <p className="text-sm text-muted-foreground">Billigste indkøbspris</p>
             <p className="text-2xl font-semibold text-foreground mt-1">{formatPrice(cheapestPrice)}</p>
             <p className="text-xs text-muted-foreground mt-0.5">ex. moms</p>
-            {cheapest?.suppliers && <p className="text-xs text-muted-foreground">{cheapest.suppliers.name}</p>}
+            {cheapestAny?.suppliers && (
+              <p className="text-xs text-muted-foreground">
+                {cheapestAny.suppliers.name}
+                {!cheapestAny.in_stock && <Badge variant="outline" className="ml-1.5 text-[10px] px-1 py-0 text-warning border-warning/30">Ikke på lager</Badge>}
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card className="shadow-sm">

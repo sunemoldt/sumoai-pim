@@ -144,6 +144,14 @@ export function getCheapestSupplier(
   return inStock.reduce((min, sp) => (sp.purchase_price < min.purchase_price ? sp : min));
 }
 
+// Utility: get cheapest supplier regardless of stock status
+export function getCheapestSupplierAny(
+  supplierProducts: (SupplierProduct & { suppliers: Supplier | null })[]
+) {
+  if (supplierProducts.length === 0) return null;
+  return supplierProducts.reduce((min, sp) => (sp.purchase_price < min.purchase_price ? sp : min));
+}
+
 // Danish VAT rate
 export const VAT_RATE = 0.25;
 
