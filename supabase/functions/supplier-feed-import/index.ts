@@ -27,7 +27,6 @@ function parseCsv(text: string, delimiter: string): Record<string, string>[] {
 function parseXml(text: string): Record<string, string>[] {
   // Simple XML parser for product feeds - finds repeating elements
   const rows: Record<string, string>[] = [];
-  // Try to find product-like elements
   const productTags = ["product", "item", "row", "Product", "Item", "Row"];
   let tag = "";
   for (const t of productTags) {
@@ -51,6 +50,52 @@ function parseXml(text: string): Record<string, string>[] {
     if (Object.keys(row).length > 0) rows.push(row);
   }
   return rows;
+}
+
+/** Aurdel-specific XML parser for their item/stock database format */
+function parseAurdelItemXml(text: string): Record<string, string>[] {
+  const rows: Record<string, string>[] = [];
+  const itemRegex = /<item\s+id="([^"]*)">([\s\S]*?)<\/item>/gi;
+  let match;
+  while ((match = itemRegex.exec(text)) !== null) {
+    const sku = match[1];
+    const inner = match[2];
+    const row: Record<string, string> = { supplier_sku: sku };
+
+    // EAN
+    const eanMatch = inner.match(/<ean>([^<]*)<\/ean>/i);
+    if (eanMatch) row.ean = eanMatch[1].trim();
+
+    // Price (net)
+    const netMatch = inner.match(/<net[^>]*>([^<]*)<\/net>/i);
+    if (netMatch) row.purchase_price = netMatch[1].trim().replace(",", ".");
+
+    // Stock quantity (attribute)
+    const stockMatch = inner.match(/<stock\s+quantity="([^"]*)"/i);
+    if (stockMatch) row.stock_quantity = stockMatch[1].trim();
+
+    // Short description (may have CDATA)
+    const shortDesc = inner.match(/<short>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/short>/i);
+    if (shortDesc) row.short_description = shortDesc[1].trim();
+
+    // Manufacturer
+    const mfgMatch = inner.match(/<manufacturer[^>]*><description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
+    if (mfgMatch) row.manufacturer = mfgMatch[1].trim();
+
+    if (row.ean || row.purchase_price) rows.push(row);
+  }
+  return rows;
+}
+
+/** Aurdel stock-only XML parser: <item id="SKU"><stock quantity="N"/></item> */
+function parseAurdelStockXml(text: string): Map<string, string> {
+  const stockMap = new Map<string, string>();
+  const itemRegex = /<item\s+id="([^"]*)">\s*<stock\s+quantity="([^"]*)"/gi;
+  let match;
+  while ((match = itemRegex.exec(text)) !== null) {
+    stockMap.set(match[1], match[2]);
+  }
+  return stockMap;
 }
 
 Deno.serve(async (req) => {
