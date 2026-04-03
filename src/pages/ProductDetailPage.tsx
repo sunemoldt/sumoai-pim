@@ -261,7 +261,6 @@ export default function ProductDetailPage() {
       <Tabs defaultValue="details" className="w-full">
         <TabsList>
           <TabsTrigger value="details">Produktdetaljer</TabsTrigger>
-          <TabsTrigger value="seo">SEO / Meta</TabsTrigger>
           <TabsTrigger value="attributes">Attributter</TabsTrigger>
           <TabsTrigger value="pricing">Avance</TabsTrigger>
           <TabsTrigger value="suppliers">Leverandører</TabsTrigger>
@@ -274,6 +273,7 @@ export default function ProductDetailPage() {
               <Badge variant="destructive" className="ml-1.5 text-[10px] px-1 py-0">{recommendations.length}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="seo">SEO</TabsTrigger>
           <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
 
