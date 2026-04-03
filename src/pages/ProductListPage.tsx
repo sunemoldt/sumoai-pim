@@ -159,13 +159,11 @@ export default function ProductListPage() {
   const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter].filter((f) => f !== "all").length;
 
   const clearFilters = () => {
-    setStockFilter("all");
-    setBrandFilter("all");
-    setCategoryFilter("all");
-    setMarginFilter("all");
-    setPriceFilter("all");
-    setSupplierFilter("all");
-    setStatusFilter("all");
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      ["stock", "brand", "category", "margin", "price", "supplier", "status"].forEach(k => next.delete(k));
+      return next;
+    }, { replace: true });
   };
 
   const formatPrice = (price: number | null) => {
