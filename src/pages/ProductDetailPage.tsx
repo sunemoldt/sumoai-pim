@@ -146,7 +146,9 @@ export default function ProductDetailPage() {
   }
 
   const cheapest = getCheapestSupplier(product.supplier_products);
-  const cheapestPrice = cheapest?.purchase_price ?? null;
+  const cheapestAny = getCheapestSupplierAny(product.supplier_products);
+  // Use cheapest from ANY supplier for pricing recommendations
+  const cheapestPrice = cheapestAny?.purchase_price ?? null;
   const recommendedPriceExVat = cheapestPrice ? getRecommendedPrice(cheapestPrice, effectiveMarkup) : null;
   const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, effectiveMarkup) : null;
   const currentPrice = product.sale_price ?? product.webshop_price;
