@@ -97,26 +97,65 @@ Deno.serve(async (req) => {
 
     if (supplier.feed_type === "api") {
       // Aurdel API: build URL from stored credentials
-      const apiDb = mapping._api_database;
+      const apiDbStr = mapping._api_database || "item";
+      const apiDbs = apiDbStr.split(",").map((d: string) => d.trim()).filter(Boolean);
       const apiCust = mapping._api_customer_id;
       const apiComp = mapping._api_company_id;
       const apiKeyVal = mapping._api_key;
       const apiLang = mapping._api_language || "da";
-      if (!apiDb || !apiCust || !apiComp) throw new Error("API credentials not configured (database, customerid, companyid)");
+      if (!apiCust || !apiComp) throw new Error("API credentials not configured (customerid, companyid)");
 
-      const params = new URLSearchParams({
-        database: apiDb,
-        customerid: apiCust,
-        companyid: apiComp,
-        language: apiLang,
-      });
-      if (apiKeyVal) params.set("apikey", apiKeyVal);
+      feedRows = [];
+      const stockData = new Map<string, Record<string, string>>();
 
-      const apiUrl = `https://api.aurdel.com/Prices/getPrice?${params.toString()}`;
-      const res = await fetch(apiUrl);
-      if (!res.ok) throw new Error(`API returned status ${res.status}`);
-      const text = await res.text();
-      feedRows = parseXml(text);
+      for (const db of apiDbs) {
+        const params = new URLSearchParams({
+          database: db,
+          customerid: apiCust,
+          companyid: apiComp,
+          language: apiLang,
+        });
+        if (apiKeyVal) params.set("apikey", apiKeyVal);
+
+        const apiUrl = `https://api.aurdel.com/Prices/getPrice?${params.toString()}`;
+        console.log(`Fetching Aurdel API database=${db}...`);
+        const res = await fetch(apiUrl);
+        if (!res.ok) throw new Error(`API returned status ${res.status} for database=${db}`);
+        const text = await res.text();
+        const rows = parseXml(text);
+        console.log(`Database ${db}: ${rows.length} rows`);
+
+        if (db === "stock" && apiDbs.length > 1) {
+          // Store stock data to merge with item data
+          for (const row of rows) {
+            const ean = Object.entries(row).find(([k]) => /ean|barcode|gtin/i.test(k))?.[1];
+            if (ean) stockData.set(ean.trim(), row);
+          }
+        } else {
+          feedRows.push(...rows);
+        }
+      }
+
+      // Merge stock data into item rows if both databases were fetched
+      if (stockData.size > 0 && feedRows.length > 0) {
+        const sampleKeys = Object.keys(feedRows[0]);
+        const eanKey = sampleKeys.find(k => /ean|barcode|gtin/i.test(k));
+        if (eanKey) {
+          for (const row of feedRows) {
+            const ean = row[eanKey]?.trim();
+            if (ean && stockData.has(ean)) {
+              const stock = stockData.get(ean)!;
+              // Merge stock fields into the item row (stock fields take priority for stock-related data)
+              for (const [k, v] of Object.entries(stock)) {
+                if (/stock|lager|qty|quantity|antal|available/i.test(k) && !row[k]) {
+                  row[k] = v;
+                }
+              }
+            }
+          }
+        }
+        console.log(`Merged stock data for ${stockData.size} EANs`);
+      }
     } else {
       if (!supplier.feed_url) throw new Error("No feed URL configured");
       if (!mapping.ean) throw new Error("EAN mapping not configured");

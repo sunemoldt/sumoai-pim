@@ -29,7 +29,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
   const [isActive, setIsActive] = useState(true);
 
   // API-specific fields (stored in column_mapping)
-  const [apiDatabase, setApiDatabase] = useState("");
+  const [apiDatabase, setApiDatabase] = useState("item,stock");
   const [apiCustomerId, setApiCustomerId] = useState("");
   const [apiCompanyId, setApiCompanyId] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -43,7 +43,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setFeedSchedule(supplier.feed_schedule ?? "manual");
       setIsActive(supplier.is_active);
       const cm = (supplier.column_mapping ?? {}) as Record<string, string>;
-      setApiDatabase(cm._api_database ?? "");
+      setApiDatabase(cm._api_database ?? "item,stock");
       setApiCustomerId(cm._api_customer_id ?? "");
       setApiCompanyId(cm._api_company_id ?? "");
       setApiKey(cm._api_key ?? "");
@@ -54,7 +54,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setFeedUrl("");
       setFeedSchedule("manual");
       setIsActive(true);
-      setApiDatabase("");
+      setApiDatabase("item,stock");
       setApiCustomerId("");
       setApiCompanyId("");
       setApiKey("");
@@ -159,8 +159,15 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
             <div className="space-y-3">
               <div className="text-xs text-muted-foreground">Aurdel API-indstillinger</div>
               <div className="space-y-2">
-                <Label htmlFor="apiDatabase">Database</Label>
-                <Input id="apiDatabase" value={apiDatabase} onChange={(e) => setApiDatabase(e.target.value)} placeholder="f.eks. W" />
+                <Label htmlFor="apiDatabase">Database(r)</Label>
+                <Select value={apiDatabase} onValueChange={setApiDatabase}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="item">Item (produkter & priser)</SelectItem>
+                    <SelectItem value="stock">Stock (lagerdata)</SelectItem>
+                    <SelectItem value="item,stock">Begge (item + stock)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="apiCustomerId">Customer ID</Label>
