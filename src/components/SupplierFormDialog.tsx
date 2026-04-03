@@ -42,12 +42,23 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setFeedUrl(supplier.feed_url ?? "");
       setFeedSchedule(supplier.feed_schedule ?? "manual");
       setIsActive(supplier.is_active);
+      const cm = (supplier.column_mapping ?? {}) as Record<string, string>;
+      setApiDatabase(cm._api_database ?? "");
+      setApiCustomerId(cm._api_customer_id ?? "");
+      setApiCompanyId(cm._api_company_id ?? "");
+      setApiKey(cm._api_key ?? "");
+      setApiLanguage(cm._api_language ?? "da");
     } else {
       setName("");
       setFeedType("csv");
       setFeedUrl("");
       setFeedSchedule("manual");
       setIsActive(true);
+      setApiDatabase("");
+      setApiCustomerId("");
+      setApiCompanyId("");
+      setApiKey("");
+      setApiLanguage("da");
     }
   }, [supplier, open]);
 
