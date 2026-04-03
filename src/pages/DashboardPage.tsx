@@ -12,8 +12,18 @@ type DashView = "overview" | "low_margin" | "out_of_stock" | "high_margin";
 export default function DashboardPage() {
   const { data: products = [] } = useMasterProducts();
   const { data: suppliers = [] } = useSuppliers();
+  const { data: analyticsMap } = useAllProductAnalytics();
   const navigate = useNavigate();
   const [view, setView] = useState<DashView>("overview");
+
+  const topVisitedProducts = useMemo(() => {
+    if (!analyticsMap) return [];
+    return products
+      .map((p) => ({ ...p, pageViews: analyticsMap.get(p.id)?.page_views ?? 0 }))
+      .filter((p) => p.pageViews > 0)
+      .sort((a, b) => b.pageViews - a.pageViews)
+      .slice(0, 10);
+  }, [products, analyticsMap]);
 
   const totalProducts = products.length;
   const activeSuppliers = suppliers.filter((s) => s.is_active).length;
