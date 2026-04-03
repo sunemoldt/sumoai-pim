@@ -116,14 +116,34 @@ export default function ProductListPage() {
     const dir = sortDir === "asc" ? 1 : -1;
     return [...filtered].sort((a, b) => {
       if (sortField === "title") return dir * a.title.localeCompare(b.title, "da");
+      if (sortField === "ean") return dir * a.ean.localeCompare(b.ean);
+      if (sortField === "brand") return dir * (a.brand ?? "").localeCompare(b.brand ?? "", "da");
       if (sortField === "stock_quantity") return dir * ((a.stock_quantity ?? 0) - (b.stock_quantity ?? 0));
-      if (sortField === "updated_at") return dir * (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime());
+      if (sortField === "purchase_price") {
+        const cA = getCheapestSupplierAny(a.supplier_products)?.purchase_price ?? 0;
+        const cB = getCheapestSupplierAny(b.supplier_products)?.purchase_price ?? 0;
+        return dir * (cA - cB);
+      }
+      if (sortField === "webshop_price") {
+        const pA = a.sale_price ?? a.webshop_price ?? 0;
+        const pB = b.sale_price ?? b.webshop_price ?? 0;
+        return dir * (pA - pB);
+      }
       if (sortField === "recommended") {
-        const cA = getCheapestSupplier(a.supplier_products);
-        const cB = getCheapestSupplier(b.supplier_products);
+        const cA = getCheapestSupplierAny(a.supplier_products);
+        const cB = getCheapestSupplierAny(b.supplier_products);
         const rA = cA ? getRecommendedPriceInclVat(cA.purchase_price, a.custom_markup_percentage ?? globalMarkup) : 0;
         const rB = cB ? getRecommendedPriceInclVat(cB.purchase_price, b.custom_markup_percentage ?? globalMarkup) : 0;
         return dir * (rA - rB);
+      }
+      if (sortField === "margin") {
+        const cA = getCheapestSupplierAny(a.supplier_products)?.purchase_price;
+        const cB = getCheapestSupplierAny(b.supplier_products)?.purchase_price;
+        const apA = a.sale_price ?? a.webshop_price;
+        const apB = b.sale_price ?? b.webshop_price;
+        const mA = apA && cA ? getMarginPercent(exVat(apA), cA) : -999;
+        const mB = apB && cB ? getMarginPercent(exVat(apB), cB) : -999;
+        return dir * (mA - mB);
       }
       if (sortField === "page_views") {
         const aV = analyticsMap?.get(a.id)?.page_views ?? 0;
@@ -135,6 +155,7 @@ export default function ProductListPage() {
         const bC = analyticsMap?.get(b.id)?.conversion_rate ?? 0;
         return dir * (aC - bC);
       }
+      if (sortField === "updated_at") return dir * (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime());
       return 0;
     });
   }, [filtered, sortField, sortDir, globalMarkup, analyticsMap]);
