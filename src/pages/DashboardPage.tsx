@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { useMasterProducts, getCheapestSupplier, getMarginPercent, exVat } from "@/hooks/use-products";
+import { useMemo, useState } from "react";
+import { useMasterProducts, getCheapestSupplier, getMarginPercent, exVat, useAllProductAnalytics } from "@/hooks/use-products";
 import { useSuppliers } from "@/hooks/use-products";
 import StatCard from "@/components/StatCard";
-import { Package, Truck, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
+import { Package, Truck, AlertTriangle, TrendingUp, TrendingDown, Eye } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
@@ -12,8 +12,18 @@ type DashView = "overview" | "low_margin" | "out_of_stock" | "high_margin";
 export default function DashboardPage() {
   const { data: products = [] } = useMasterProducts();
   const { data: suppliers = [] } = useSuppliers();
+  const { data: analyticsMap } = useAllProductAnalytics();
   const navigate = useNavigate();
   const [view, setView] = useState<DashView>("overview");
+
+  const topVisitedProducts = useMemo(() => {
+    if (!analyticsMap) return [];
+    return products
+      .map((p) => ({ ...p, pageViews: analyticsMap.get(p.id)?.page_views ?? 0 }))
+      .filter((p) => p.pageViews > 0)
+      .sort((a, b) => b.pageViews - a.pageViews)
+      .slice(0, 10);
+  }, [products, analyticsMap]);
 
   const totalProducts = products.length;
   const activeSuppliers = suppliers.filter((s) => s.is_active).length;
@@ -169,7 +179,7 @@ export default function DashboardPage() {
       )}
 
       {view === "overview" && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-3">
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-medium">Produkter med lav avance</CardTitle>
@@ -204,6 +214,27 @@ export default function DashboardPage() {
                   Vis alle {outOfStockProducts.length} →
                 </button>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <Eye className="h-4 w-4 text-muted-foreground" />
+                Mest besøgte (30 dage)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {topVisitedProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">Ingen besøgsdata endnu</p>
+              ) : renderProductList(topVisitedProducts, (p) => {
+                const pv = (p as typeof topVisitedProducts[0]).pageViews;
+                return (
+                  <Badge variant="outline" className="ml-2 shrink-0">
+                    {pv} besøg
+                  </Badge>
+                );
+              })}
             </CardContent>
           </Card>
         </div>
