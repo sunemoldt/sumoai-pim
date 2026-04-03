@@ -236,6 +236,17 @@ Deno.serve(async (req) => {
     let imported = 0;
     let skipped = 0;
     const errors: string[] = [];
+    const changeLogs: { master_product_id: string; change_type: string; field_name: string; old_value: string | null; new_value: string | null; source: string }[] = [];
+
+    // Pre-fetch existing supplier_products for diff detection
+    const { data: existingSps } = await supabase
+      .from("supplier_products")
+      .select("master_product_id, purchase_price, stock_quantity, in_stock, supplier_sku")
+      .eq("supplier_id", supplier.id);
+    const existingMap = new Map<string, typeof existingSps extends (infer T)[] | null ? T : never>();
+    for (const sp of existingSps ?? []) {
+      existingMap.set(sp.master_product_id, sp);
+    }
 
     for (const row of feedRows) {
       const ean = row[mapping.ean]?.trim();
@@ -261,6 +272,23 @@ Deno.serve(async (req) => {
 
       const supplierSku = mapping.sku ? row[mapping.sku]?.trim() || null : null;
 
+      // Detect changes for changelog
+      const existing = existingMap.get(masterProductId);
+      if (existing) {
+        if (Number(existing.purchase_price) !== price) {
+          changeLogs.push({ master_product_id: masterProductId, change_type: "price_update", field_name: "purchase_price", old_value: String(existing.purchase_price), new_value: String(price), source: `supplier:${supplier.name}` });
+        }
+        if (existing.stock_quantity !== (stockQty !== null && !isNaN(stockQty) ? stockQty : null)) {
+          changeLogs.push({ master_product_id: masterProductId, change_type: "stock_update", field_name: "supplier_stock_quantity", old_value: String(existing.stock_quantity ?? "null"), new_value: String(stockQty ?? "null"), source: `supplier:${supplier.name}` });
+        }
+        if (existing.in_stock !== inStock) {
+          changeLogs.push({ master_product_id: masterProductId, change_type: "stock_update", field_name: "supplier_in_stock", old_value: String(existing.in_stock), new_value: String(inStock), source: `supplier:${supplier.name}` });
+        }
+      } else {
+        // New supplier product link
+        changeLogs.push({ master_product_id: masterProductId, change_type: "supplier_added", field_name: "supplier_product", old_value: null, new_value: `${supplier.name}: ${price} DKK`, source: `supplier:${supplier.name}` });
+      }
+
       const spRow = {
         supplier_id: supplier.id,
         master_product_id: masterProductId,
@@ -281,6 +309,14 @@ Deno.serve(async (req) => {
       } else {
         imported++;
       }
+    }
+
+    // Insert change logs in batches
+    if (changeLogs.length > 0) {
+      for (let i = 0; i < changeLogs.length; i += 500) {
+        await supabase.from("product_change_log").insert(changeLogs.slice(i, i + 500));
+      }
+      console.log(`Logged ${changeLogs.length} changes`);
     }
 
     // Update last_sync_at
