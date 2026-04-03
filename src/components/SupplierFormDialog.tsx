@@ -88,12 +88,26 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
     }
     setSaving(true);
     try {
+      // Merge API credentials into column_mapping
+      const existingMapping = supplier ? ((supplier.column_mapping ?? {}) as Record<string, string>) : {};
+      const columnMapping = feedType === "api"
+        ? {
+            ...existingMapping,
+            _api_database: apiDatabase.trim(),
+            _api_customer_id: apiCustomerId.trim(),
+            _api_company_id: apiCompanyId.trim(),
+            _api_key: apiKey.trim(),
+            _api_language: apiLanguage,
+          }
+        : existingMapping;
+
       const row = {
         name: name.trim(),
         feed_type: feedType,
-        feed_url: feedUrl.trim() || null,
+        feed_url: feedType === "api" ? "https://api.aurdel.com/Prices/getPrice" : (feedUrl.trim() || null),
         feed_schedule: feedSchedule,
         is_active: isActive,
+        column_mapping: columnMapping,
       };
 
       if (supplier) {
