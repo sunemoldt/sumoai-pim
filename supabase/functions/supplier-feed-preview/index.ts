@@ -28,7 +28,50 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { feed_url, feed_type, delimiter = ";" } = await req.json();
+    const { feed_url, feed_type, delimiter = ";", supplier_id } = await req.json();
+
+    // For API-type suppliers, fetch columns from the API using stored credentials
+    if (feed_type === "api" && supplier_id) {
+      const adminClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const { data: supplier, error: supErr } = await adminClient
+        .from("suppliers")
+        .select("column_mapping")
+        .eq("id", supplier_id)
+        .single();
+      if (supErr || !supplier) throw new Error("Supplier not found");
+
+      const mapping = (supplier.column_mapping ?? {}) as Record<string, string>;
+      const apiDbStr = mapping._api_database || "item";
+      const firstDb = apiDbStr.split(",")[0].trim();
+      const params = new URLSearchParams({
+        database: firstDb,
+        customerid: mapping._api_customer_id || "",
+        companyid: mapping._api_company_id || "",
+        language: mapping._api_language || "da",
+      });
+      if (mapping._api_key) params.set("apikey", mapping._api_key);
+
+      const apiUrl = `https://api.aurdel.com/Prices/getPrice?${params.toString()}`;
+      const res = await fetch(apiUrl);
+      if (!res.ok) throw new Error(`API returned status ${res.status}`);
+      const text = await res.text();
+
+      // Extract field names from first <item>
+      const itemMatch = text.match(/<item\s+id="[^"]*">([\s\S]*?)<\/item>/i);
+      const columns: string[] = ["supplier_sku (item id)"];
+      if (itemMatch) {
+        const inner = itemMatch[1];
+        if (/<ean>/i.test(inner)) columns.push("ean");
+        if (/<net/i.test(inner)) columns.push("purchase_price (net)");
+        if (/<stock\s+quantity/i.test(inner)) columns.push("stock_quantity");
+        if (/<short>/i.test(inner)) columns.push("short_description");
+        if (/<manufacturer/i.test(inner)) columns.push("manufacturer");
+      }
+
+      return new Response(JSON.stringify({ columns }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (!feed_url) {
       return new Response(JSON.stringify({ error: "feed_url is required" }), {
@@ -44,7 +87,6 @@ Deno.serve(async (req) => {
     let columns: string[] = [];
 
     if (feed_type === "xml") {
-      // Extract unique tag names from first product element
       const tagMatches = text.match(/<([a-zA-Z_][a-zA-Z0-9_.-]*)[^/]*>/g);
       if (tagMatches) {
         const tags = new Set<string>();
@@ -55,7 +97,6 @@ Deno.serve(async (req) => {
         columns = [...tags].slice(0, 50);
       }
     } else {
-      // CSV: read first line
       const firstLine = text.split(/\r?\n/)[0];
       if (firstLine) {
         columns = firstLine.split(delimiter).map((c) => c.trim().replace(/^["']|["']$/g, ""));
