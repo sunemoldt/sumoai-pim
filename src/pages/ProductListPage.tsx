@@ -129,9 +129,13 @@ export default function ProductListPage() {
         if (marginFilter === "good" && margin < 20) return false;
       }
 
+      // Duplicate filter
+      if (duplicateFilter === "fallback_ean" && !product.ean.startsWith("wc-")) return false;
+      if (duplicateFilter === "shared_ean" && (!duplicateEans || !duplicateEans.has(product.ean))) return false;
+
       return true;
     });
-  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter]);
+  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -198,12 +202,12 @@ export default function ProductListPage() {
     return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
-  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter].filter((f) => f !== "all").length;
+  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter].filter((f) => f !== "all").length;
 
   const clearFilters = () => {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
-      ["stock", "brand", "category", "margin", "price", "supplier", "status"].forEach(k => next.delete(k));
+      ["stock", "brand", "category", "margin", "price", "supplier", "status", "duplicate"].forEach(k => next.delete(k));
       return next;
     }, { replace: true });
   };
