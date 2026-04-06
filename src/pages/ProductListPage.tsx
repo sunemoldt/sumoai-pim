@@ -1,5 +1,7 @@
 import { useMemo, useCallback } from "react";
 import { useMasterProducts, useSuppliers, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -14,6 +16,7 @@ type StockFilter = "all" | "instock" | "outofstock" | "backorder";
 type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
+type DuplicateFilter = "all" | "fallback_ean" | "shared_ean";
 type SortField = "title" | "ean" | "brand" | "stock_quantity" | "purchase_price" | "webshop_price" | "recommended" | "margin" | "page_views" | "conversion_rate" | "updated_at";
 type SortDir = "asc" | "desc";
 
@@ -29,6 +32,7 @@ export default function ProductListPage() {
   const priceFilter = (searchParams.get("price") ?? "all") as PriceFilter;
   const supplierFilter = searchParams.get("supplier") ?? "all";
   const statusFilter = (searchParams.get("status") ?? "all") as StatusFilter;
+  const duplicateFilter = (searchParams.get("duplicate") ?? "all") as DuplicateFilter;
   const sortField = (searchParams.get("sort") ?? "title") as SortField;
   const sortDir = (searchParams.get("dir") ?? "asc") as SortDir;
 
@@ -52,6 +56,7 @@ export default function ProductListPage() {
   const setPriceFilter = (v: PriceFilter) => setParam("price", v);
   const setSupplierFilter = (v: string) => setParam("supplier", v);
   const setStatusFilter = (v: StatusFilter) => setParam("status", v);
+  const setDuplicateFilter = (v: DuplicateFilter) => setParam("duplicate", v);
 
   const { data: products = [], isLoading } = useMasterProducts(search || undefined);
   const { data: priceSettings = [] } = usePriceSettings();
@@ -59,6 +64,22 @@ export default function ProductListPage() {
   const { data: analyticsMap } = useAllProductAnalytics();
   const { data: recommendations = [] } = useProductRecommendations();
   const navigate = useNavigate();
+
+  // Fetch duplicate EANs from latest WooCommerce import log
+  const { data: duplicateEans } = useQuery({
+    queryKey: ["duplicate_eans"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("import_logs")
+        .select("duplicate_eans")
+        .eq("source", "woocommerce")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      const eans = (data?.duplicate_eans as string[] | null) ?? [];
+      return new Set(eans);
+    },
+  });
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
