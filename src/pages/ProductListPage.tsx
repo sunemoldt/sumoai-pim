@@ -316,7 +316,17 @@ export default function ProductListPage() {
             </SelectContent>
           </Select>
 
-          {activeFilterCount > 0 && (
+          <Select value={duplicateFilter} onValueChange={(v) => setDuplicateFilter(v as DuplicateFilter)}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue placeholder="Dubletter" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle produkter</SelectItem>
+              <SelectItem value="fallback_ean">Fallback-EAN (wc-)</SelectItem>
+              <SelectItem value="shared_ean">Delt EAN</SelectItem>
+            </SelectContent>
+          </Select>
+
             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1 text-xs">
               <X className="h-3 w-3" />
               Ryd ({activeFilterCount})
