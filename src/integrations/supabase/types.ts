@@ -43,6 +43,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           deduplicated: number | null
+          duplicate_eans: Json | null
           ean_snapshot: Json | null
           errors: Json | null
           id: string
@@ -57,6 +58,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           deduplicated?: number | null
+          duplicate_eans?: Json | null
           ean_snapshot?: Json | null
           errors?: Json | null
           id?: string
@@ -71,6 +73,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           deduplicated?: number | null
+          duplicate_eans?: Json | null
           ean_snapshot?: Json | null
           errors?: Json | null
           id?: string

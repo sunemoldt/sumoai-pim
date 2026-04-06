@@ -1,0 +1,1 @@
+ALTER TABLE public.import_logs ADD COLUMN duplicate_eans jsonb DEFAULT '[]'::jsonb;

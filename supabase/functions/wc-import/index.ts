@@ -293,6 +293,7 @@ Deno.serve(async (req) => {
         deduplicated: rows.length - dedupedRows.length,
         errors: errors.length > 0 ? errors : [],
         ean_snapshot: dedupedRows.map((r) => r.ean),
+        duplicate_eans: duplicateEans.size > 0 ? Array.from(duplicateEans) : [],
         completed_at: new Date().toISOString(),
       }).eq("id", logId);
     }
