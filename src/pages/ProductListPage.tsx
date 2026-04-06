@@ -327,6 +327,7 @@ export default function ProductListPage() {
             </SelectContent>
           </Select>
 
+          {activeFilterCount > 0 && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1 text-xs">
               <X className="h-3 w-3" />
               Ryd ({activeFilterCount})
