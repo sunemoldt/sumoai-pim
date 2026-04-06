@@ -293,14 +293,14 @@ export default function ProductDetailPage() {
               <div className="space-y-2">
                 <Label>Kort beskrivelse</Label>
                 <div
-                  className="rounded-md border border-border bg-secondary/30 p-3 text-sm text-foreground min-h-[60px] prose prose-sm max-w-none"
+                  className="rounded-md border border-border bg-secondary/30 p-3 text-sm text-foreground min-h-[60px] prose prose-sm max-w-none overflow-hidden break-words"
                   dangerouslySetInnerHTML={{ __html: (product as any).short_description || "<span class='text-muted-foreground'>Ingen kort beskrivelse</span>" }}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Lang beskrivelse</Label>
                 <div
-                  className="rounded-md border border-border bg-secondary/30 p-3 text-sm text-foreground min-h-[100px] prose prose-sm max-w-none"
+                  className="rounded-md border border-border bg-secondary/30 p-3 text-sm text-foreground min-h-[100px] prose prose-sm max-w-none overflow-hidden break-words"
                   dangerouslySetInnerHTML={{ __html: (product as any).long_description || "<span class='text-muted-foreground'>Ingen lang beskrivelse</span>" }}
                 />
               </div>
