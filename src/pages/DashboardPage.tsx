@@ -180,65 +180,68 @@ export default function DashboardPage() {
       )}
 
       {view === "overview" && (
-        <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-medium">Produkter med lav avance</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {lowMarginProducts.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">Ingen produkter med lav avance</p>
-              ) : renderProductList(lowMarginProducts.slice(0, 5), (p) => {
-                const m = getProductMargin(p);
-                return <Badge variant="outline" className="text-warning border-warning/30 ml-2 shrink-0">{m?.toFixed(1)}%</Badge>;
-              })}
-              {lowMarginProducts.length > 5 && (
-                <button onClick={() => setView("low_margin")} className="text-sm text-primary mt-3 hover:underline">
-                  Vis alle {lowMarginProducts.length} →
-                </button>
-              )}
-            </CardContent>
-          </Card>
+        <>
+          <AiInsightsWidget />
+          <div className="grid gap-6 lg:grid-cols-3">
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-medium">Produkter med lav avance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {lowMarginProducts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">Ingen produkter med lav avance</p>
+                ) : renderProductList(lowMarginProducts.slice(0, 5), (p) => {
+                  const m = getProductMargin(p);
+                  return <Badge variant="outline" className="text-warning border-warning/30 ml-2 shrink-0">{m?.toFixed(1)}%</Badge>;
+                })}
+                {lowMarginProducts.length > 5 && (
+                  <button onClick={() => setView("low_margin")} className="text-sm text-primary mt-3 hover:underline">
+                    Vis alle {lowMarginProducts.length} →
+                  </button>
+                )}
+              </CardContent>
+            </Card>
 
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-medium">Udsolgte produkter</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {outOfStockProducts.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">Alle produkter er på lager</p>
-              ) : renderProductList(outOfStockProducts.slice(0, 5), () => (
-                <Badge variant="destructive" className="ml-2 shrink-0">Udsolgt</Badge>
-              ))}
-              {outOfStockProducts.length > 5 && (
-                <button onClick={() => setView("out_of_stock")} className="text-sm text-primary mt-3 hover:underline">
-                  Vis alle {outOfStockProducts.length} →
-                </button>
-              )}
-            </CardContent>
-          </Card>
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-medium">Udsolgte produkter</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {outOfStockProducts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">Alle produkter er på lager</p>
+                ) : renderProductList(outOfStockProducts.slice(0, 5), () => (
+                  <Badge variant="destructive" className="ml-2 shrink-0">Udsolgt</Badge>
+                ))}
+                {outOfStockProducts.length > 5 && (
+                  <button onClick={() => setView("out_of_stock")} className="text-sm text-primary mt-3 hover:underline">
+                    Vis alle {outOfStockProducts.length} →
+                  </button>
+                )}
+              </CardContent>
+            </Card>
 
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <Eye className="h-4 w-4 text-muted-foreground" />
-                Mest besøgte (30 dage)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {topVisitedProducts.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">Ingen besøgsdata endnu</p>
-              ) : renderProductList(topVisitedProducts, (p) => {
-                const pv = (p as typeof topVisitedProducts[0]).pageViews;
-                return (
-                  <Badge variant="outline" className="ml-2 shrink-0">
-                    {pv} besøg
-                  </Badge>
-                );
-              })}
-            </CardContent>
-          </Card>
-        </div>
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-medium flex items-center gap-2">
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                  Mest besøgte (30 dage)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {topVisitedProducts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">Ingen besøgsdata endnu</p>
+                ) : renderProductList(topVisitedProducts, (p) => {
+                  const pv = (p as typeof topVisitedProducts[0]).pageViews;
+                  return (
+                    <Badge variant="outline" className="ml-2 shrink-0">
+                      {pv} besøg
+                    </Badge>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          </div>
+        </>
       )}
     </div>
   );
