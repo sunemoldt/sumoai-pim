@@ -4,8 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Brain, RefreshCw, X, Sparkles, TrendingUp, Package, DollarSign, ShoppingCart } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Brain, RefreshCw, X, Sparkles, TrendingUp, Package, DollarSign, ShoppingCart, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -22,14 +21,19 @@ const typeLabels: Record<string, string> = {
   margin: "Avance",
 };
 
-const severityColors: Record<string, string> = {
-  critical: "text-destructive border-destructive/30",
-  warning: "text-warning border-warning/30",
-  info: "text-primary border-primary/30",
+const severityBg: Record<string, string> = {
+  critical: "bg-destructive/10 border-destructive/20",
+  warning: "bg-warning/10 border-warning/20",
+  info: "bg-primary/5 border-primary/15",
+};
+
+const severityBadge: Record<string, string> = {
+  critical: "bg-destructive/15 text-destructive border-0",
+  warning: "bg-warning/15 text-warning border-0",
+  info: "bg-primary/10 text-primary border-0",
 };
 
 export default function AiInsightsWidget() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -42,7 +46,7 @@ export default function AiInsightsWidget() {
         .eq("is_dismissed", false)
         .in("recommendation_type", ["pricing", "stock", "conversion", "margin"])
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(50);
       if (error) throw error;
       return data;
     },
@@ -64,23 +68,38 @@ export default function AiInsightsWidget() {
   });
 
   const dismissMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("product_recommendations")
-        .update({ is_dismissed: true })
-        .eq("id", id);
-      if (error) throw error;
+    mutationFn: async (title: string) => {
+      // Dismiss all recs with same title
+      const ids = recommendations.filter(r => r.title === title).map(r => r.id);
+      for (const id of ids) {
+        await supabase.from("product_recommendations").update({ is_dismissed: true }).eq("id", id);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai-recommendations"] });
     },
   });
 
-  // Deduplicate by title (since one recommendation can span multiple products)
-  const uniqueRecs = recommendations.reduce((acc, rec) => {
-    if (!acc.find(r => r.title === rec.title)) acc.push(rec);
+  // Group by title: collect all related products per recommendation
+  const grouped = recommendations.reduce((acc, rec) => {
+    const existing = acc.find(r => r.title === rec.title);
+    if (existing) {
+      if (rec.master_products) {
+        const mp = rec.master_products as any;
+        if (!existing.products.find((p: any) => p.id === mp.id)) {
+          existing.products.push(mp);
+        }
+      }
+    } else {
+      acc.push({
+        ...rec,
+        products: rec.master_products ? [rec.master_products as any] : [],
+      });
+    }
     return acc;
-  }, [] as typeof recommendations);
+  }, [] as (typeof recommendations[0] & { products: { id: string; title: string; ean: string }[] })[]);
+
+  const isExpanded = (title: string) => expandedId === title;
 
   return (
     <Card className="shadow-sm border-primary/20">
@@ -89,6 +108,9 @@ export default function AiInsightsWidget() {
           <CardTitle className="text-base font-medium flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" />
             AI-indsigter
+            {grouped.length > 0 && (
+              <Badge variant="secondary" className="text-[10px] font-normal">{grouped.length}</Badge>
+            )}
           </CardTitle>
           <Button
             variant="outline"
@@ -102,70 +124,103 @@ export default function AiInsightsWidget() {
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
         {isLoading ? (
           <p className="text-sm text-muted-foreground py-4">Indlæser...</p>
-        ) : uniqueRecs.length === 0 ? (
+        ) : grouped.length === 0 ? (
           <div className="text-center py-6">
             <Brain className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
             <p className="text-sm text-muted-foreground">Ingen AI-anbefalinger endnu</p>
             <p className="text-xs text-muted-foreground mt-1">Klik "Kør analyse" for at generere indsigter</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {uniqueRecs.slice(0, 6).map((rec) => (
-              <div
-                key={rec.id}
-                className="rounded-md border border-border p-3 hover:bg-accent/50 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-2 min-w-0 flex-1">
-                    <span className="mt-0.5 shrink-0">{typeIcons[rec.recommendation_type] ?? <Brain className="h-4 w-4" />}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p
-                          className="text-sm font-medium text-foreground cursor-pointer hover:underline"
-                          onClick={() => setExpandedId(expandedId === rec.id ? null : rec.id)}
-                        >
-                          {rec.title}
-                        </p>
-                        <Badge variant="outline" className={`text-[10px] ${severityColors[rec.severity] ?? ""}`}>
-                          {typeLabels[rec.recommendation_type] ?? rec.recommendation_type}
-                        </Badge>
-                      </div>
-                      {expandedId === rec.id && (
-                        <div className="mt-2 space-y-2">
-                          <p className="text-xs text-muted-foreground">{rec.description}</p>
-                          {rec.action_suggestion && (
-                            <p className="text-xs text-primary font-medium">→ {rec.action_suggestion}</p>
-                          )}
-                          {rec.master_products && (
-                            <button
-                              onClick={() => navigate(`/products/${(rec.master_products as any).id}`)}
-                              className="text-xs text-primary hover:underline"
-                            >
-                              Se produkt: {(rec.master_products as any).title}
-                            </button>
-                          )}
-                        </div>
+          grouped.map((rec) => (
+            <div
+              key={rec.title}
+              className={`rounded-lg border p-4 transition-colors ${severityBg[rec.severity] ?? "border-border"}`}
+            >
+              {/* Header row */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <span className="mt-0.5 shrink-0 text-muted-foreground">
+                    {typeIcons[rec.recommendation_type] ?? <Brain className="h-4 w-4" />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <h4 className="text-sm font-semibold text-foreground">{rec.title}</h4>
+                      <Badge className={`text-[10px] ${severityBadge[rec.severity] ?? ""}`}>
+                        {typeLabels[rec.recommendation_type] ?? rec.recommendation_type}
+                      </Badge>
+                      {rec.products.length > 0 && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {rec.products.length} produkt{rec.products.length !== 1 ? "er" : ""}
+                        </span>
                       )}
                     </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{rec.description}</p>
+
+                    {rec.action_suggestion && (
+                      <p className="text-xs font-medium text-primary mt-2 flex items-start gap-1">
+                        <span className="shrink-0">→</span>
+                        <span>{rec.action_suggestion}</span>
+                      </p>
+                    )}
                   </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); dismissMutation.mutate(rec.id); }}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {rec.products.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setExpandedId(isExpanded(rec.title) ? null : rec.title)}
+                    >
+                      {isExpanded(rec.title)
+                        ? <ChevronUp className="h-4 w-4" />
+                        : <ChevronDown className="h-4 w-4" />
+                      }
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => dismissMutation.mutate(rec.title)}
                   >
                     <X className="h-3.5 w-3.5" />
-                  </button>
+                  </Button>
                 </div>
               </div>
-            ))}
-            {uniqueRecs.length > 6 && (
-              <p className="text-xs text-muted-foreground text-center pt-1">
-                + {uniqueRecs.length - 6} flere anbefalinger
-              </p>
-            )}
-          </div>
+
+              {/* Expanded product list */}
+              {isExpanded(rec.title) && rec.products.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-border/50">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">
+                    Berørte produkter
+                  </p>
+                  <div className="grid gap-1">
+                    {rec.products.map((p) => (
+                      <a
+                        key={p.id}
+                        href={`/products/${p.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between rounded-md px-3 py-2 text-sm hover:bg-background/80 transition-colors group"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="text-foreground group-hover:text-primary transition-colors truncate block">
+                            {p.title}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">EAN: {p.ean}</span>
+                        </div>
+                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary shrink-0 ml-2 transition-colors" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
         )}
       </CardContent>
     </Card>
