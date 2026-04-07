@@ -4,6 +4,7 @@ import { useSuppliers } from "@/hooks/use-products";
 import StatCard from "@/components/StatCard";
 import { Package, Truck, AlertTriangle, TrendingUp, TrendingDown, Eye } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import AiInsightsWidget from "@/components/AiInsightsWidget";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 
