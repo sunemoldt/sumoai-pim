@@ -563,6 +563,65 @@ export default function ProductDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Auto stock sync */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" /> Automatisk lager-sync
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="auto-stock-sync"
+                  checked={autoStockSync}
+                  onCheckedChange={(checked) => setAutoStockSync(!!checked)}
+                />
+                <Label htmlFor="auto-stock-sync" className="cursor-pointer">
+                  Aktiver automatisk lager-sync for dette produkt
+                </Label>
+              </div>
+
+              {autoStockSync && (
+                <div className="grid gap-4 sm:grid-cols-2 max-w-lg pl-7">
+                  <div className="space-y-2">
+                    <Label>Leverandør</Label>
+                    <Select value={stockSyncSupplierId} onValueChange={setStockSyncSupplierId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Vælg leverandør" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {product.supplier_products.map((sp) => (
+                          <SelectItem key={sp.supplier_id} value={sp.supplier_id}>
+                            {sp.suppliers?.name ?? "Ukendt"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Interval</Label>
+                    <Select value={stockSyncInterval} onValueChange={setStockSyncInterval}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hourly">Hver time</SelectItem>
+                        <SelectItem value="daily">Dagligt</SelectItem>
+                        <SelectItem value="weekly">Ugentligt</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
+              <Button onClick={saveStockSync} disabled={savingSync} size="sm">
+                {savingSync ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Gem sync-indstillinger
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="comparison" className="space-y-4 mt-4">
