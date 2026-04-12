@@ -104,7 +104,7 @@ export default function ProductDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["product_recommendations", id] });
   };
 
-
+  const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
   // Use product-specific markup if set, otherwise global
   const effectiveMarkup = product?.custom_markup_percentage != null
