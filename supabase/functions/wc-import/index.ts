@@ -87,17 +87,24 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Normalize EAN: strip leading zeros for consistent matching (0810084693650 → 810084693650)
+    function normalizeEan(ean: string): string {
+      const stripped = ean.replace(/^0+/, "");
+      // Keep at least 1 digit
+      return stripped || ean;
+    }
+
     // Helper to extract EAN from meta_data
     const eanMetaKeys = ["_avecdo_ean", "_gtin", "woo_feed_ean_var", "woo_feed_gtin_var", "_wc_gla_gtin"];
     function extractEan(metaData: any[], sku: string | null, fallbackId: string): string {
       if (metaData) {
         for (const key of eanMetaKeys) {
           const val = metaData.find((m: any) => m.key === key)?.value;
-          if (val && String(val).trim()) return String(val).trim();
+          if (val && String(val).trim()) return normalizeEan(String(val).trim());
         }
       }
       // Only use SKU if it looks like a numeric barcode (8-14 digits)
-      if (sku && /^\d{8,14}$/.test(sku.trim())) return sku.trim();
+      if (sku && /^\d{8,14}$/.test(sku.trim())) return normalizeEan(sku.trim());
       return fallbackId;
     }
 
