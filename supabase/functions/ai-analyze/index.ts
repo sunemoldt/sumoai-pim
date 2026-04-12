@@ -230,7 +230,14 @@ Returnér anbefalinger som JSON array med tool calling.`;
           title: rec.title,
           description: rec.description,
           action_suggestion: rec.action_suggestion,
-          data: { ai_generated: true, generated_at: new Date().toISOString(), product_ids: rec.product_ids },
+          data: {
+            ai_generated: true,
+            generated_at: new Date().toISOString(),
+            product_ids: rec.product_ids,
+            ...(rec.suggested_price !== undefined && { suggested_price: rec.suggested_price }),
+            ...(rec.suggested_stock_status && { suggested_stock_status: rec.suggested_stock_status }),
+            ...(rec.suggested_stock_quantity !== undefined && { suggested_stock_quantity: rec.suggested_stock_quantity }),
+          },
         });
       }
     }
