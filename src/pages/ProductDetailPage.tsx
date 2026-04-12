@@ -313,14 +313,19 @@ export default function ProductDetailPage() {
         <Card className="shadow-sm">
           <CardContent className="p-5">
             <p className="text-sm text-muted-foreground">Anbefalet pris</p>
-            <p className="text-2xl font-semibold text-primary mt-1">{formatPrice(recommendedPriceInclVat)}</p>
+            <p className="text-2xl font-semibold text-primary mt-1">{formatPrice(recommendedPriceInclVat ? applyRounding(recommendedPriceInclVat, roundingMode) : null)}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               inkl. moms · ex. {formatPrice(recommendedPriceExVat)}
             </p>
-            {priceDiff !== null && (
-              <p className={`text-xs mt-0.5 ${priceDiff > 0 ? "text-success" : priceDiff < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                {priceDiff > 0 ? "+" : ""}{formatPrice(priceDiff)} vs. anbefalet
-              </p>
+            {priceDiff !== null && recommendedPriceInclVat && (
+              (() => {
+                const roundedDiff = currentPrice! - applyRounding(recommendedPriceInclVat, roundingMode);
+                return (
+                  <p className={`text-xs mt-0.5 ${roundedDiff > 0 ? "text-success" : roundedDiff < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                    {roundedDiff > 0 ? "+" : ""}{formatPrice(roundedDiff)} vs. anbefalet
+                  </p>
+                );
+              })()
             )}
           </CardContent>
         </Card>
@@ -853,18 +858,23 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
                 {recommendedPriceInclVat && (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-primary border-primary/30">
-                      Anbefalet: {formatPrice(recommendedPriceInclVat)} inkl. moms
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setPushPrice(recommendedPriceInclVat.toString())}
-                    >
-                      Brug anbefalet
-                    </Button>
-                  </div>
+                  (() => {
+                    const roundedRecommended = applyRounding(recommendedPriceInclVat, roundingMode);
+                    return (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-primary border-primary/30">
+                          Anbefalet: {formatPrice(roundedRecommended)} inkl. moms
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPushPrice(roundedRecommended.toString())}
+                        >
+                          Brug anbefalet
+                        </Button>
+                      </div>
+                    );
+                  })()
                 )}
               </div>
 
@@ -907,6 +917,57 @@ export default function ProductDetailPage() {
                     </Select>
                   </div>
                 </div>
+                {/* Stock recommendation from suppliers */}
+                {(() => {
+                  // Sum all in-stock supplier quantities
+                  const totalSupplierStock = product.supplier_products
+                    .filter(sp => sp.in_stock)
+                    .reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
+                  const anyInStock = product.supplier_products.some(sp => sp.in_stock);
+                  const suggestedStatus = anyInStock ? "instock" : "outofstock";
+                  const suggestedBackorder = backorderMode === "yes" ? "yes" : backorderMode === "notify" ? "notify" : "no";
+                  
+                  return (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {anyInStock && totalSupplierStock > 0 && (
+                        <>
+                          <Badge variant="outline" className="text-primary border-primary/30">
+                            Leverandørlager: {totalSupplierStock} stk.
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setPushStockQty(totalSupplierStock.toString());
+                              setPushStockStatus(suggestedStatus);
+                              setPushBackorders(suggestedBackorder);
+                            }}
+                          >
+                            Brug leverandørlager
+                          </Button>
+                        </>
+                      )}
+                      {!anyInStock && (
+                        <>
+                          <Badge variant="outline" className="text-warning border-warning/30">
+                            Ingen leverandør på lager
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setPushStockQty("0");
+                              setPushStockStatus("onbackorder");
+                              setPushBackorders(suggestedBackorder);
+                            }}
+                          >
+                            Sæt på restordre
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Current vs new comparison */}
