@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Copy, Loader2, KeyRound, Calculator } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, Loader2, KeyRound, Calculator, Package } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -28,16 +28,20 @@ export default function SettingsPage() {
   const qc = useQueryClient();
   const [roundingMode, setRoundingMode] = useState("nearest_5");
   const [savingRounding, setSavingRounding] = useState(false);
+  const [backorderMode, setBackorderMode] = useState("notify");
+  const [savingBackorder, setSavingBackorder] = useState(false);
 
-  // Load rounding setting
+  // Load rounding + backorder settings
   useEffect(() => {
     supabase
       .from("price_settings")
-      .select("scope_value")
-      .eq("scope", "price_rounding")
-      .maybeSingle()
+      .select("scope, scope_value")
+      .in("scope", ["price_rounding", "default_backorder"])
       .then(({ data }) => {
-        if (data?.scope_value) setRoundingMode(data.scope_value);
+        for (const row of data ?? []) {
+          if (row.scope === "price_rounding" && row.scope_value) setRoundingMode(row.scope_value);
+          if (row.scope === "default_backorder" && row.scope_value) setBackorderMode(row.scope_value);
+        }
       });
   }, []);
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -229,6 +233,39 @@ export default function SettingsPage() {
           <div className="rounded-md border border-border bg-secondary/30 p-3">
             <p className="text-xs text-muted-foreground">
               <span className="font-medium text-foreground">Eksempel:</span> {roundingExamples[roundingMode] ?? ""}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Default backorder setting */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-medium flex items-center gap-2">
+            <Package className="h-4 w-4" /> Standard restordre-indstilling
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Bestemmer hvilken restordre-status AI-anbefalinger anvender som standard, når et produkt anbefales sat på restordre.
+          </p>
+          <div className="space-y-2 max-w-sm">
+            <Label>Restordre-tilstand</Label>
+            <Select value={backorderMode} onValueChange={saveBackorderMode} disabled={savingBackorder}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="yes">Ja (tillad uden besked)</SelectItem>
+                <SelectItem value="notify">Ja med besked</SelectItem>
+                <SelectItem value="no">Nej (ingen restordre)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-md border border-border bg-secondary/30 p-3">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Valgt:</span>{" "}
+              {backorderMode === "notify" ? "Restordre tilladt – kunden får besked om ventetid" : backorderMode === "yes" ? "Restordre tilladt – ingen besked til kunden" : "Restordre ikke tilladt"}
             </p>
           </div>
         </CardContent>
