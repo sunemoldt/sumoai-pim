@@ -313,14 +313,19 @@ export default function ProductDetailPage() {
         <Card className="shadow-sm">
           <CardContent className="p-5">
             <p className="text-sm text-muted-foreground">Anbefalet pris</p>
-            <p className="text-2xl font-semibold text-primary mt-1">{formatPrice(recommendedPriceInclVat)}</p>
+            <p className="text-2xl font-semibold text-primary mt-1">{formatPrice(recommendedPriceInclVat ? applyRounding(recommendedPriceInclVat, roundingMode) : null)}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               inkl. moms · ex. {formatPrice(recommendedPriceExVat)}
             </p>
-            {priceDiff !== null && (
-              <p className={`text-xs mt-0.5 ${priceDiff > 0 ? "text-success" : priceDiff < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                {priceDiff > 0 ? "+" : ""}{formatPrice(priceDiff)} vs. anbefalet
-              </p>
+            {priceDiff !== null && recommendedPriceInclVat && (
+              (() => {
+                const roundedDiff = currentPrice! - applyRounding(recommendedPriceInclVat, roundingMode);
+                return (
+                  <p className={`text-xs mt-0.5 ${roundedDiff > 0 ? "text-success" : roundedDiff < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                    {roundedDiff > 0 ? "+" : ""}{formatPrice(roundedDiff)} vs. anbefalet
+                  </p>
+                );
+              })()
             )}
           </CardContent>
         </Card>
