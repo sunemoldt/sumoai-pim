@@ -80,13 +80,16 @@ export default function ImportPage() {
         .eq("scope", "wc_schedule")
         .maybeSingle();
       if (existing) {
-        await supabase.from("price_settings").update({ scope_value: val }).eq("id", existing.id);
+        const { error } = await supabase.from("price_settings").update({ scope_value: val, updated_at: new Date().toISOString() }).eq("id", existing.id);
+        if (error) throw error;
       } else {
-        await supabase.from("price_settings").insert({ scope: "wc_schedule", scope_value: val, markup_percentage: 0, minimum_margin: 0 });
+        const { error } = await supabase.from("price_settings").insert({ scope: "wc_schedule", scope_value: val, markup_percentage: 0, minimum_margin: 0 } as any);
+        if (error) throw error;
       }
       toast.success("WooCommerce synkroniseringsfrekvens gemt");
     } catch (err: any) {
-      toast.error("Fejl ved gemning af frekvens");
+      console.error("Save WC schedule error:", err);
+      toast.error(`Fejl ved gemning af frekvens: ${err.message || err}`);
     } finally {
       setSavingSchedule(false);
     }
