@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Copy, Loader2, KeyRound } from "lucide-react";
-import { useState } from "react";
+import { Plus, Pencil, Trash2, Copy, Loader2, KeyRound, Calculator } from "lucide-react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -25,7 +26,20 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const [roundingMode, setRoundingMode] = useState("nearest_5");
+  const [savingRounding, setSavingRounding] = useState(false);
 
+  // Load rounding setting
+  useEffect(() => {
+    supabase
+      .from("price_settings")
+      .select("scope_value")
+      .eq("scope", "price_rounding")
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.scope_value) setRoundingMode(data.scope_value);
+      });
+  }, []);
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const mcpUrl = `${supabaseUrl}/functions/v1/mcp-server`;
 
