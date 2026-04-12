@@ -168,19 +168,6 @@ export default function AiInsightsWidget() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {rec.products.length > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={() => setExpandedId(isExpanded(rec.title) ? null : rec.title)}
-                    >
-                      {isExpanded(rec.title)
-                        ? <ChevronUp className="h-4 w-4" />
-                        : <ChevronDown className="h-4 w-4" />
-                      }
-                    </Button>
-                  )}
                   <Button
                     variant="ghost"
                     size="sm"
