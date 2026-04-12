@@ -110,13 +110,15 @@ export default function SettingsPage() {
         .eq("scope", "price_rounding")
         .maybeSingle();
       if (existing) {
-        await supabase.from("price_settings").update({ scope_value: roundingMode }).eq("id", existing.id);
+        const { error } = await supabase.from("price_settings").update({ scope_value: roundingMode, updated_at: new Date().toISOString() }).eq("id", existing.id);
+        if (error) throw error;
       } else {
-        await supabase.from("price_settings").insert({ scope: "price_rounding", scope_value: roundingMode, markup_percentage: 0, minimum_margin: 0 });
+        const { error } = await supabase.from("price_settings").insert({ scope: "price_rounding", scope_value: roundingMode, markup_percentage: 0, minimum_margin: 0 } as any);
+        if (error) throw error;
       }
       toast({ title: "Prisafrundingsregel gemt" });
-    } catch {
-      toast({ title: "Fejl", description: "Kunne ikke gemme reglen", variant: "destructive" });
+    } catch (err: any) {
+      toast({ title: "Fejl", description: err?.message || "Kunne ikke gemme reglen", variant: "destructive" });
     } finally {
       setSavingRounding(false);
     }
@@ -131,13 +133,15 @@ export default function SettingsPage() {
         .eq("scope", "default_backorder")
         .maybeSingle();
       if (existing) {
-        await supabase.from("price_settings").update({ scope_value: backorderMode }).eq("id", existing.id);
+        const { error } = await supabase.from("price_settings").update({ scope_value: backorderMode, updated_at: new Date().toISOString() }).eq("id", existing.id);
+        if (error) throw error;
       } else {
-        await supabase.from("price_settings").insert({ scope: "default_backorder", scope_value: backorderMode, markup_percentage: 0, minimum_margin: 0 });
+        const { error } = await supabase.from("price_settings").insert({ scope: "default_backorder", scope_value: backorderMode, markup_percentage: 0, minimum_margin: 0 } as any);
+        if (error) throw error;
       }
       toast({ title: "Restordre-indstilling gemt" });
-    } catch {
-      toast({ title: "Fejl", description: "Kunne ikke gemme indstillingen", variant: "destructive" });
+    } catch (err: any) {
+      toast({ title: "Fejl", description: err?.message || "Kunne ikke gemme indstillingen", variant: "destructive" });
     } finally {
       setSavingBackorder(false);
     }
