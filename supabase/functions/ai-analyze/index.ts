@@ -108,15 +108,26 @@ Deno.serve(async (req) => {
     const priceChanges = changeLogs.filter(c => c.change_type === "price_update");
     const stockChanges = changeLogs.filter(c => c.change_type === "stock_update");
 
+    // Load rounding setting
+    const { data: roundingSetting } = await supabase
+      .from("price_settings")
+      .select("scope_value")
+      .eq("scope", "price_rounding")
+      .maybeSingle();
+    const roundingMode = roundingSetting?.scope_value ?? "nearest_5";
+
     const systemPrompt = `Du er en intelligent PIM-analytiker for en dansk webshop. 
 Du analyserer produktdata, prisændringer, lagerdata og besøgsstatistik for at generere KONKRETE, HANDLINGSORIENTEREDE anbefalinger.
 
 Regler:
 - Skriv altid på dansk
 - Giv max 8 anbefalinger, prioriteret efter potentiel forretningsværdi
-- Hver anbefaling SKAL have: title, description, severity (info/warning/critical), recommendation_type (pricing/stock/conversion/margin), action_suggestion, og en liste af berørte product_ids
+- Hver anbefaling SKAL have: title, description, severity (info/warning/critical), recommendation_type (pricing/stock/conversion/margin), action_suggestion, product_ids
+- For PRIS-anbefalinger (pricing/margin): inkluder altid suggested_price (et konkret tal inkl. moms i DKK)
+- For LAGER-anbefalinger (stock): inkluder suggested_stock_status og/eller suggested_stock_quantity
 - Fokusér på mønstre: produkter med høj trafik men lav konvertering, lav margin, prisændringer der skaber trends, udsolgte populære produkter osv.
 - Priser i DKK inkl. moms (x1.25 fra ex. moms)
+- Afrundingsregel: ${roundingMode} - anvend denne ved prisforslag
 - Overvej sæsonmønstre og prisudvikling over tid`;
 
     const userPrompt = `Analysér disse data og giv anbefalinger:
