@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Brain, RefreshCw, X, Sparkles, TrendingUp, Package, DollarSign, ShoppingCart, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { Brain, RefreshCw, X, Sparkles, TrendingUp, Package, DollarSign, ShoppingCart, ExternalLink, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -33,16 +33,29 @@ const severityBadge: Record<string, string> = {
   info: "bg-primary/10 text-primary border-0",
 };
 
+function applyRounding(price: number, mode: string): number {
+  switch (mode) {
+    case "nearest_1": return Math.round(price);
+    case "nearest_5": return Math.round(price / 5) * 5;
+    case "nearest_10": return Math.round(price / 10) * 10;
+    case "nearest_25": return Math.round(price / 25) * 25;
+    case "nearest_49": return Math.floor(price / 10) * 10 + 9;
+    case "nearest_95": return Math.floor(price) - (Math.floor(price) % 5) + 4.95;
+    case "nearest_99": return Math.floor(price / 10) * 10 - 0.01;
+    default: return Math.round(price * 100) / 100;
+  }
+}
+
 export default function AiInsightsWidget() {
   const queryClient = useQueryClient();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [applyingGroup, setApplyingGroup] = useState<string | null>(null);
 
   const { data: recommendations = [], isLoading } = useQuery({
     queryKey: ["ai-recommendations"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("product_recommendations")
-        .select("*, master_products(id, title, ean)")
+        .select("*, master_products(id, title, ean, webshop_price, stock_status, stock_quantity)")
         .eq("is_dismissed", false)
         .in("recommendation_type", ["pricing", "stock", "conversion", "margin"])
         .order("created_at", { ascending: false })
@@ -51,6 +64,21 @@ export default function AiInsightsWidget() {
       return data;
     },
   });
+
+  // Load rounding mode
+  const { data: roundingSetting } = useQuery({
+    queryKey: ["price_rounding_setting"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("price_settings")
+        .select("scope_value")
+        .eq("scope", "price_rounding")
+        .maybeSingle();
+      return data?.scope_value ?? "nearest_5";
+    },
+  });
+
+  const roundingMode = roundingSetting ?? "nearest_5";
 
   const analyzeMutation = useMutation({
     mutationFn: async () => {
@@ -69,7 +97,6 @@ export default function AiInsightsWidget() {
 
   const dismissMutation = useMutation({
     mutationFn: async (title: string) => {
-      // Dismiss all recs with same title
       const ids = recommendations.filter(r => r.title === title).map(r => r.id);
       for (const id of ids) {
         await supabase.from("product_recommendations").update({ is_dismissed: true }).eq("id", id);
@@ -80,7 +107,82 @@ export default function AiInsightsWidget() {
     },
   });
 
-  // Group by title: collect all related products per recommendation
+  const applyPriceRecommendation = async (rec: any) => {
+    setApplyingGroup(rec.title + "_price");
+    try {
+      let applied = 0;
+      for (const r of recommendations.filter(x => x.title === rec.title)) {
+        const data = r.data as any;
+        const product = r.master_products as any;
+        if (!product || !data?.suggested_price) continue;
+        
+        const roundedPrice = applyRounding(data.suggested_price, roundingMode);
+        
+        const { error } = await supabase
+          .from("master_products")
+          .update({ webshop_price: roundedPrice })
+          .eq("id", product.id);
+        if (!error) applied++;
+      }
+      if (applied > 0) {
+        toast.success(`Pris opdateret for ${applied} produkt${applied !== 1 ? "er" : ""}`);
+        // Mark as resolved
+        const ids = recommendations.filter(r => r.title === rec.title).map(r => r.id);
+        for (const id of ids) {
+          await supabase.from("product_recommendations").update({ resolved_at: new Date().toISOString(), is_dismissed: true }).eq("id", id);
+        }
+        queryClient.invalidateQueries({ queryKey: ["ai-recommendations"] });
+        queryClient.invalidateQueries({ queryKey: ["master_products"] });
+      } else {
+        toast.error("Ingen prisforslag fundet i anbefalingen");
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? "Fejl ved opdatering");
+    } finally {
+      setApplyingGroup(null);
+    }
+  };
+
+  const applyStockRecommendation = async (rec: any) => {
+    setApplyingGroup(rec.title + "_stock");
+    try {
+      let applied = 0;
+      for (const r of recommendations.filter(x => x.title === rec.title)) {
+        const data = r.data as any;
+        const product = r.master_products as any;
+        if (!product) continue;
+        
+        const updates: any = {};
+        if (data?.suggested_stock_status) updates.stock_status = data.suggested_stock_status;
+        if (data?.suggested_stock_quantity !== undefined) updates.stock_quantity = data.suggested_stock_quantity;
+        
+        if (Object.keys(updates).length === 0) continue;
+        
+        const { error } = await supabase
+          .from("master_products")
+          .update(updates)
+          .eq("id", product.id);
+        if (!error) applied++;
+      }
+      if (applied > 0) {
+        toast.success(`Lager opdateret for ${applied} produkt${applied !== 1 ? "er" : ""}`);
+        const ids = recommendations.filter(r => r.title === rec.title).map(r => r.id);
+        for (const id of ids) {
+          await supabase.from("product_recommendations").update({ resolved_at: new Date().toISOString(), is_dismissed: true }).eq("id", id);
+        }
+        queryClient.invalidateQueries({ queryKey: ["ai-recommendations"] });
+        queryClient.invalidateQueries({ queryKey: ["master_products"] });
+      } else {
+        toast.error("Ingen lagerforslag fundet i anbefalingen");
+      }
+    } catch (err: any) {
+      toast.error(err?.message ?? "Fejl ved opdatering");
+    } finally {
+      setApplyingGroup(null);
+    }
+  };
+
+  // Group by title
   const grouped = recommendations.reduce((acc, rec) => {
     const existing = acc.find(r => r.title === rec.title);
     if (existing) {
@@ -90,16 +192,21 @@ export default function AiInsightsWidget() {
           existing.products.push(mp);
         }
       }
+      // Collect suggested values
+      const data = rec.data as any;
+      if (data?.suggested_price) existing.hasPriceSuggestion = true;
+      if (data?.suggested_stock_status || data?.suggested_stock_quantity !== undefined) existing.hasStockSuggestion = true;
     } else {
+      const data = rec.data as any;
       acc.push({
         ...rec,
         products: rec.master_products ? [rec.master_products as any] : [],
+        hasPriceSuggestion: !!data?.suggested_price,
+        hasStockSuggestion: !!(data?.suggested_stock_status || data?.suggested_stock_quantity !== undefined),
       });
     }
     return acc;
-  }, [] as (typeof recommendations[0] & { products: { id: string; title: string; ean: string }[] })[]);
-
-  const isExpanded = (title: string) => expandedId === title;
+  }, [] as (typeof recommendations[0] & { products: any[]; hasPriceSuggestion: boolean; hasStockSuggestion: boolean })[]);
 
   return (
     <Card className="shadow-sm border-primary/20">
@@ -165,6 +272,42 @@ export default function AiInsightsWidget() {
                         <span>{rec.action_suggestion}</span>
                       </p>
                     )}
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2 mt-3">
+                      {(rec.recommendation_type === "pricing" || rec.recommendation_type === "margin") && rec.hasPriceSuggestion && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1"
+                          disabled={applyingGroup === rec.title + "_price"}
+                          onClick={() => applyPriceRecommendation(rec)}
+                        >
+                          {applyingGroup === rec.title + "_price" ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Check className="h-3 w-3" />
+                          )}
+                          Følg prisanbefaling
+                        </Button>
+                      )}
+                      {rec.recommendation_type === "stock" && rec.hasStockSuggestion && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1"
+                          disabled={applyingGroup === rec.title + "_stock"}
+                          onClick={() => applyStockRecommendation(rec)}
+                        >
+                          {applyingGroup === rec.title + "_stock" ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Check className="h-3 w-3" />
+                          )}
+                          Følg lageranbefaling
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -186,7 +329,7 @@ export default function AiInsightsWidget() {
                     Berørte produkter
                   </p>
                   <div className="grid gap-1">
-                    {rec.products.map((p) => (
+                    {rec.products.map((p: any) => (
                       <a
                         key={p.id}
                         href={`/products/${p.id}`}
