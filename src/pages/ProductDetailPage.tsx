@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History, TrendingUp, AlertTriangle, Lightbulb, Eye, ShoppingCart, MousePointerClick, ExternalLink, RefreshCw } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History, TrendingUp, AlertTriangle, Lightbulb, Eye, ShoppingCart, MousePointerClick, ExternalLink, RefreshCw, Check, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +39,70 @@ export default function ProductDetailPage() {
   const [stockSyncInterval, setStockSyncInterval] = useState("daily");
   const [savingSync, setSavingSync] = useState(false);
   const [syncInitialized, setSyncInitialized] = useState(false);
+  const [applyingRec, setApplyingRec] = useState<string | null>(null);
+
+  // Load rounding + backorder settings for recommendations
+  const roundingMode = priceSettings.find(s => s.scope === "price_rounding")?.scope_value ?? "nearest_5";
+  const backorderMode = priceSettings.find(s => s.scope === "default_backorder")?.scope_value ?? "notify";
+
+  function applyRounding(price: number, mode: string): number {
+    switch (mode) {
+      case "nearest_1": return Math.round(price);
+      case "nearest_5": return Math.round(price / 5) * 5;
+      case "nearest_10": return Math.round(price / 10) * 10;
+      case "nearest_25": return Math.round(price / 25) * 25;
+      case "nearest_49": return Math.floor(price / 10) * 10 + 9;
+      case "nearest_95": return Math.floor(price) - (Math.floor(price) % 5) + 4.95;
+      case "nearest_99": return Math.floor(price / 10) * 10 - 0.01;
+      default: return Math.round(price * 100) / 100;
+    }
+  }
+
+  const applyRecPrice = async (rec: any) => {
+    setApplyingRec(rec.id + "_price");
+    try {
+      const data = rec.data as any;
+      if (!data?.suggested_price || !product) { toast.error("Ingen prisforslag"); return; }
+      const rounded = applyRounding(data.suggested_price, roundingMode);
+      const { error } = await supabase.from("master_products").update({ webshop_price: rounded }).eq("id", product.id);
+      if (error) throw error;
+      await supabase.from("product_recommendations").update({ resolved_at: new Date().toISOString(), is_dismissed: true }).eq("id", rec.id);
+      toast.success(`Pris opdateret til ${rounded} kr.`);
+      queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+      queryClient.invalidateQueries({ queryKey: ["product_recommendations", id] });
+    } catch (err: any) { toast.error(err?.message ?? "Fejl"); }
+    finally { setApplyingRec(null); }
+  };
+
+  const applyRecStock = async (rec: any) => {
+    setApplyingRec(rec.id + "_stock");
+    try {
+      const data = rec.data as any;
+      if (!product) return;
+      const updates: any = {};
+      if (data?.suggested_stock_status) {
+        updates.stock_status = data.suggested_stock_status;
+        if (data.suggested_stock_status === "onbackorder") {
+          const mode = data.suggested_backorder_mode ?? backorderMode;
+          updates.backorders_allowed = mode === "yes" || mode === "notify";
+        }
+      }
+      if (data?.suggested_stock_quantity !== undefined) updates.stock_quantity = data.suggested_stock_quantity;
+      if (Object.keys(updates).length === 0) { toast.error("Ingen lagerforslag"); return; }
+      const { error } = await supabase.from("master_products").update(updates).eq("id", product.id);
+      if (error) throw error;
+      await supabase.from("product_recommendations").update({ resolved_at: new Date().toISOString(), is_dismissed: true }).eq("id", rec.id);
+      toast.success("Lager opdateret");
+      queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+      queryClient.invalidateQueries({ queryKey: ["product_recommendations", id] });
+    } catch (err: any) { toast.error(err?.message ?? "Fejl"); }
+    finally { setApplyingRec(null); }
+  };
+
+  const dismissRec = async (recId: string) => {
+    await supabase.from("product_recommendations").update({ is_dismissed: true }).eq("id", recId);
+    queryClient.invalidateQueries({ queryKey: ["product_recommendations", id] });
+  };
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
@@ -948,29 +1012,78 @@ export default function ProductDetailPage() {
           {/* Recommendations */}
           {recommendations.length > 0 && (
             <div className="space-y-3">
-              {recommendations.map((rec) => (
-                <Card key={rec.id} className={`shadow-sm border-l-4 ${
-                  rec.severity === "critical" ? "border-l-destructive" : 
-                  rec.severity === "warning" ? "border-l-warning" : "border-l-primary"
-                }`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      {rec.severity === "critical" ? (
-                        <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
-                      ) : (
-                        <Lightbulb className="h-5 w-5 text-warning mt-0.5 shrink-0" />
-                      )}
-                      <div>
-                        <p className="font-medium text-foreground">{rec.title}</p>
-                        <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
-                        {rec.action_suggestion && (
-                          <p className="text-sm text-primary mt-2 font-medium">💡 {rec.action_suggestion}</p>
-                        )}
+              {recommendations.map((rec) => {
+                const recData = rec.data as any;
+                const hasPrice = !!recData?.suggested_price;
+                const hasStock = !!(recData?.suggested_stock_status || recData?.suggested_stock_quantity !== undefined);
+                return (
+                  <Card key={rec.id} className={`shadow-sm border-l-4 ${
+                    rec.severity === "critical" ? "border-l-destructive" : 
+                    rec.severity === "warning" ? "border-l-warning" : "border-l-primary"
+                  }`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          {rec.severity === "critical" ? (
+                            <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                          ) : (
+                            <Lightbulb className="h-5 w-5 text-warning mt-0.5 shrink-0" />
+                          )}
+                          <div>
+                            <p className="font-medium text-foreground">{rec.title}</p>
+                            <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
+                            {rec.action_suggestion && (
+                              <p className="text-sm text-primary mt-2 font-medium">💡 {rec.action_suggestion}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-3">
+                              {(rec.recommendation_type === "pricing" || rec.recommendation_type === "margin") && hasPrice && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1"
+                                  disabled={applyingRec === rec.id + "_price"}
+                                  onClick={() => applyRecPrice(rec)}
+                                >
+                                  {applyingRec === rec.id + "_price" ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Check className="h-3 w-3" />
+                                  )}
+                                  Følg prisanbefaling
+                                </Button>
+                              )}
+                              {rec.recommendation_type === "stock" && hasStock && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1"
+                                  disabled={applyingRec === rec.id + "_stock"}
+                                  onClick={() => applyRecStock(rec)}
+                                >
+                                  {applyingRec === rec.id + "_stock" ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Check className="h-3 w-3" />
+                                  )}
+                                  Følg lageranbefaling
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                          onClick={() => dismissRec(rec.id)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
 
