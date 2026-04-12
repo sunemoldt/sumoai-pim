@@ -123,7 +123,28 @@ export default function SettingsPage() {
     }
   };
 
-  const roundingExamples: Record<string, string> = {
+  const saveBackorderMode = async (val: string) => {
+    setBackorderMode(val);
+    setSavingBackorder(true);
+    try {
+      const { data: existing } = await supabase
+        .from("price_settings")
+        .select("id")
+        .eq("scope", "default_backorder")
+        .maybeSingle();
+      if (existing) {
+        await supabase.from("price_settings").update({ scope_value: val }).eq("id", existing.id);
+      } else {
+        await supabase.from("price_settings").insert({ scope: "default_backorder", scope_value: val, markup_percentage: 0, minimum_margin: 0 });
+      }
+      toast({ title: "Restordre-indstilling gemt" });
+    } catch {
+      toast({ title: "Fejl", description: "Kunne ikke gemme indstillingen", variant: "destructive" });
+    } finally {
+      setSavingBackorder(false);
+    }
+  };
+
     none: "741,57 → 741,57",
     nearest_1: "741,57 → 742,00",
     nearest_5: "741,57 → 745,00",
