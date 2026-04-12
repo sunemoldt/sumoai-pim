@@ -1012,29 +1012,78 @@ export default function ProductDetailPage() {
           {/* Recommendations */}
           {recommendations.length > 0 && (
             <div className="space-y-3">
-              {recommendations.map((rec) => (
-                <Card key={rec.id} className={`shadow-sm border-l-4 ${
-                  rec.severity === "critical" ? "border-l-destructive" : 
-                  rec.severity === "warning" ? "border-l-warning" : "border-l-primary"
-                }`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      {rec.severity === "critical" ? (
-                        <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
-                      ) : (
-                        <Lightbulb className="h-5 w-5 text-warning mt-0.5 shrink-0" />
-                      )}
-                      <div>
-                        <p className="font-medium text-foreground">{rec.title}</p>
-                        <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
-                        {rec.action_suggestion && (
-                          <p className="text-sm text-primary mt-2 font-medium">💡 {rec.action_suggestion}</p>
-                        )}
+              {recommendations.map((rec) => {
+                const recData = rec.data as any;
+                const hasPrice = !!recData?.suggested_price;
+                const hasStock = !!(recData?.suggested_stock_status || recData?.suggested_stock_quantity !== undefined);
+                return (
+                  <Card key={rec.id} className={`shadow-sm border-l-4 ${
+                    rec.severity === "critical" ? "border-l-destructive" : 
+                    rec.severity === "warning" ? "border-l-warning" : "border-l-primary"
+                  }`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          {rec.severity === "critical" ? (
+                            <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                          ) : (
+                            <Lightbulb className="h-5 w-5 text-warning mt-0.5 shrink-0" />
+                          )}
+                          <div>
+                            <p className="font-medium text-foreground">{rec.title}</p>
+                            <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
+                            {rec.action_suggestion && (
+                              <p className="text-sm text-primary mt-2 font-medium">💡 {rec.action_suggestion}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-3">
+                              {(rec.recommendation_type === "pricing" || rec.recommendation_type === "margin") && hasPrice && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1"
+                                  disabled={applyingRec === rec.id + "_price"}
+                                  onClick={() => applyRecPrice(rec)}
+                                >
+                                  {applyingRec === rec.id + "_price" ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Check className="h-3 w-3" />
+                                  )}
+                                  Følg prisanbefaling
+                                </Button>
+                              )}
+                              {rec.recommendation_type === "stock" && hasStock && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1"
+                                  disabled={applyingRec === rec.id + "_stock"}
+                                  onClick={() => applyRecStock(rec)}
+                                >
+                                  {applyingRec === rec.id + "_stock" ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Check className="h-3 w-3" />
+                                  )}
+                                  Følg lageranbefaling
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                          onClick={() => dismissRec(rec.id)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
 
