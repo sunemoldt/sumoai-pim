@@ -234,7 +234,7 @@ export default function SettingsPage() {
           </p>
           <div className="space-y-2 max-w-sm">
             <Label>Afrundingsregel</Label>
-            <Select value={roundingMode} onValueChange={saveRoundingMode} disabled={savingRounding}>
+            <Select value={roundingMode} onValueChange={setRoundingMode}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -255,6 +255,10 @@ export default function SettingsPage() {
               <span className="font-medium text-foreground">Eksempel:</span> {roundingExamples[roundingMode] ?? ""}
             </p>
           </div>
+          <Button onClick={saveRoundingMode} disabled={savingRounding} className="mt-2">
+            {savingRounding ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Gem
+          </Button>
         </CardContent>
       </Card>
 
@@ -271,7 +275,7 @@ export default function SettingsPage() {
           </p>
           <div className="space-y-2 max-w-sm">
             <Label>Restordre-tilstand</Label>
-            <Select value={backorderMode} onValueChange={saveBackorderMode} disabled={savingBackorder}>
+            <Select value={backorderMode} onValueChange={setBackorderMode}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -288,6 +292,10 @@ export default function SettingsPage() {
               {backorderMode === "notify" ? "Restordre tilladt – kunden får besked om ventetid" : backorderMode === "yes" ? "Restordre tilladt – ingen besked til kunden" : "Restordre ikke tilladt"}
             </p>
           </div>
+          <Button onClick={saveBackorderMode} disabled={savingBackorder} className="mt-2">
+            {savingBackorder ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Gem
+          </Button>
         </CardContent>
       </Card>
 
