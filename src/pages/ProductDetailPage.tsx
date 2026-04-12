@@ -97,6 +97,36 @@ export default function ProductDetailPage() {
     setPushInitialized(true);
   };
 
+  // Initialize stock sync fields
+  if (product && !syncInitialized) {
+    setAutoStockSync((product as any).auto_stock_sync ?? false);
+    setStockSyncSupplierId((product as any).stock_sync_supplier_id ?? "");
+    setStockSyncInterval((product as any).stock_sync_interval ?? "daily");
+    setSyncInitialized(true);
+  }
+
+  const saveStockSync = async () => {
+    if (!product) return;
+    setSavingSync(true);
+    try {
+      const { error } = await supabase
+        .from("master_products")
+        .update({
+          auto_stock_sync: autoStockSync,
+          stock_sync_supplier_id: stockSyncSupplierId || null,
+          stock_sync_interval: stockSyncInterval,
+        } as any)
+        .eq("id", product.id);
+      if (error) throw error;
+      toast.success("Automatisk lager-sync indstillinger gemt");
+      queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+    } catch (err: any) {
+      toast.error(err?.message || "Fejl ved gemning");
+    } finally {
+      setSavingSync(false);
+    }
+  };
+
   const pushToShop = async () => {
     if (!product) return;
     setPushing(true);
