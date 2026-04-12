@@ -243,6 +243,7 @@ Returnér anbefalinger som JSON array med tool calling.`;
             ...(rec.suggested_price !== undefined && { suggested_price: rec.suggested_price }),
             ...(rec.suggested_stock_status && { suggested_stock_status: rec.suggested_stock_status }),
             ...(rec.suggested_stock_quantity !== undefined && { suggested_stock_quantity: rec.suggested_stock_quantity }),
+            ...(rec.suggested_backorder_mode && { suggested_backorder_mode: rec.suggested_backorder_mode }),
           },
         });
       }
