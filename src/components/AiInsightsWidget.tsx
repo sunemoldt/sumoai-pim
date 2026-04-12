@@ -157,7 +157,13 @@ export default function AiInsightsWidget() {
         if (!product) continue;
         
         const updates: any = {};
-        if (data?.suggested_stock_status) updates.stock_status = data.suggested_stock_status;
+        if (data?.suggested_stock_status) {
+          updates.stock_status = data.suggested_stock_status;
+          if (data.suggested_stock_status === "onbackorder") {
+            const mode = data.suggested_backorder_mode ?? backorderMode;
+            updates.backorders_allowed = mode === "yes" || mode === "notify";
+          }
+        }
         if (data?.suggested_stock_quantity !== undefined) updates.stock_quantity = data.suggested_stock_quantity;
         
         if (Object.keys(updates).length === 0) continue;
