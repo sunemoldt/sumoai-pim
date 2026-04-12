@@ -853,18 +853,23 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
                 {recommendedPriceInclVat && (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-primary border-primary/30">
-                      Anbefalet: {formatPrice(recommendedPriceInclVat)} inkl. moms
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setPushPrice(recommendedPriceInclVat.toString())}
-                    >
-                      Brug anbefalet
-                    </Button>
-                  </div>
+                  (() => {
+                    const roundedRecommended = applyRounding(recommendedPriceInclVat, roundingMode);
+                    return (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-primary border-primary/30">
+                          Anbefalet: {formatPrice(roundedRecommended)} inkl. moms
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPushPrice(roundedRecommended.toString())}
+                        >
+                          Brug anbefalet
+                        </Button>
+                      </div>
+                    );
+                  })()
                 )}
               </div>
 
