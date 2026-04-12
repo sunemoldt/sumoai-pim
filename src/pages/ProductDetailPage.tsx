@@ -912,6 +912,57 @@ export default function ProductDetailPage() {
                     </Select>
                   </div>
                 </div>
+                {/* Stock recommendation from suppliers */}
+                {(() => {
+                  // Sum all in-stock supplier quantities
+                  const totalSupplierStock = product.supplier_products
+                    .filter(sp => sp.in_stock)
+                    .reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
+                  const anyInStock = product.supplier_products.some(sp => sp.in_stock);
+                  const suggestedStatus = anyInStock ? "instock" : "outofstock";
+                  const suggestedBackorder = backorderMode === "yes" ? "yes" : backorderMode === "notify" ? "notify" : "no";
+                  
+                  return (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {anyInStock && totalSupplierStock > 0 && (
+                        <>
+                          <Badge variant="outline" className="text-primary border-primary/30">
+                            Leverandørlager: {totalSupplierStock} stk.
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setPushStockQty(totalSupplierStock.toString());
+                              setPushStockStatus(suggestedStatus);
+                              setPushBackorders(suggestedBackorder);
+                            }}
+                          >
+                            Brug leverandørlager
+                          </Button>
+                        </>
+                      )}
+                      {!anyInStock && (
+                        <>
+                          <Badge variant="outline" className="text-warning border-warning/30">
+                            Ingen leverandør på lager
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setPushStockQty("0");
+                              setPushStockStatus("onbackorder");
+                              setPushBackorders(suggestedBackorder);
+                            }}
+                          >
+                            Sæt på restordre
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Current vs new comparison */}
