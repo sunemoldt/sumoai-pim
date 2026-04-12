@@ -64,7 +64,7 @@ function parseAurdelItemXml(text: string): Record<string, string>[] {
 
     // EAN
     const eanMatch = inner.match(/<ean>([^<]*)<\/ean>/i);
-    if (eanMatch) row.ean = eanMatch[1].trim();
+    if (eanMatch) row.ean = eanMatch[1].trim().replace(/^0+/, "") || eanMatch[1].trim();
 
     // Price (net)
     const netMatch = inner.match(/<net[^>]*>([^<]*)<\/net>/i);
@@ -229,7 +229,9 @@ Deno.serve(async (req) => {
 
     const eanToId = new Map<string, string>();
     for (const mp of masterProducts ?? []) {
-      eanToId.set(mp.ean, mp.id);
+      // Normalize stored EAN too: strip leading zeros
+      const normEan = mp.ean.replace(/^0+/, "") || mp.ean;
+      eanToId.set(normEan, mp.id);
     }
 
     // Process feed rows - only those matching existing EANs
@@ -249,8 +251,10 @@ Deno.serve(async (req) => {
     }
 
     for (const row of feedRows) {
-      const ean = row[mapping.ean]?.trim();
-      if (!ean) { skipped++; continue; }
+      const rawEan = row[mapping.ean]?.trim();
+      if (!rawEan) { skipped++; continue; }
+      // Normalize: strip leading zeros
+      const ean = rawEan.replace(/^0+/, "") || rawEan;
 
       const masterProductId = eanToId.get(ean);
       if (!masterProductId) { skipped++; continue; }
