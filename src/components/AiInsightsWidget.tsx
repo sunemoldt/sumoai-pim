@@ -65,20 +65,24 @@ export default function AiInsightsWidget() {
     },
   });
 
-  // Load rounding mode
-  const { data: roundingSetting } = useQuery({
-    queryKey: ["price_rounding_setting"],
+  // Load rounding + backorder settings
+  const { data: settingsData } = useQuery({
+    queryKey: ["price_settings_ai"],
     queryFn: async () => {
       const { data } = await supabase
         .from("price_settings")
-        .select("scope_value")
-        .eq("scope", "price_rounding")
-        .maybeSingle();
-      return data?.scope_value ?? "nearest_5";
+        .select("scope, scope_value")
+        .in("scope", ["price_rounding", "default_backorder"]);
+      const map = new Map((data ?? []).map(r => [r.scope, r.scope_value]));
+      return {
+        rounding: map.get("price_rounding") ?? "nearest_5",
+        backorder: map.get("default_backorder") ?? "notify",
+      };
     },
   });
 
-  const roundingMode = roundingSetting ?? "nearest_5";
+  const roundingMode = settingsData?.rounding ?? "nearest_5";
+  const backorderMode = settingsData?.backorder ?? "notify";
 
   const analyzeMutation = useMutation({
     mutationFn: async () => {
