@@ -192,8 +192,8 @@ export default function AiInsightsWidget() {
                 </div>
               </div>
 
-              {/* Expanded product list */}
-              {isExpanded(rec.title) && rec.products.length > 0 && (
+              {/* Product list - always visible */}
+              {rec.products.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-border/50">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2">
                     Berørte produkter
