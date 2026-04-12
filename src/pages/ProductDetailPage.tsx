@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History, TrendingUp, AlertTriangle, Lightbulb, Eye, ShoppingCart, MousePointerClick, ExternalLink, RefreshCw } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History, TrendingUp, AlertTriangle, Lightbulb, Eye, ShoppingCart, MousePointerClick, ExternalLink, RefreshCw, Check, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
