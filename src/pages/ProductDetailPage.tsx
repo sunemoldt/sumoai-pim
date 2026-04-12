@@ -157,7 +157,7 @@ export default function ProductDetailPage() {
     // Set status based on supplier stock
     const hasSupplierStock = product.supplier_products.some(sp => sp.in_stock);
     setPushStockStatus(hasSupplierStock ? "instock" : (product.stock_status ?? "outofstock"));
-    setPushBackorders(product.backorders_allowed ? "yes" : "no");
+    setPushBackorders(product.backorders_allowed ? backorderMode : "no");
     setPushInitialized(true);
   };
 
@@ -450,7 +450,9 @@ export default function ProductDetailPage() {
                   <Label className="text-muted-foreground text-xs">Restordre tilladt</Label>
                   <p className="text-sm text-foreground">
                     {(product as any).backorders_allowed ? (
-                      <Badge variant="outline" className="text-success border-success/30">Ja</Badge>
+                      <Badge variant="outline" className="text-success border-success/30">
+                        {backorderMode === "notify" ? "Ja, med besked" : "Ja"}
+                      </Badge>
                     ) : (
                       <Badge variant="outline" className="text-muted-foreground">Nej</Badge>
                     )}
