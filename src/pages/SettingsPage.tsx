@@ -97,11 +97,44 @@ export default function SettingsPage() {
     setChangingPassword(false);
   };
 
+  const saveRoundingMode = async (val: string) => {
+    setRoundingMode(val);
+    setSavingRounding(true);
+    try {
+      const { data: existing } = await supabase
+        .from("price_settings")
+        .select("id")
+        .eq("scope", "price_rounding")
+        .maybeSingle();
+      if (existing) {
+        await supabase.from("price_settings").update({ scope_value: val }).eq("id", existing.id);
+      } else {
+        await supabase.from("price_settings").insert({ scope: "price_rounding", scope_value: val, markup_percentage: 0, minimum_margin: 0 });
+      }
+      toast({ title: "Prisafrundingsregel gemt" });
+    } catch {
+      toast({ title: "Fejl", description: "Kunne ikke gemme reglen", variant: "destructive" });
+    } finally {
+      setSavingRounding(false);
+    }
+  };
+
+  const roundingExamples: Record<string, string> = {
+    none: "741,57 → 741,57",
+    nearest_1: "741,57 → 742,00",
+    nearest_5: "741,57 → 745,00",
+    nearest_10: "741,57 → 740,00",
+    nearest_25: "741,57 → 750,00",
+    nearest_49: "741,57 → 749,00",
+    nearest_95: "741,57 → 745,00 (ender på ,95)",
+    nearest_99: "741,57 → 739,99",
+  };
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Indstillinger</h1>
-        <p className="text-sm text-muted-foreground mt-1">Administrer avanceprocenter, webhooks og MCP</p>
+        <p className="text-sm text-muted-foreground mt-1">Administrer avanceprocenter, prisregler, webhooks og MCP</p>
       </div>
 
       {/* Change Password */}
@@ -161,6 +194,43 @@ export default function SettingsPage() {
               ))}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* Price rounding rule */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-medium flex items-center gap-2">
+            <Calculator className="h-4 w-4" /> Prisafrunding
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Bestemmer hvordan anbefalede priser afrundes. Reglen anvendes af AI-analysen og ved "Følg anbefaling"-handlinger.
+          </p>
+          <div className="space-y-2 max-w-sm">
+            <Label>Afrundingsregel</Label>
+            <Select value={roundingMode} onValueChange={saveRoundingMode} disabled={savingRounding}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Ingen afrunding</SelectItem>
+                <SelectItem value="nearest_1">Til nærmeste hele krone</SelectItem>
+                <SelectItem value="nearest_5">Til nærmeste 5 kr.</SelectItem>
+                <SelectItem value="nearest_10">Til nærmeste 10 kr.</SelectItem>
+                <SelectItem value="nearest_25">Til nærmeste 25 kr.</SelectItem>
+                <SelectItem value="nearest_49">Ender på 9 (f.eks. 749,-)</SelectItem>
+                <SelectItem value="nearest_95">Ender på ,95 (f.eks. 744,95)</SelectItem>
+                <SelectItem value="nearest_99">Ender på ,99 (f.eks. 739,99)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="rounded-md border border-border bg-secondary/30 p-3">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Eksempel:</span> {roundingExamples[roundingMode] ?? ""}
+            </p>
+          </div>
         </CardContent>
       </Card>
 
