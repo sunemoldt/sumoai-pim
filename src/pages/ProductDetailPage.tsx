@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History, TrendingUp, AlertTriangle, Lightbulb, Eye, ShoppingCart, MousePointerClick, ExternalLink } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History, TrendingUp, AlertTriangle, Lightbulb, Eye, ShoppingCart, MousePointerClick, ExternalLink, RefreshCw } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -33,6 +34,11 @@ export default function ProductDetailPage() {
   const [pushStockStatus, setPushStockStatus] = useState<string>("");
   const [pushBackorders, setPushBackorders] = useState<string>("");
   const [pushInitialized, setPushInitialized] = useState(false);
+  const [autoStockSync, setAutoStockSync] = useState(false);
+  const [stockSyncSupplierId, setStockSyncSupplierId] = useState<string>("");
+  const [stockSyncInterval, setStockSyncInterval] = useState("daily");
+  const [savingSync, setSavingSync] = useState(false);
+  const [syncInitialized, setSyncInitialized] = useState(false);
 
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
@@ -89,6 +95,36 @@ export default function ProductDetailPage() {
     setPushStockStatus(hasSupplierStock ? "instock" : (product.stock_status ?? "outofstock"));
     setPushBackorders(product.backorders_allowed ? "yes" : "no");
     setPushInitialized(true);
+  };
+
+  // Initialize stock sync fields
+  if (product && !syncInitialized) {
+    setAutoStockSync((product as any).auto_stock_sync ?? false);
+    setStockSyncSupplierId((product as any).stock_sync_supplier_id ?? "");
+    setStockSyncInterval((product as any).stock_sync_interval ?? "daily");
+    setSyncInitialized(true);
+  }
+
+  const saveStockSync = async () => {
+    if (!product) return;
+    setSavingSync(true);
+    try {
+      const { error } = await supabase
+        .from("master_products")
+        .update({
+          auto_stock_sync: autoStockSync,
+          stock_sync_supplier_id: stockSyncSupplierId || null,
+          stock_sync_interval: stockSyncInterval,
+        } as any)
+        .eq("id", product.id);
+      if (error) throw error;
+      toast.success("Automatisk lager-sync indstillinger gemt");
+      queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+    } catch (err: any) {
+      toast.error(err?.message || "Fejl ved gemning");
+    } finally {
+      setSavingSync(false);
+    }
   };
 
   const pushToShop = async () => {
@@ -525,6 +561,65 @@ export default function ProductDetailPage() {
                   </TableBody>
                 </Table>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Auto stock sync */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" /> Automatisk lager-sync
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Checkbox
+                  id="auto-stock-sync"
+                  checked={autoStockSync}
+                  onCheckedChange={(checked) => setAutoStockSync(!!checked)}
+                />
+                <Label htmlFor="auto-stock-sync" className="cursor-pointer">
+                  Aktiver automatisk lager-sync for dette produkt
+                </Label>
+              </div>
+
+              {autoStockSync && (
+                <div className="grid gap-4 sm:grid-cols-2 max-w-lg pl-7">
+                  <div className="space-y-2">
+                    <Label>Leverandør</Label>
+                    <Select value={stockSyncSupplierId} onValueChange={setStockSyncSupplierId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Vælg leverandør" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {product.supplier_products.map((sp) => (
+                          <SelectItem key={sp.supplier_id} value={sp.supplier_id}>
+                            {sp.suppliers?.name ?? "Ukendt"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Interval</Label>
+                    <Select value={stockSyncInterval} onValueChange={setStockSyncInterval}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hourly">Hver time</SelectItem>
+                        <SelectItem value="daily">Dagligt</SelectItem>
+                        <SelectItem value="weekly">Ugentligt</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
+              <Button onClick={saveStockSync} disabled={savingSync} size="sm">
+                {savingSync ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Gem sync-indstillinger
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

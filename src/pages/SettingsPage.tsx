@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Copy, Loader2, KeyRound, Calculator, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, Loader2, KeyRound, Calculator, Package, Save } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -101,8 +101,7 @@ export default function SettingsPage() {
     setChangingPassword(false);
   };
 
-  const saveRoundingMode = async (val: string) => {
-    setRoundingMode(val);
+  const saveRoundingMode = async () => {
     setSavingRounding(true);
     try {
       const { data: existing } = await supabase
@@ -111,9 +110,9 @@ export default function SettingsPage() {
         .eq("scope", "price_rounding")
         .maybeSingle();
       if (existing) {
-        await supabase.from("price_settings").update({ scope_value: val }).eq("id", existing.id);
+        await supabase.from("price_settings").update({ scope_value: roundingMode }).eq("id", existing.id);
       } else {
-        await supabase.from("price_settings").insert({ scope: "price_rounding", scope_value: val, markup_percentage: 0, minimum_margin: 0 });
+        await supabase.from("price_settings").insert({ scope: "price_rounding", scope_value: roundingMode, markup_percentage: 0, minimum_margin: 0 });
       }
       toast({ title: "Prisafrundingsregel gemt" });
     } catch {
@@ -123,8 +122,7 @@ export default function SettingsPage() {
     }
   };
 
-  const saveBackorderMode = async (val: string) => {
-    setBackorderMode(val);
+  const saveBackorderMode = async () => {
     setSavingBackorder(true);
     try {
       const { data: existing } = await supabase
@@ -133,9 +131,9 @@ export default function SettingsPage() {
         .eq("scope", "default_backorder")
         .maybeSingle();
       if (existing) {
-        await supabase.from("price_settings").update({ scope_value: val }).eq("id", existing.id);
+        await supabase.from("price_settings").update({ scope_value: backorderMode }).eq("id", existing.id);
       } else {
-        await supabase.from("price_settings").insert({ scope: "default_backorder", scope_value: val, markup_percentage: 0, minimum_margin: 0 });
+        await supabase.from("price_settings").insert({ scope: "default_backorder", scope_value: backorderMode, markup_percentage: 0, minimum_margin: 0 });
       }
       toast({ title: "Restordre-indstilling gemt" });
     } catch {
@@ -236,7 +234,7 @@ export default function SettingsPage() {
           </p>
           <div className="space-y-2 max-w-sm">
             <Label>Afrundingsregel</Label>
-            <Select value={roundingMode} onValueChange={saveRoundingMode} disabled={savingRounding}>
+            <Select value={roundingMode} onValueChange={setRoundingMode}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -257,6 +255,10 @@ export default function SettingsPage() {
               <span className="font-medium text-foreground">Eksempel:</span> {roundingExamples[roundingMode] ?? ""}
             </p>
           </div>
+          <Button onClick={saveRoundingMode} disabled={savingRounding} className="mt-2">
+            {savingRounding ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Gem
+          </Button>
         </CardContent>
       </Card>
 
@@ -273,7 +275,7 @@ export default function SettingsPage() {
           </p>
           <div className="space-y-2 max-w-sm">
             <Label>Restordre-tilstand</Label>
-            <Select value={backorderMode} onValueChange={saveBackorderMode} disabled={savingBackorder}>
+            <Select value={backorderMode} onValueChange={setBackorderMode}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -290,6 +292,10 @@ export default function SettingsPage() {
               {backorderMode === "notify" ? "Restordre tilladt – kunden får besked om ventetid" : backorderMode === "yes" ? "Restordre tilladt – ingen besked til kunden" : "Restordre ikke tilladt"}
             </p>
           </div>
+          <Button onClick={saveBackorderMode} disabled={savingBackorder} className="mt-2">
+            {savingBackorder ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Gem
+          </Button>
         </CardContent>
       </Card>
 
