@@ -145,6 +145,7 @@ export default function SettingsPage() {
     }
   };
 
+  const roundingExamples: Record<string, string> = {
     none: "741,57 → 741,57",
     nearest_1: "741,57 → 742,00",
     nearest_5: "741,57 → 745,00",
