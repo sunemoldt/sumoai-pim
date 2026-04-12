@@ -108,13 +108,17 @@ Deno.serve(async (req) => {
     const priceChanges = changeLogs.filter(c => c.change_type === "price_update");
     const stockChanges = changeLogs.filter(c => c.change_type === "stock_update");
 
-    // Load rounding setting
-    const { data: roundingSetting } = await supabase
+    // Load rounding + backorder settings
+    const { data: settingsRows } = await supabase
       .from("price_settings")
-      .select("scope_value")
-      .eq("scope", "price_rounding")
-      .maybeSingle();
-    const roundingMode = roundingSetting?.scope_value ?? "nearest_5";
+      .select("scope, scope_value")
+      .in("scope", ["price_rounding", "default_backorder"]);
+    
+    const settingsMap = new Map((settingsRows ?? []).map(r => [r.scope, r.scope_value]));
+    const roundingMode = settingsMap.get("price_rounding") ?? "nearest_5";
+    const backorderMode = settingsMap.get("default_backorder") ?? "notify";
+
+    const backorderLabel = backorderMode === "notify" ? "Ja med besked (notify)" : backorderMode === "yes" ? "Ja (yes)" : "Nej (no)";
 
     const systemPrompt = `Du er en intelligent PIM-analytiker for en dansk webshop. 
 Du analyserer produktdata, prisændringer, lagerdata og besøgsstatistik for at generere KONKRETE, HANDLINGSORIENTEREDE anbefalinger.
@@ -125,6 +129,7 @@ Regler:
 - Hver anbefaling SKAL have: title, description, severity (info/warning/critical), recommendation_type (pricing/stock/conversion/margin), action_suggestion, product_ids
 - For PRIS-anbefalinger (pricing/margin): inkluder altid suggested_price (et konkret tal inkl. moms i DKK)
 - For LAGER-anbefalinger (stock): inkluder suggested_stock_status og/eller suggested_stock_quantity
+- Når du anbefaler restordre (onbackorder), brug ALTID backorder_mode: "${backorderMode}" – dette betyder: ${backorderLabel}
 - Fokusér på mønstre: produkter med høj trafik men lav konvertering, lav margin, prisændringer der skaber trends, udsolgte populære produkter osv.
 - Priser i DKK inkl. moms (x1.25 fra ex. moms)
 - Afrundingsregel: ${roundingMode} - anvend denne ved prisforslag
@@ -175,6 +180,7 @@ Returnér anbefalinger som JSON array med tool calling.`;
                       product_ids: { type: "array", items: { type: "string" } },
                       suggested_price: { type: "number", description: "Suggested price incl. VAT in DKK (only for pricing/margin recs)" },
                       suggested_stock_status: { type: "string", enum: ["instock", "outofstock", "onbackorder"], description: "Suggested stock status (only for stock recs)" },
+                      suggested_backorder_mode: { type: "string", enum: ["yes", "notify", "no"], description: "Backorder mode when status is onbackorder" },
                       suggested_stock_quantity: { type: "number", description: "Suggested stock quantity (only for stock recs)" },
                     },
                     required: ["title", "description", "severity", "recommendation_type", "action_suggestion", "product_ids"],
