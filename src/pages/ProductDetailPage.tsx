@@ -39,8 +39,72 @@ export default function ProductDetailPage() {
   const [stockSyncInterval, setStockSyncInterval] = useState("daily");
   const [savingSync, setSavingSync] = useState(false);
   const [syncInitialized, setSyncInitialized] = useState(false);
+  const [applyingRec, setApplyingRec] = useState<string | null>(null);
 
-  const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
+  // Load rounding + backorder settings for recommendations
+  const roundingMode = priceSettings.find(s => s.scope === "price_rounding")?.scope_value ?? "nearest_5";
+  const backorderMode = priceSettings.find(s => s.scope === "default_backorder")?.scope_value ?? "notify";
+
+  function applyRounding(price: number, mode: string): number {
+    switch (mode) {
+      case "nearest_1": return Math.round(price);
+      case "nearest_5": return Math.round(price / 5) * 5;
+      case "nearest_10": return Math.round(price / 10) * 10;
+      case "nearest_25": return Math.round(price / 25) * 25;
+      case "nearest_49": return Math.floor(price / 10) * 10 + 9;
+      case "nearest_95": return Math.floor(price) - (Math.floor(price) % 5) + 4.95;
+      case "nearest_99": return Math.floor(price / 10) * 10 - 0.01;
+      default: return Math.round(price * 100) / 100;
+    }
+  }
+
+  const applyRecPrice = async (rec: any) => {
+    setApplyingRec(rec.id + "_price");
+    try {
+      const data = rec.data as any;
+      if (!data?.suggested_price || !product) { toast.error("Ingen prisforslag"); return; }
+      const rounded = applyRounding(data.suggested_price, roundingMode);
+      const { error } = await supabase.from("master_products").update({ webshop_price: rounded }).eq("id", product.id);
+      if (error) throw error;
+      await supabase.from("product_recommendations").update({ resolved_at: new Date().toISOString(), is_dismissed: true }).eq("id", rec.id);
+      toast.success(`Pris opdateret til ${rounded} kr.`);
+      queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+      queryClient.invalidateQueries({ queryKey: ["product_recommendations", id] });
+    } catch (err: any) { toast.error(err?.message ?? "Fejl"); }
+    finally { setApplyingRec(null); }
+  };
+
+  const applyRecStock = async (rec: any) => {
+    setApplyingRec(rec.id + "_stock");
+    try {
+      const data = rec.data as any;
+      if (!product) return;
+      const updates: any = {};
+      if (data?.suggested_stock_status) {
+        updates.stock_status = data.suggested_stock_status;
+        if (data.suggested_stock_status === "onbackorder") {
+          const mode = data.suggested_backorder_mode ?? backorderMode;
+          updates.backorders_allowed = mode === "yes" || mode === "notify";
+        }
+      }
+      if (data?.suggested_stock_quantity !== undefined) updates.stock_quantity = data.suggested_stock_quantity;
+      if (Object.keys(updates).length === 0) { toast.error("Ingen lagerforslag"); return; }
+      const { error } = await supabase.from("master_products").update(updates).eq("id", product.id);
+      if (error) throw error;
+      await supabase.from("product_recommendations").update({ resolved_at: new Date().toISOString(), is_dismissed: true }).eq("id", rec.id);
+      toast.success("Lager opdateret");
+      queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+      queryClient.invalidateQueries({ queryKey: ["product_recommendations", id] });
+    } catch (err: any) { toast.error(err?.message ?? "Fejl"); }
+    finally { setApplyingRec(null); }
+  };
+
+  const dismissRec = async (recId: string) => {
+    await supabase.from("product_recommendations").update({ is_dismissed: true }).eq("id", recId);
+    queryClient.invalidateQueries({ queryKey: ["product_recommendations", id] });
+  };
+
+
 
   // Use product-specific markup if set, otherwise global
   const effectiveMarkup = product?.custom_markup_percentage != null
