@@ -101,8 +101,7 @@ export default function SettingsPage() {
     setChangingPassword(false);
   };
 
-  const saveRoundingMode = async (val: string) => {
-    setRoundingMode(val);
+  const saveRoundingMode = async () => {
     setSavingRounding(true);
     try {
       const { data: existing } = await supabase
@@ -111,9 +110,9 @@ export default function SettingsPage() {
         .eq("scope", "price_rounding")
         .maybeSingle();
       if (existing) {
-        await supabase.from("price_settings").update({ scope_value: val }).eq("id", existing.id);
+        await supabase.from("price_settings").update({ scope_value: roundingMode }).eq("id", existing.id);
       } else {
-        await supabase.from("price_settings").insert({ scope: "price_rounding", scope_value: val, markup_percentage: 0, minimum_margin: 0 });
+        await supabase.from("price_settings").insert({ scope: "price_rounding", scope_value: roundingMode, markup_percentage: 0, minimum_margin: 0 });
       }
       toast({ title: "Prisafrundingsregel gemt" });
     } catch {
@@ -123,8 +122,7 @@ export default function SettingsPage() {
     }
   };
 
-  const saveBackorderMode = async (val: string) => {
-    setBackorderMode(val);
+  const saveBackorderMode = async () => {
     setSavingBackorder(true);
     try {
       const { data: existing } = await supabase
@@ -133,9 +131,9 @@ export default function SettingsPage() {
         .eq("scope", "default_backorder")
         .maybeSingle();
       if (existing) {
-        await supabase.from("price_settings").update({ scope_value: val }).eq("id", existing.id);
+        await supabase.from("price_settings").update({ scope_value: backorderMode }).eq("id", existing.id);
       } else {
-        await supabase.from("price_settings").insert({ scope: "default_backorder", scope_value: val, markup_percentage: 0, minimum_margin: 0 });
+        await supabase.from("price_settings").insert({ scope: "default_backorder", scope_value: backorderMode, markup_percentage: 0, minimum_margin: 0 });
       }
       toast({ title: "Restordre-indstilling gemt" });
     } catch {
