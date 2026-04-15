@@ -442,20 +442,51 @@ export default function ProductListPage() {
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5">
+        <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5 flex-wrap">
           <CheckSquare className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium">{selectedIds.size} valgt</span>
-          <div className="flex items-center gap-2 ml-2">
-            <Select onValueChange={(v) => bulkEnableStockSync(v)} disabled={bulkLoading}>
-              <SelectTrigger className="h-8 w-[200px] text-xs">
-                <SelectValue placeholder="Aktivér lager-sync med..." />
-              </SelectTrigger>
-              <SelectContent>
-                {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-2 ml-2 flex-wrap">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs" disabled={bulkLoading}>
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Aktivér lager-sync ({bulkSyncSupplierIds.length} valgt)
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-3" align="start">
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Vælg leverandører til sync</p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {suppliers.map((s) => (
+                      <div key={s.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`bulk-sync-${s.id}`}
+                          checked={bulkSyncSupplierIds.includes(s.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setBulkSyncSupplierIds((prev) => [...prev, s.id]);
+                            } else {
+                              setBulkSyncSupplierIds((prev) => prev.filter((id) => id !== s.id));
+                            }
+                          }}
+                        />
+                        <Label htmlFor={`bulk-sync-${s.id}`} className="cursor-pointer text-sm">{s.name}</Label>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Min. avance: 15% — leverandører under springes over automatisk</p>
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    disabled={bulkSyncSupplierIds.length === 0 || bulkLoading}
+                    onClick={() => bulkEnableStockSync(bulkSyncSupplierIds)}
+                  >
+                    {bulkLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                    Aktivér for {selectedIds.size} produkter
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={bulkDisableStockSync} disabled={bulkLoading}>
               Deaktivér sync
             </Button>
