@@ -535,7 +535,15 @@ export default function ProductListPage() {
                   const convRate = analytics?.conversion_rate ?? 0;
 
                   return (
-                    <tr key={product.id} className="border-b cursor-pointer transition-colors hover:bg-accent/50" onClick={() => navigate(`/products/${product.id}`)}>
+                    <tr key={product.id} className={`border-b cursor-pointer transition-colors hover:bg-accent/50 ${selectedIds.has(product.id) ? "bg-primary/5" : ""}`} onClick={() => navigate(`/products/${product.id}`)}>
+                      <td className="px-2 py-1.5 align-middle text-center">
+                        <Checkbox
+                          checked={selectedIds.has(product.id)}
+                          onCheckedChange={() => toggleSelect(product.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label="Vælg produkt"
+                        />
+                      </td>
                       <td className="px-2 py-1.5 align-middle">
                         {product.image_url ? (
                           <img src={product.image_url} alt="" className="h-7 w-7 rounded object-cover" />
