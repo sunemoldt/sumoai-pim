@@ -429,11 +429,48 @@ export default function ProductListPage() {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5">
+          <CheckSquare className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium">{selectedIds.size} valgt</span>
+          <div className="flex items-center gap-2 ml-2">
+            <Select onValueChange={(v) => bulkEnableStockSync(v)} disabled={bulkLoading}>
+              <SelectTrigger className="h-8 w-[200px] text-xs">
+                <SelectValue placeholder="Aktivér lager-sync med..." />
+              </SelectTrigger>
+              <SelectContent>
+                {suppliers.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={bulkDisableStockSync} disabled={bulkLoading}>
+              Deaktivér sync
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={bulkEnableBackorders} disabled={bulkLoading}>
+              Aktivér restordre
+            </Button>
+          </div>
+          <Button variant="ghost" size="sm" className="h-8 text-xs ml-auto" onClick={clearSelection}>
+            <X className="h-3 w-3 mr-1" /> Ryd valg
+          </Button>
+        </div>
+      )}
+
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full caption-bottom text-xs">
             <thead className="[&_tr]:border-b">
               <tr className="border-b bg-secondary/50">
+                <th className="h-9 px-2 text-center align-middle font-medium text-muted-foreground w-8">
+                  <Checkbox
+                    checked={sorted.length > 0 && selectedIds.size === sorted.length}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Vælg alle"
+                    className="mx-auto"
+                  />
+                </th>
                 <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground w-8"></th>
                 <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("title")}>
                   <span className="inline-flex items-center">Produkt<SortIcon field="title" /></span>
