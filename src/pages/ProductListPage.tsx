@@ -66,8 +66,99 @@ export default function ProductListPage() {
   const { data: analyticsMap } = useAllProductAnalytics();
   const { data: recommendations = [] } = useProductRecommendations();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  // Fetch duplicate EANs from latest WooCommerce import log
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const toggleSelect = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === sorted.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sorted.map(p => p.id)));
+    }
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const bulkEnableStockSync = async (supplierId: string) => {
+    setBulkLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const { error } = await supabase
+        .from("master_products")
+        .update({
+          auto_stock_sync: true,
+          stock_sync_supplier_id: supplierId,
+          stock_sync_interval: "daily",
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", ids);
+      if (error) throw error;
+      toast.success(`Lager-sync aktiveret for ${ids.length} produkter`);
+      clearSelection();
+      queryClient.invalidateQueries({ queryKey: ["master_products"] });
+    } catch (err: any) {
+      toast.error("Fejl: " + (err.message ?? "Ukendt fejl"));
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const bulkDisableStockSync = async () => {
+    setBulkLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const { error } = await supabase
+        .from("master_products")
+        .update({
+          auto_stock_sync: false,
+          stock_sync_supplier_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", ids);
+      if (error) throw error;
+      toast.success(`Lager-sync deaktiveret for ${ids.length} produkter`);
+      clearSelection();
+      queryClient.invalidateQueries({ queryKey: ["master_products"] });
+    } catch (err: any) {
+      toast.error("Fejl: " + (err.message ?? "Ukendt fejl"));
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const bulkEnableBackorders = async () => {
+    setBulkLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const { error } = await supabase
+        .from("master_products")
+        .update({
+          backorders_allowed: true,
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", ids);
+      if (error) throw error;
+      toast.success(`Restordre aktiveret for ${ids.length} produkter`);
+      clearSelection();
+      queryClient.invalidateQueries({ queryKey: ["master_products"] });
+    } catch (err: any) {
+      toast.error("Fejl: " + (err.message ?? "Ukendt fejl"));
+    } finally {
+      setBulkLoading(false);
+    }
+  };
   const { data: duplicateEans } = useQuery({
     queryKey: ["duplicate_eans"],
     queryFn: async () => {
