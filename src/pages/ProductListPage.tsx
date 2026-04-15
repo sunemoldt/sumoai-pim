@@ -94,29 +94,28 @@ export default function ProductListPage() {
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  const bulkEnableStockSync = async (supplierId: string) => {
+  const bulkEnableStockSync = async (supplierIds: string[]) => {
     setBulkLoading(true);
     try {
-      const ids = Array.from(selectedIds);
-      // For each product, add the supplier to the sync list if not already there
       const selectedProducts = sorted.filter(p => selectedIds.has(p.id));
       for (const prod of selectedProducts) {
         const existing = ((prod as any).stock_sync_supplier_ids as string[] | null) ?? [];
-        const newIds = existing.includes(supplierId) ? existing : [...existing, supplierId];
+        const merged = [...new Set([...existing, ...supplierIds])];
         await supabase
           .from("master_products")
           .update({
             auto_stock_sync: true,
-            stock_sync_supplier_ids: newIds,
-            stock_sync_supplier_id: newIds[0] || null,
+            stock_sync_supplier_ids: merged,
+            stock_sync_supplier_id: merged[0] || null,
             stock_sync_interval: "daily",
             min_sync_margin: 15,
             updated_at: new Date().toISOString(),
           } as any)
           .eq("id", prod.id);
       }
-      toast.success(`Lager-sync aktiveret for ${ids.length} produkter med min. 15% avance`);
+      toast.success(`Lager-sync aktiveret for ${selectedProducts.length} produkter med ${supplierIds.length} leverandør(er)`);
       clearSelection();
+      setBulkSyncSupplierIds([]);
       queryClient.invalidateQueries({ queryKey: ["master_products"] });
     } catch (err: any) {
       toast.error("Fejl: " + (err.message ?? "Ukendt fejl"));
