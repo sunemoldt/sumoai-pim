@@ -181,8 +181,10 @@ export default function ProductDetailPage() {
         .from("master_products")
         .update({
           auto_stock_sync: autoStockSync,
-          stock_sync_supplier_id: stockSyncSupplierId || null,
+          stock_sync_supplier_ids: stockSyncSupplierIds,
+          stock_sync_supplier_id: stockSyncSupplierIds[0] || null,
           stock_sync_interval: stockSyncInterval,
+          min_sync_margin: parseFloat(minSyncMargin) || 15,
         } as any)
         .eq("id", product.id);
       if (error) throw error;
