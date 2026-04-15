@@ -1,16 +1,18 @@
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState } from "react";
 import { useMasterProducts, useSuppliers, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp } from "lucide-react";
+import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 
 type StockFilter = "all" | "instock" | "outofstock" | "backorder";
 type MarginFilter = "all" | "low" | "medium" | "good";
@@ -64,8 +66,99 @@ export default function ProductListPage() {
   const { data: analyticsMap } = useAllProductAnalytics();
   const { data: recommendations = [] } = useProductRecommendations();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  // Fetch duplicate EANs from latest WooCommerce import log
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  const toggleSelect = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === sorted.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sorted.map(p => p.id)));
+    }
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const bulkEnableStockSync = async (supplierId: string) => {
+    setBulkLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const { error } = await supabase
+        .from("master_products")
+        .update({
+          auto_stock_sync: true,
+          stock_sync_supplier_id: supplierId,
+          stock_sync_interval: "daily",
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", ids);
+      if (error) throw error;
+      toast.success(`Lager-sync aktiveret for ${ids.length} produkter`);
+      clearSelection();
+      queryClient.invalidateQueries({ queryKey: ["master_products"] });
+    } catch (err: any) {
+      toast.error("Fejl: " + (err.message ?? "Ukendt fejl"));
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const bulkDisableStockSync = async () => {
+    setBulkLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const { error } = await supabase
+        .from("master_products")
+        .update({
+          auto_stock_sync: false,
+          stock_sync_supplier_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", ids);
+      if (error) throw error;
+      toast.success(`Lager-sync deaktiveret for ${ids.length} produkter`);
+      clearSelection();
+      queryClient.invalidateQueries({ queryKey: ["master_products"] });
+    } catch (err: any) {
+      toast.error("Fejl: " + (err.message ?? "Ukendt fejl"));
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const bulkEnableBackorders = async () => {
+    setBulkLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const { error } = await supabase
+        .from("master_products")
+        .update({
+          backorders_allowed: true,
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", ids);
+      if (error) throw error;
+      toast.success(`Restordre aktiveret for ${ids.length} produkter`);
+      clearSelection();
+      queryClient.invalidateQueries({ queryKey: ["master_products"] });
+    } catch (err: any) {
+      toast.error("Fejl: " + (err.message ?? "Ukendt fejl"));
+    } finally {
+      setBulkLoading(false);
+    }
+  };
   const { data: duplicateEans } = useQuery({
     queryKey: ["duplicate_eans"],
     queryFn: async () => {
@@ -336,11 +429,48 @@ export default function ProductListPage() {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5">
+          <CheckSquare className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium">{selectedIds.size} valgt</span>
+          <div className="flex items-center gap-2 ml-2">
+            <Select onValueChange={(v) => bulkEnableStockSync(v)} disabled={bulkLoading}>
+              <SelectTrigger className="h-8 w-[200px] text-xs">
+                <SelectValue placeholder="Aktivér lager-sync med..." />
+              </SelectTrigger>
+              <SelectContent>
+                {suppliers.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={bulkDisableStockSync} disabled={bulkLoading}>
+              Deaktivér sync
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={bulkEnableBackorders} disabled={bulkLoading}>
+              Aktivér restordre
+            </Button>
+          </div>
+          <Button variant="ghost" size="sm" className="h-8 text-xs ml-auto" onClick={clearSelection}>
+            <X className="h-3 w-3 mr-1" /> Ryd valg
+          </Button>
+        </div>
+      )}
+
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full caption-bottom text-xs">
             <thead className="[&_tr]:border-b">
               <tr className="border-b bg-secondary/50">
+                <th className="h-9 px-2 text-center align-middle font-medium text-muted-foreground w-8">
+                  <Checkbox
+                    checked={sorted.length > 0 && selectedIds.size === sorted.length}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Vælg alle"
+                    className="mx-auto"
+                  />
+                </th>
                 <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground w-8"></th>
                 <th className="h-9 px-2 text-left align-middle font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("title")}>
                   <span className="inline-flex items-center">Produkt<SortIcon field="title" /></span>
@@ -382,11 +512,11 @@ export default function ProductListPage() {
             <tbody className="[&_tr:last-child]:border-0">
               {isLoading ? (
                 <tr className="border-b">
-                  <td colSpan={14} className="py-8 text-center text-muted-foreground">Indlæser...</td>
+                  <td colSpan={15} className="py-8 text-center text-muted-foreground">Indlæser...</td>
                 </tr>
               ) : sorted.length === 0 ? (
                 <tr className="border-b">
-                  <td colSpan={14} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={15} className="py-8 text-center text-muted-foreground">
                     <Package className="mx-auto mb-2 h-8 w-8 opacity-40" />
                     Ingen produkter fundet
                   </td>
@@ -405,7 +535,15 @@ export default function ProductListPage() {
                   const convRate = analytics?.conversion_rate ?? 0;
 
                   return (
-                    <tr key={product.id} className="border-b cursor-pointer transition-colors hover:bg-accent/50" onClick={() => navigate(`/products/${product.id}`)}>
+                    <tr key={product.id} className={`border-b cursor-pointer transition-colors hover:bg-accent/50 ${selectedIds.has(product.id) ? "bg-primary/5" : ""}`} onClick={() => navigate(`/products/${product.id}`)}>
+                      <td className="px-2 py-1.5 align-middle text-center">
+                        <Checkbox
+                          checked={selectedIds.has(product.id)}
+                          onCheckedChange={() => toggleSelect(product.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label="Vælg produkt"
+                        />
+                      </td>
                       <td className="px-2 py-1.5 align-middle">
                         {product.image_url ? (
                           <img src={product.image_url} alt="" className="h-7 w-7 rounded object-cover" />
