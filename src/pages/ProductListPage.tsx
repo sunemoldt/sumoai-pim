@@ -131,8 +131,9 @@ export default function ProductListPage() {
         .update({
           auto_stock_sync: false,
           stock_sync_supplier_id: null,
+          stock_sync_supplier_ids: [],
           updated_at: new Date().toISOString(),
-        })
+        } as any)
         .in("id", ids);
       if (error) throw error;
       toast.success(`Lager-sync deaktiveret for ${ids.length} produkter`);
