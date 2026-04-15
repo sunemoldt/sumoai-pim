@@ -7,11 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare } from "lucide-react";
+import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 type StockFilter = "all" | "instock" | "outofstock" | "backorder";
@@ -71,6 +73,7 @@ export default function ProductListPage() {
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkSyncSupplierIds, setBulkSyncSupplierIds] = useState<string[]>([]);
 
   const toggleSelect = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -91,29 +94,28 @@ export default function ProductListPage() {
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  const bulkEnableStockSync = async (supplierId: string) => {
+  const bulkEnableStockSync = async (supplierIds: string[]) => {
     setBulkLoading(true);
     try {
-      const ids = Array.from(selectedIds);
-      // For each product, add the supplier to the sync list if not already there
       const selectedProducts = sorted.filter(p => selectedIds.has(p.id));
       for (const prod of selectedProducts) {
         const existing = ((prod as any).stock_sync_supplier_ids as string[] | null) ?? [];
-        const newIds = existing.includes(supplierId) ? existing : [...existing, supplierId];
+        const merged = [...new Set([...existing, ...supplierIds])];
         await supabase
           .from("master_products")
           .update({
             auto_stock_sync: true,
-            stock_sync_supplier_ids: newIds,
-            stock_sync_supplier_id: newIds[0] || null,
+            stock_sync_supplier_ids: merged,
+            stock_sync_supplier_id: merged[0] || null,
             stock_sync_interval: "daily",
             min_sync_margin: 15,
             updated_at: new Date().toISOString(),
           } as any)
           .eq("id", prod.id);
       }
-      toast.success(`Lager-sync aktiveret for ${ids.length} produkter med min. 15% avance`);
+      toast.success(`Lager-sync aktiveret for ${selectedProducts.length} produkter med ${supplierIds.length} leverandør(er)`);
       clearSelection();
+      setBulkSyncSupplierIds([]);
       queryClient.invalidateQueries({ queryKey: ["master_products"] });
     } catch (err: any) {
       toast.error("Fejl: " + (err.message ?? "Ukendt fejl"));
@@ -439,20 +441,51 @@ export default function ProductListPage() {
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5">
+        <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5 flex-wrap">
           <CheckSquare className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium">{selectedIds.size} valgt</span>
-          <div className="flex items-center gap-2 ml-2">
-            <Select onValueChange={(v) => bulkEnableStockSync(v)} disabled={bulkLoading}>
-              <SelectTrigger className="h-8 w-[200px] text-xs">
-                <SelectValue placeholder="Aktivér lager-sync med..." />
-              </SelectTrigger>
-              <SelectContent>
-                {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-2 ml-2 flex-wrap">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs" disabled={bulkLoading}>
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Aktivér lager-sync ({bulkSyncSupplierIds.length} valgt)
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-3" align="start">
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Vælg leverandører til sync</p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {suppliers.map((s) => (
+                      <div key={s.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`bulk-sync-${s.id}`}
+                          checked={bulkSyncSupplierIds.includes(s.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setBulkSyncSupplierIds((prev) => [...prev, s.id]);
+                            } else {
+                              setBulkSyncSupplierIds((prev) => prev.filter((id) => id !== s.id));
+                            }
+                          }}
+                        />
+                        <Label htmlFor={`bulk-sync-${s.id}`} className="cursor-pointer text-sm">{s.name}</Label>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Min. avance: 15% — leverandører under springes over automatisk</p>
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    disabled={bulkSyncSupplierIds.length === 0 || bulkLoading}
+                    onClick={() => bulkEnableStockSync(bulkSyncSupplierIds)}
+                  >
+                    {bulkLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                    Aktivér for {selectedIds.size} produkter
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button variant="outline" size="sm" className="h-8 text-xs" onClick={bulkDisableStockSync} disabled={bulkLoading}>
               Deaktivér sync
             </Button>
