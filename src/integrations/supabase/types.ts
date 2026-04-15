@@ -101,6 +101,7 @@ export type Database = {
           long_description: string | null
           meta_description: string | null
           meta_title: string | null
+          min_sync_margin: number | null
           sale_price: number | null
           short_description: string | null
           sku: string | null
@@ -108,6 +109,7 @@ export type Database = {
           stock_status: string | null
           stock_sync_interval: string | null
           stock_sync_supplier_id: string | null
+          stock_sync_supplier_ids: string[] | null
           title: string
           updated_at: string
           webshop_parent_id: string | null
@@ -129,6 +131,7 @@ export type Database = {
           long_description?: string | null
           meta_description?: string | null
           meta_title?: string | null
+          min_sync_margin?: number | null
           sale_price?: number | null
           short_description?: string | null
           sku?: string | null
@@ -136,6 +139,7 @@ export type Database = {
           stock_status?: string | null
           stock_sync_interval?: string | null
           stock_sync_supplier_id?: string | null
+          stock_sync_supplier_ids?: string[] | null
           title: string
           updated_at?: string
           webshop_parent_id?: string | null
@@ -157,6 +161,7 @@ export type Database = {
           long_description?: string | null
           meta_description?: string | null
           meta_title?: string | null
+          min_sync_margin?: number | null
           sale_price?: number | null
           short_description?: string | null
           sku?: string | null
@@ -164,6 +169,7 @@ export type Database = {
           stock_status?: string | null
           stock_sync_interval?: string | null
           stock_sync_supplier_id?: string | null
+          stock_sync_supplier_ids?: string[] | null
           title?: string
           updated_at?: string
           webshop_parent_id?: string | null

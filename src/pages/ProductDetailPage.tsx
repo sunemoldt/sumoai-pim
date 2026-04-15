@@ -35,8 +35,9 @@ export default function ProductDetailPage() {
   const [pushBackorders, setPushBackorders] = useState<string>("");
   const [pushInitialized, setPushInitialized] = useState(false);
   const [autoStockSync, setAutoStockSync] = useState(false);
-  const [stockSyncSupplierId, setStockSyncSupplierId] = useState<string>("");
+  const [stockSyncSupplierIds, setStockSyncSupplierIds] = useState<string[]>([]);
   const [stockSyncInterval, setStockSyncInterval] = useState("daily");
+  const [minSyncMargin, setMinSyncMargin] = useState<string>("15");
   const [savingSync, setSavingSync] = useState(false);
   const [syncInitialized, setSyncInitialized] = useState(false);
   const [applyingRec, setApplyingRec] = useState<string | null>(null);
@@ -164,8 +165,11 @@ export default function ProductDetailPage() {
   // Initialize stock sync fields
   if (product && !syncInitialized) {
     setAutoStockSync((product as any).auto_stock_sync ?? false);
-    setStockSyncSupplierId((product as any).stock_sync_supplier_id ?? "");
+    const ids = (product as any).stock_sync_supplier_ids as string[] | null;
+    const legacyId = (product as any).stock_sync_supplier_id as string | null;
+    setStockSyncSupplierIds(ids && ids.length > 0 ? ids : legacyId ? [legacyId] : []);
     setStockSyncInterval((product as any).stock_sync_interval ?? "daily");
+    setMinSyncMargin(String((product as any).min_sync_margin ?? 15));
     setSyncInitialized(true);
   }
 
@@ -177,8 +181,10 @@ export default function ProductDetailPage() {
         .from("master_products")
         .update({
           auto_stock_sync: autoStockSync,
-          stock_sync_supplier_id: stockSyncSupplierId || null,
+          stock_sync_supplier_ids: stockSyncSupplierIds,
+          stock_sync_supplier_id: stockSyncSupplierIds[0] || null,
           stock_sync_interval: stockSyncInterval,
+          min_sync_margin: parseFloat(minSyncMargin) || 15,
         } as any)
         .eq("id", product.id);
       if (error) throw error;
@@ -655,34 +661,60 @@ export default function ProductDetailPage() {
               </div>
 
               {autoStockSync && (
-                <div className="grid gap-4 sm:grid-cols-2 max-w-lg pl-7">
+                <div className="space-y-4 pl-7 max-w-lg">
                   <div className="space-y-2">
-                    <Label>Leverandør</Label>
-                    <Select value={stockSyncSupplierId} onValueChange={setStockSyncSupplierId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Vælg leverandør" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {product.supplier_products.map((sp) => (
-                          <SelectItem key={sp.supplier_id} value={sp.supplier_id}>
-                            {sp.suppliers?.name ?? "Ukendt"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>Leverandører til sync</Label>
+                    <div className="space-y-2 rounded-md border border-border p-3">
+                      {product.supplier_products.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Ingen leverandører tilknyttet</p>
+                      ) : (
+                        product.supplier_products.map((sp) => (
+                          <div key={sp.supplier_id} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`sync-${sp.supplier_id}`}
+                              checked={stockSyncSupplierIds.includes(sp.supplier_id)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setStockSyncSupplierIds((prev) => [...prev, sp.supplier_id]);
+                                } else {
+                                  setStockSyncSupplierIds((prev) => prev.filter((id) => id !== sp.supplier_id));
+                                }
+                              }}
+                            />
+                            <Label htmlFor={`sync-${sp.supplier_id}`} className="cursor-pointer text-sm">
+                              {sp.suppliers?.name ?? "Ukendt"}
+                            </Label>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Interval</Label>
-                    <Select value={stockSyncInterval} onValueChange={setStockSyncInterval}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="hourly">Hver time</SelectItem>
-                        <SelectItem value="daily">Dagligt</SelectItem>
-                        <SelectItem value="weekly">Ugentligt</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Interval</Label>
+                      <Select value={stockSyncInterval} onValueChange={setStockSyncInterval}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="hourly">Hver time</SelectItem>
+                          <SelectItem value="daily">Dagligt</SelectItem>
+                          <SelectItem value="weekly">Ugentligt</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Min. avance for sync (%)</Label>
+                      <Input
+                        type="number"
+                        value={minSyncMargin}
+                        onChange={(e) => setMinSyncMargin(e.target.value)}
+                        placeholder="15"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Leverandører med lavere avance end dette springes over
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}

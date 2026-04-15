@@ -95,17 +95,24 @@ export default function ProductListPage() {
     setBulkLoading(true);
     try {
       const ids = Array.from(selectedIds);
-      const { error } = await supabase
-        .from("master_products")
-        .update({
-          auto_stock_sync: true,
-          stock_sync_supplier_id: supplierId,
-          stock_sync_interval: "daily",
-          updated_at: new Date().toISOString(),
-        })
-        .in("id", ids);
-      if (error) throw error;
-      toast.success(`Lager-sync aktiveret for ${ids.length} produkter`);
+      // For each product, add the supplier to the sync list if not already there
+      const selectedProducts = sorted.filter(p => selectedIds.has(p.id));
+      for (const prod of selectedProducts) {
+        const existing = ((prod as any).stock_sync_supplier_ids as string[] | null) ?? [];
+        const newIds = existing.includes(supplierId) ? existing : [...existing, supplierId];
+        await supabase
+          .from("master_products")
+          .update({
+            auto_stock_sync: true,
+            stock_sync_supplier_ids: newIds,
+            stock_sync_supplier_id: newIds[0] || null,
+            stock_sync_interval: "daily",
+            min_sync_margin: 15,
+            updated_at: new Date().toISOString(),
+          } as any)
+          .eq("id", prod.id);
+      }
+      toast.success(`Lager-sync aktiveret for ${ids.length} produkter med min. 15% avance`);
       clearSelection();
       queryClient.invalidateQueries({ queryKey: ["master_products"] });
     } catch (err: any) {
@@ -124,8 +131,9 @@ export default function ProductListPage() {
         .update({
           auto_stock_sync: false,
           stock_sync_supplier_id: null,
+          stock_sync_supplier_ids: [],
           updated_at: new Date().toISOString(),
-        })
+        } as any)
         .in("id", ids);
       if (error) throw error;
       toast.success(`Lager-sync deaktiveret for ${ids.length} produkter`);
