@@ -165,8 +165,11 @@ export default function ProductDetailPage() {
   // Initialize stock sync fields
   if (product && !syncInitialized) {
     setAutoStockSync((product as any).auto_stock_sync ?? false);
-    setStockSyncSupplierId((product as any).stock_sync_supplier_id ?? "");
+    const ids = (product as any).stock_sync_supplier_ids as string[] | null;
+    const legacyId = (product as any).stock_sync_supplier_id as string | null;
+    setStockSyncSupplierIds(ids && ids.length > 0 ? ids : legacyId ? [legacyId] : []);
     setStockSyncInterval((product as any).stock_sync_interval ?? "daily");
+    setMinSyncMargin(String((product as any).min_sync_margin ?? 15));
     setSyncInitialized(true);
   }
 
