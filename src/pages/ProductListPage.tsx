@@ -516,7 +516,7 @@ export default function ProductListPage() {
                 </tr>
               ) : sorted.length === 0 ? (
                 <tr className="border-b">
-                  <td colSpan={14} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={15} className="py-8 text-center text-muted-foreground">
                     <Package className="mx-auto mb-2 h-8 w-8 opacity-40" />
                     Ingen produkter fundet
                   </td>
