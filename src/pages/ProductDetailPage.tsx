@@ -35,8 +35,9 @@ export default function ProductDetailPage() {
   const [pushBackorders, setPushBackorders] = useState<string>("");
   const [pushInitialized, setPushInitialized] = useState(false);
   const [autoStockSync, setAutoStockSync] = useState(false);
-  const [stockSyncSupplierId, setStockSyncSupplierId] = useState<string>("");
+  const [stockSyncSupplierIds, setStockSyncSupplierIds] = useState<string[]>([]);
   const [stockSyncInterval, setStockSyncInterval] = useState("daily");
+  const [minSyncMargin, setMinSyncMargin] = useState<string>("15");
   const [savingSync, setSavingSync] = useState(false);
   const [syncInitialized, setSyncInitialized] = useState(false);
   const [applyingRec, setApplyingRec] = useState<string | null>(null);
