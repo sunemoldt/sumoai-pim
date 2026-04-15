@@ -73,6 +73,7 @@ export default function ProductListPage() {
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkSyncSupplierIds, setBulkSyncSupplierIds] = useState<string[]>([]);
 
   const toggleSelect = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
