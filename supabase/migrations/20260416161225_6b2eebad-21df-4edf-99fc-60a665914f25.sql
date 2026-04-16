@@ -1,0 +1,2 @@
+ALTER TABLE public.price_settings DROP CONSTRAINT price_settings_scope_check;
+ALTER TABLE public.price_settings ADD CONSTRAINT price_settings_scope_check CHECK (scope = ANY (ARRAY['global', 'brand', 'product', 'wc_schedule']));
