@@ -131,6 +131,31 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Validate URL scheme to prevent SSRF
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(feed_url);
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid URL" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+      return new Response(JSON.stringify({ error: "Only http/https URLs are allowed" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    // Block internal/private IP ranges
+    const hostname = parsedUrl.hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.startsWith("10.") || hostname.startsWith("192.168.") || hostname.startsWith("172.") || hostname === "169.254.169.254" || hostname.endsWith(".internal") || hostname.endsWith(".local")) {
+      return new Response(JSON.stringify({ error: "Internal URLs are not allowed" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const res = await fetch(feed_url);
     const text = await res.text();
 
