@@ -16,7 +16,12 @@ Deno.serve(async (req) => {
 
   // Auth check
   const authHeader = req.headers.get("authorization");
-  if (authHeader && !authHeader.includes(SUPABASE_SERVICE_ROLE_KEY)) {
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  if (!authHeader.includes(SUPABASE_SERVICE_ROLE_KEY)) {
     const anonClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
       global: { headers: { Authorization: authHeader } },
     });
