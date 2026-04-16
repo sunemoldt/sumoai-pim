@@ -15,8 +15,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import ManualSupplierPriceDialog from "@/components/ManualSupplierPriceDialog";
 
 export default function ProductDetailPage() {
+  const [manualPriceOpen, setManualPriceOpen] = useState(false);
+  const [manualEditSupplierId, setManualEditSupplierId] = useState<string | undefined>();
+  const [manualInitialPrice, setManualInitialPrice] = useState<number | undefined>();
+  const [manualInitialStock, setManualInitialStock] = useState<number | null | undefined>();
+  const [manualInitialInStock, setManualInitialInStock] = useState<boolean | undefined>();
+  const [manualInitialSku, setManualInitialSku] = useState<string | null | undefined>();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: product, isLoading } = useMasterProduct(id!);
