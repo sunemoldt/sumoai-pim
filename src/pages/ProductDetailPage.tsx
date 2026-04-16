@@ -15,8 +15,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import ManualSupplierPriceDialog from "@/components/ManualSupplierPriceDialog";
 
 export default function ProductDetailPage() {
+  const [manualPriceOpen, setManualPriceOpen] = useState(false);
+  const [manualEditSupplierId, setManualEditSupplierId] = useState<string | undefined>();
+  const [manualInitialPrice, setManualInitialPrice] = useState<number | undefined>();
+  const [manualInitialStock, setManualInitialStock] = useState<number | null | undefined>();
+  const [manualInitialInStock, setManualInitialInStock] = useState<boolean | undefined>();
+  const [manualInitialSku, setManualInitialSku] = useState<string | null | undefined>();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: product, isLoading } = useMasterProduct(id!);
@@ -584,8 +591,23 @@ export default function ProductDetailPage() {
 
         <TabsContent value="suppliers" className="space-y-4 mt-4">
           <Card className="shadow-sm">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base font-medium">Leverandøroversigt</CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setManualEditSupplierId(undefined);
+                  setManualInitialPrice(undefined);
+                  setManualInitialStock(undefined);
+                  setManualInitialInStock(true);
+                  setManualInitialSku(undefined);
+                  setManualPriceOpen(true);
+                }}
+              >
+                <Package className="h-4 w-4 mr-1.5" />
+                Tilføj manuel indkøbspris
+              </Button>
             </CardHeader>
             <CardContent>
               {product.supplier_products.length === 0 ? (
@@ -600,6 +622,7 @@ export default function ProductDetailPage() {
                       <TableHead className="text-right">Lager</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Sidst opdateret</TableHead>
+                      <TableHead className="text-right">Handling</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -607,12 +630,16 @@ export default function ProductDetailPage() {
                       .sort((a, b) => a.purchase_price - b.purchase_price)
                       .map((sp) => {
                         const isCheapest = cheapest?.id === sp.id;
+                        const isManual = (sp.suppliers as any)?.feed_type === "manual";
                         return (
                           <TableRow key={sp.id} className={isCheapest ? "bg-success/5" : ""}>
                             <TableCell className="font-medium text-foreground">
                               {sp.suppliers?.name ?? "Ukendt"}
                               {isCheapest && (
                                 <Badge className="ml-2 bg-success/10 text-success border-0 text-xs">Billigst</Badge>
+                              )}
+                              {isManual && (
+                                <Badge variant="outline" className="ml-2 text-xs">Manuel</Badge>
                               )}
                             </TableCell>
                             <TableCell className="text-muted-foreground font-mono text-xs">{sp.supplier_sku ?? "—"}</TableCell>
@@ -632,6 +659,26 @@ export default function ProductDetailPage() {
                             <TableCell className="text-muted-foreground text-xs">
                               {new Date(sp.last_updated).toLocaleDateString("da-DK")}
                             </TableCell>
+                            <TableCell className="text-right">
+                              {isManual ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setManualEditSupplierId(sp.supplier_id);
+                                    setManualInitialPrice(sp.purchase_price);
+                                    setManualInitialStock(sp.stock_quantity);
+                                    setManualInitialInStock(sp.in_stock);
+                                    setManualInitialSku(sp.supplier_sku);
+                                    setManualPriceOpen(true);
+                                  }}
+                                >
+                                  Rediger
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
                           </TableRow>
                         );
                       })}
@@ -640,6 +687,20 @@ export default function ProductDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          <ManualSupplierPriceDialog
+            open={manualPriceOpen}
+            onOpenChange={setManualPriceOpen}
+            masterProductId={product.id}
+            existingBySupplier={Object.fromEntries(
+              product.supplier_products.map((sp) => [sp.supplier_id, sp.id])
+            )}
+            editSupplierId={manualEditSupplierId}
+            initialPrice={manualInitialPrice}
+            initialStockQty={manualInitialStock}
+            initialInStock={manualInitialInStock}
+            initialSku={manualInitialSku}
+          />
 
           {/* Auto stock sync */}
           <Card className="shadow-sm">
