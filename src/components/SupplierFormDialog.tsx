@@ -35,6 +35,12 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
   const [apiKey, setApiKey] = useState("");
   const [apiLanguage, setApiLanguage] = useState("da");
 
+  // FTP-specific fields
+  const [ftpHost, setFtpHost] = useState("");
+  const [ftpUser, setFtpUser] = useState("");
+  const [ftpPass, setFtpPass] = useState("");
+  const [ftpPath, setFtpPath] = useState("");
+
   useEffect(() => {
     if (supplier) {
       setName(supplier.name);
