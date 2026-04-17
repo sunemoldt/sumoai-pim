@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -109,7 +109,7 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Kolonne-mapping: {supplier.name}</DialogTitle>
-          <p className="text-sm text-muted-foreground">Hent kolonner fra feedet og map dem til systemfelter.</p>
+          <DialogDescription>Hent kolonner fra feedet og map dem til systemfelter.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
