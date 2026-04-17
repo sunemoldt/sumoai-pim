@@ -134,6 +134,12 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
             </div>
           )}
 
+          {loading === false && feedColumns.length === 0 && supplier.feed_type === "ftp" && (
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              FTP-forbindelsen virker, men filen kunne ikke findes på serveren med den angivne sti. Tjek filnavnet/stien hos leverandøren.
+            </div>
+          )}
+
           <div className="space-y-3 border rounded-md p-4">
             <p className="text-sm font-medium text-foreground">Map feedkolonner → systemfelter</p>
             {SYSTEM_FIELDS.map((field) => (
