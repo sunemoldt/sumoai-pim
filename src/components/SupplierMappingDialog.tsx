@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -30,6 +30,7 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [attemptedFetch, setAttemptedFetch] = useState(false);
   const [feedColumns, setFeedColumns] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [delimiter, setDelimiter] = useState(";");
@@ -52,6 +53,7 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
       return;
     }
     setLoading(true);
+    setAttemptedFetch(true);
     try {
       const { data, error } = await supabase.functions.invoke("supplier-feed-preview", {
         body: {
@@ -67,8 +69,11 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
         toast.success(`${data.columns.length} kolonner fundet`);
       } else if (data?.error) {
         throw new Error(data.error);
+      } else {
+        throw new Error("Kunne ikke hente kolonner");
       }
     } catch (err: any) {
+      setFeedColumns([]);
       toast.error(err?.message || "Kunne ikke hente kolonner");
     } finally {
       setLoading(false);
@@ -107,6 +112,7 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Kolonne-mapping: {supplier.name}</DialogTitle>
+          <DialogDescription>Hent kolonner fra feedet og map dem til systemfelter.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
@@ -127,6 +133,12 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
               {feedColumns.map((c) => (
                 <Badge key={c} variant="secondary" className="text-xs">{c}</Badge>
               ))}
+            </div>
+          )}
+
+          {attemptedFetch && loading === false && feedColumns.length === 0 && supplier.feed_type === "ftp" && (
+            <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              FTP-login virker, men serveren eksponerer ikke den angivne fil. Bekræft det præcise filnavn eller den præcise mappe hos leverandøren, og prøv igen.
             </div>
           )}
 
