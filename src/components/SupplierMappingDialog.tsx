@@ -138,7 +138,7 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
 
           {attemptedFetch && loading === false && feedColumns.length === 0 && supplier.feed_type === "ftp" && (
             <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-              FTP-forbindelsen virker, men filen kunne ikke findes på serveren med den angivne sti. Tjek filnavnet/stien hos leverandøren.
+              FTP-login virker, men serveren eksponerer ikke den angivne fil. Bekræft det præcise filnavn eller den præcise mappe hos leverandøren.
             </div>
           )}
 
