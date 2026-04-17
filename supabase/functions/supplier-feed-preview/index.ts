@@ -124,6 +124,65 @@ Deno.serve(async (req) => {
       });
     }
 
+    // FTP preview: load credentials from supplier and try HTTPS/HTTP, then real FTP
+    if (feed_type === "ftp") {
+      if (!supplier_id) {
+        return new Response(JSON.stringify({ error: "supplier_id is required for ftp feeds" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const adminClient = createClient(supabaseUrl, serviceRoleKey);
+      const { data: supplier, error: supErr } = await adminClient
+        .from("suppliers").select("column_mapping").eq("id", supplier_id).single();
+      if (supErr || !supplier) throw new Error("Supplier not found");
+
+      const m = (supplier.column_mapping ?? {}) as Record<string, string>;
+      const host = m._ftp_host?.trim();
+      const userFtp = m._ftp_user?.trim() || "anonymous";
+      const passFtp = m._ftp_pass?.trim() || "";
+      const path = m._ftp_path?.trim();
+      if (!host || !path) throw new Error("FTP host og filsti er påkrævet");
+      const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+      let text = "";
+      let fetched = false;
+      for (const scheme of ["https", "http"]) {
+        try {
+          const url = userFtp && passFtp
+            ? `${scheme}://${encodeURIComponent(userFtp)}:${encodeURIComponent(passFtp)}@${host}${cleanPath}`
+            : `${scheme}://${host}${cleanPath}`;
+          const r = await fetch(url, { redirect: "follow" });
+          if (r.ok) { text = await r.text(); fetched = true; break; }
+        } catch { /* try next */ }
+      }
+      if (!fetched) {
+        text = await downloadViaFtpPreview(host, userFtp, passFtp, cleanPath);
+      }
+
+      // Only need first ~64KB for header parsing
+      const sample = text.slice(0, 65536);
+      let columns: string[] = [];
+      if (sample.trimStart().startsWith("<")) {
+        const tagMatches = sample.match(/<([a-zA-Z_][a-zA-Z0-9_.-]*)[^/]*>/g);
+        if (tagMatches) {
+          const tags = new Set<string>();
+          for (const mm of tagMatches) {
+            const name = mm.replace(/<([a-zA-Z_][a-zA-Z0-9_.-]*)[^>]*>/, "$1");
+            tags.add(name);
+          }
+          columns = [...tags].slice(0, 50);
+        }
+      } else {
+        const firstLine = sample.split(/\r?\n/)[0];
+        if (firstLine) {
+          columns = firstLine.split(delimiter).map((c) => c.trim().replace(/^["']|["']$/g, ""));
+        }
+      }
+      return new Response(JSON.stringify({ columns }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!feed_url) {
       return new Response(JSON.stringify({ error: "feed_url is required" }), {
         status: 400,
