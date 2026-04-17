@@ -54,6 +54,10 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setApiCompanyId(cm._api_company_id ?? "");
       setApiKey(cm._api_key ?? "");
       setApiLanguage(cm._api_language ?? "da");
+      setFtpHost(cm._ftp_host ?? "");
+      setFtpUser(cm._ftp_user ?? "");
+      setFtpPass(cm._ftp_pass ?? "");
+      setFtpPath(cm._ftp_path ?? "");
     } else {
       setName("");
       setFeedType("csv");
@@ -65,6 +69,10 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setApiCompanyId("");
       setApiKey("");
       setApiLanguage("da");
+      setFtpHost("");
+      setFtpUser("");
+      setFtpPass("");
+      setFtpPath("");
     }
   }, [supplier, open]);
 
