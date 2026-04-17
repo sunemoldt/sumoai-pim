@@ -5,6 +5,68 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/** Minimal FTP client (passive mode) for preview. */
+async function downloadViaFtpPreview(host: string, user: string, pass: string, path: string): Promise<string> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const conn = await Deno.connect({ hostname: host, port: 21 });
+
+  async function readResponse(): Promise<string> {
+    const buf = new Uint8Array(4096);
+    let result = "";
+    while (true) {
+      const n = await conn.read(buf);
+      if (n === null) break;
+      result += decoder.decode(buf.subarray(0, n));
+      if (/\r\n$/.test(result)) break;
+      if (result.length > 100000) break;
+    }
+    return result;
+  }
+  async function send(cmd: string): Promise<string> {
+    await conn.write(encoder.encode(cmd + "\r\n"));
+    return await readResponse();
+  }
+
+  try {
+    await readResponse();
+    let resp = await send(`USER ${user}`);
+    if (/^3\d\d/.test(resp)) resp = await send(`PASS ${pass}`);
+    if (!/^2\d\d/.test(resp)) throw new Error(`FTP login failed: ${resp.trim()}`);
+    await send("TYPE I");
+    const pasvResp = await send("PASV");
+    const m = pasvResp.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+    if (!m) throw new Error(`PASV parse failed: ${pasvResp.trim()}`);
+    const dataHost = `${m[1]}.${m[2]}.${m[3]}.${m[4]}`;
+    const dataPort = parseInt(m[5], 10) * 256 + parseInt(m[6], 10);
+
+    const dataConn = await Deno.connect({ hostname: dataHost, port: dataPort });
+    const retrResp = await send(`RETR ${path}`);
+    if (!/^1\d\d/.test(retrResp)) {
+      try { dataConn.close(); } catch { /* noop */ }
+      throw new Error(`RETR failed: ${retrResp.trim()}`);
+    }
+    const chunks: Uint8Array[] = [];
+    const dbuf = new Uint8Array(65536);
+    let total = 0;
+    while (true) {
+      const n = await dataConn.read(dbuf);
+      if (n === null) break;
+      chunks.push(dbuf.slice(0, n));
+      total += n;
+      if (total > 200_000) break; // preview only needs header
+    }
+    dataConn.close();
+    try { await send("QUIT"); } catch { /* noop */ }
+    const merged = new Uint8Array(total);
+    let off = 0;
+    for (const c of chunks) { merged.set(c, off); off += c.length; }
+    return decoder.decode(merged);
+  } finally {
+    try { conn.close(); } catch { /* noop */ }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -119,6 +181,65 @@ Deno.serve(async (req) => {
         if (/<manufacturer/i.test(inner)) columns.push("manufacturer");
       }
 
+      return new Response(JSON.stringify({ columns }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // FTP preview: load credentials from supplier and try HTTPS/HTTP, then real FTP
+    if (feed_type === "ftp") {
+      if (!supplier_id) {
+        return new Response(JSON.stringify({ error: "supplier_id is required for ftp feeds" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const adminClient = createClient(supabaseUrl, serviceRoleKey);
+      const { data: supplier, error: supErr } = await adminClient
+        .from("suppliers").select("column_mapping").eq("id", supplier_id).single();
+      if (supErr || !supplier) throw new Error("Supplier not found");
+
+      const m = (supplier.column_mapping ?? {}) as Record<string, string>;
+      const host = m._ftp_host?.trim();
+      const userFtp = m._ftp_user?.trim() || "anonymous";
+      const passFtp = m._ftp_pass?.trim() || "";
+      const path = m._ftp_path?.trim();
+      if (!host || !path) throw new Error("FTP host og filsti er påkrævet");
+      const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+      let text = "";
+      let fetched = false;
+      for (const scheme of ["https", "http"]) {
+        try {
+          const url = userFtp && passFtp
+            ? `${scheme}://${encodeURIComponent(userFtp)}:${encodeURIComponent(passFtp)}@${host}${cleanPath}`
+            : `${scheme}://${host}${cleanPath}`;
+          const r = await fetch(url, { redirect: "follow" });
+          if (r.ok) { text = await r.text(); fetched = true; break; }
+        } catch { /* try next */ }
+      }
+      if (!fetched) {
+        text = await downloadViaFtpPreview(host, userFtp, passFtp, cleanPath);
+      }
+
+      // Only need first ~64KB for header parsing
+      const sample = text.slice(0, 65536);
+      let columns: string[] = [];
+      if (sample.trimStart().startsWith("<")) {
+        const tagMatches = sample.match(/<([a-zA-Z_][a-zA-Z0-9_.-]*)[^/]*>/g);
+        if (tagMatches) {
+          const tags = new Set<string>();
+          for (const mm of tagMatches) {
+            const name = mm.replace(/<([a-zA-Z_][a-zA-Z0-9_.-]*)[^>]*>/, "$1");
+            tags.add(name);
+          }
+          columns = [...tags].slice(0, 50);
+        }
+      } else {
+        const firstLine = sample.split(/\r?\n/)[0];
+        if (firstLine) {
+          columns = firstLine.split(delimiter).map((c) => c.trim().replace(/^["']|["']$/g, ""));
+        }
+      }
       return new Response(JSON.stringify({ columns }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

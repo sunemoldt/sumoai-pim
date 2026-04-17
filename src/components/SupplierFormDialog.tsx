@@ -35,6 +35,12 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
   const [apiKey, setApiKey] = useState("");
   const [apiLanguage, setApiLanguage] = useState("da");
 
+  // FTP-specific fields
+  const [ftpHost, setFtpHost] = useState("");
+  const [ftpUser, setFtpUser] = useState("");
+  const [ftpPass, setFtpPass] = useState("");
+  const [ftpPath, setFtpPath] = useState("");
+
   useEffect(() => {
     if (supplier) {
       setName(supplier.name);
@@ -48,6 +54,10 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setApiCompanyId(cm._api_company_id ?? "");
       setApiKey(cm._api_key ?? "");
       setApiLanguage(cm._api_language ?? "da");
+      setFtpHost(cm._ftp_host ?? "");
+      setFtpUser(cm._ftp_user ?? "");
+      setFtpPass(cm._ftp_pass ?? "");
+      setFtpPath(cm._ftp_path ?? "");
     } else {
       setName("");
       setFeedType("csv");
@@ -59,6 +69,10 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setApiCompanyId("");
       setApiKey("");
       setApiLanguage("da");
+      setFtpHost("");
+      setFtpUser("");
+      setFtpPass("");
+      setFtpPath("");
     }
   }, [supplier, open]);
 
@@ -99,12 +113,29 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
             _api_key: apiKey.trim(),
             _api_language: apiLanguage,
           }
+        : feedType === "ftp"
+        ? {
+            ...existingMapping,
+            _ftp_host: ftpHost.trim(),
+            _ftp_user: ftpUser.trim(),
+            _ftp_pass: ftpPass.trim(),
+            _ftp_path: ftpPath.trim(),
+          }
         : existingMapping;
+
+      const ftpFeedUrl = ftpHost.trim()
+        ? `ftp://${ftpHost.trim()}${ftpPath.trim().startsWith("/") ? "" : "/"}${ftpPath.trim()}`
+        : null;
 
       const row = {
         name: name.trim(),
         feed_type: feedType,
-        feed_url: feedType === "api" ? "https://api.aurdel.com/Prices/getPrice" : (feedUrl.trim() || null),
+        feed_url:
+          feedType === "api"
+            ? "https://api.aurdel.com/Prices/getPrice"
+            : feedType === "ftp"
+            ? ftpFeedUrl
+            : (feedUrl.trim() || null),
         feed_schedule: feedSchedule,
         is_active: isActive,
         column_mapping: columnMapping,
@@ -196,13 +227,36 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
             </div>
           )}
 
-          {feedType !== "manual" && feedType !== "api" && (
+          {feedType === "ftp" && (
+            <div className="space-y-3">
+              <div className="text-xs text-muted-foreground">FTP-indstillinger</div>
+              <div className="space-y-2">
+                <Label htmlFor="ftpHost">Host</Label>
+                <Input id="ftpHost" value={ftpHost} onChange={(e) => setFtpHost(e.target.value)} placeholder="f.eks. 212.18.29.164 eller ftp.server.dk" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ftpUser">Brugernavn</Label>
+                <Input id="ftpUser" value={ftpUser} onChange={(e) => setFtpUser(e.target.value)} placeholder="FTP-brugernavn" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ftpPass">Adgangskode</Label>
+                <Input id="ftpPass" type="password" value={ftpPass} onChange={(e) => setFtpPass(e.target.value)} placeholder="FTP-adgangskode" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ftpPath">Filsti</Label>
+                <Input id="ftpPath" value={ftpPath} onChange={(e) => setFtpPath(e.target.value)} placeholder="f.eks. /C06150-DK_COMTEK.csv" />
+                <div className="text-xs text-muted-foreground">Filen hentes via HTTPS/HTTP, hvis muligt — ellers via FTP.</div>
+              </div>
+            </div>
+          )}
+
+          {feedType !== "manual" && feedType !== "api" && feedType !== "ftp" && (
             <div className="space-y-2">
-              <Label>{feedType === "ftp" ? "FTP URL" : "Feed URL"}</Label>
+              <Label>Feed URL</Label>
               <Input
                 value={feedUrl}
                 onChange={(e) => setFeedUrl(e.target.value)}
-                placeholder={feedType === "ftp" ? "ftp://bruger:kode@server.dk/prisfil.csv" : "https://leverandor.dk/feed.csv"}
+                placeholder="https://leverandor.dk/feed.csv"
               />
               <div className="text-xs text-muted-foreground">eller upload en fil:</div>
               <label className="flex items-center gap-2 cursor-pointer">
