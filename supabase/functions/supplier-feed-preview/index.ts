@@ -5,6 +5,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function buildFtpPathCandidates(path: string, user: string): string[] {
+  const trimmed = path.trim();
+  const noLeadingSlash = trimmed.replace(/^\/+/, "");
+  const fileName = noLeadingSlash.split("/").filter(Boolean).pop() ?? noLeadingSlash;
+  const suffix = noLeadingSlash || fileName;
+  const userFolder = user.replace(/^aln/i, "");
+
+  return [...new Set([
+    trimmed,
+    noLeadingSlash,
+    fileName,
+    `/${fileName}`,
+    userFolder ? `${userFolder}/${fileName}` : "",
+    userFolder ? `/${userFolder}/${fileName}` : "",
+    user ? `${user}/${fileName}` : "",
+    user ? `/${user}/${fileName}` : "",
+    userFolder && suffix ? `${userFolder}/${suffix}` : "",
+    userFolder && suffix ? `/${userFolder}/${suffix}` : "",
+  ].filter(Boolean))];
+}
+
 /** Minimal FTP client (passive mode) for preview. */
 async function downloadViaFtpPreview(host: string, user: string, pass: string, path: string): Promise<string> {
   const decoder = new TextDecoder();
@@ -23,9 +44,19 @@ async function downloadViaFtpPreview(host: string, user: string, pass: string, p
     }
     return result;
   }
+
   async function send(cmd: string): Promise<string> {
     await conn.write(encoder.encode(cmd + "\r\n"));
     return await readResponse();
+  }
+
+  async function openPassiveDataConnection() {
+    const pasvResp = await send("PASV");
+    const m = pasvResp.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+    if (!m) throw new Error(`PASV parse failed: ${pasvResp.trim()}`);
+    const dataHost = `${m[1]}.${m[2]}.${m[3]}.${m[4]}`;
+    const dataPort = parseInt(m[5], 10) * 256 + parseInt(m[6], 10);
+    return Deno.connect({ hostname: dataHost, port: dataPort });
   }
 
   try {
@@ -34,46 +65,39 @@ async function downloadViaFtpPreview(host: string, user: string, pass: string, p
     if (/^3\d\d/.test(resp)) resp = await send(`PASS ${pass}`);
     if (!/^2\d\d/.test(resp)) throw new Error(`FTP login failed: ${resp.trim()}`);
     await send("TYPE I");
-    const pasvResp = await send("PASV");
-    const m = pasvResp.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
-    if (!m) throw new Error(`PASV parse failed: ${pasvResp.trim()}`);
-    const dataHost = `${m[1]}.${m[2]}.${m[3]}.${m[4]}`;
-    const dataPort = parseInt(m[5], 10) * 256 + parseInt(m[6], 10);
 
-    let dataConn = await Deno.connect({ hostname: dataHost, port: dataPort });
-    let retrResp = await send(`RETR ${path}`);
-    // Fallback: try without leading slash (relative to home dir)
-    if (!/^1\d\d/.test(retrResp) && path.startsWith("/")) {
-      try { dataConn.close(); } catch { /* noop */ }
-      const pasv2 = await send("PASV");
-      const m2 = pasv2.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
-      if (m2) {
-        const dh = `${m2[1]}.${m2[2]}.${m2[3]}.${m2[4]}`;
-        const dp = parseInt(m2[5], 10) * 256 + parseInt(m2[6], 10);
-        dataConn = await Deno.connect({ hostname: dh, port: dp });
-        retrResp = await send(`RETR ${path.replace(/^\/+/, "")}`);
+    const candidates = buildFtpPathCandidates(path, user);
+    let lastError = "";
+
+    for (const candidate of candidates) {
+      const dataConn = await openPassiveDataConnection();
+      const retrResp = await send(`RETR ${candidate}`);
+      if (!/^1\d\d/.test(retrResp)) {
+        lastError = retrResp.trim();
+        try { dataConn.close(); } catch { /* noop */ }
+        continue;
       }
+
+      const chunks: Uint8Array[] = [];
+      const dbuf = new Uint8Array(65536);
+      let total = 0;
+      while (true) {
+        const n = await dataConn.read(dbuf);
+        if (n === null) break;
+        chunks.push(dbuf.slice(0, n));
+        total += n;
+        if (total > 200_000) break;
+      }
+      dataConn.close();
+      await readResponse();
+      try { await send("QUIT"); } catch { /* noop */ }
+      const merged = new Uint8Array(total);
+      let off = 0;
+      for (const c of chunks) { merged.set(c, off); off += c.length; }
+      return decoder.decode(merged);
     }
-    if (!/^1\d\d/.test(retrResp)) {
-      try { dataConn.close(); } catch { /* noop */ }
-      throw new Error(`RETR failed: ${retrResp.trim()}`);
-    }
-    const chunks: Uint8Array[] = [];
-    const dbuf = new Uint8Array(65536);
-    let total = 0;
-    while (true) {
-      const n = await dataConn.read(dbuf);
-      if (n === null) break;
-      chunks.push(dbuf.slice(0, n));
-      total += n;
-      if (total > 200_000) break; // preview only needs header
-    }
-    dataConn.close();
-    try { await send("QUIT"); } catch { /* noop */ }
-    const merged = new Uint8Array(total);
-    let off = 0;
-    for (const c of chunks) { merged.set(c, off); off += c.length; }
-    return decoder.decode(merged);
+
+    throw new Error(`RETR failed: ${lastError || "file not found"}`);
   } finally {
     try { conn.close(); } catch { /* noop */ }
   }
