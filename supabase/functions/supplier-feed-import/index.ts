@@ -98,6 +98,72 @@ function parseAurdelStockXml(text: string): Map<string, string> {
   return stockMap;
 }
 
+/** Minimal FTP client (passive mode, binary download) using Deno TCP. */
+async function downloadViaFtp(host: string, user: string, pass: string, path: string): Promise<string> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+
+  const conn = await Deno.connect({ hostname: host, port: 21 });
+
+  async function readResponse(): Promise<string> {
+    const buf = new Uint8Array(4096);
+    let result = "";
+    while (true) {
+      const n = await conn.read(buf);
+      if (n === null) break;
+      result += decoder.decode(buf.subarray(0, n));
+      if (/\r\n$/.test(result)) break;
+      if (result.length > 100000) break;
+    }
+    return result;
+  }
+
+  async function send(cmd: string): Promise<string> {
+    await conn.write(encoder.encode(cmd + "\r\n"));
+    return await readResponse();
+  }
+
+  try {
+    await readResponse(); // banner
+    let resp = await send(`USER ${user}`);
+    if (/^3\d\d/.test(resp)) resp = await send(`PASS ${pass}`);
+    if (!/^2\d\d/.test(resp)) throw new Error(`FTP login failed: ${resp.trim()}`);
+
+    await send("TYPE I");
+    const pasvResp = await send("PASV");
+    const m = pasvResp.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+    if (!m) throw new Error(`PASV parse failed: ${pasvResp.trim()}`);
+    const dataHost = `${m[1]}.${m[2]}.${m[3]}.${m[4]}`;
+    const dataPort = parseInt(m[5], 10) * 256 + parseInt(m[6], 10);
+
+    const dataConn = await Deno.connect({ hostname: dataHost, port: dataPort });
+    const retrResp = await send(`RETR ${path}`);
+    if (!/^1\d\d/.test(retrResp)) {
+      try { dataConn.close(); } catch { /* noop */ }
+      throw new Error(`RETR failed: ${retrResp.trim()}`);
+    }
+
+    const chunks: Uint8Array[] = [];
+    const dbuf = new Uint8Array(65536);
+    while (true) {
+      const n = await dataConn.read(dbuf);
+      if (n === null) break;
+      chunks.push(dbuf.slice(0, n));
+    }
+    dataConn.close();
+    await readResponse();
+    try { await send("QUIT"); } catch { /* noop */ }
+
+    const total = chunks.reduce((a, c) => a + c.length, 0);
+    const merged = new Uint8Array(total);
+    let off = 0;
+    for (const c of chunks) { merged.set(c, off); off += c.length; }
+    return decoder.decode(merged);
+  } finally {
+    try { conn.close(); } catch { /* noop */ }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
