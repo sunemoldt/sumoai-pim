@@ -71,6 +71,7 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
         throw new Error("Kunne ikke hente kolonner");
       }
     } catch (err: any) {
+      setFeedColumns([]);
       toast.error(err?.message || "Kunne ikke hente kolonner");
     } finally {
       setLoading(false);
