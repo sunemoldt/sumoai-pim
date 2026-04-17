@@ -66,6 +66,8 @@ async function downloadViaFtpPreview(host: string, user: string, pass: string, p
     try { conn.close(); } catch { /* noop */ }
   }
 }
+
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
