@@ -33,6 +33,7 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
   const [attemptedFetch, setAttemptedFetch] = useState(false);
   const [feedColumns, setFeedColumns] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [delimiter, setDelimiter] = useState(";");
 
   // Load existing mapping
   useEffect(() => {
