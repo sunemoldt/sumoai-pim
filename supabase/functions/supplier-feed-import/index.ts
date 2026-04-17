@@ -136,8 +136,19 @@ async function downloadViaFtp(host: string, user: string, pass: string, path: st
     const dataHost = `${m[1]}.${m[2]}.${m[3]}.${m[4]}`;
     const dataPort = parseInt(m[5], 10) * 256 + parseInt(m[6], 10);
 
-    const dataConn = await Deno.connect({ hostname: dataHost, port: dataPort });
-    const retrResp = await send(`RETR ${path}`);
+    let dataConn = await Deno.connect({ hostname: dataHost, port: dataPort });
+    let retrResp = await send(`RETR ${path}`);
+    if (!/^1\d\d/.test(retrResp) && path.startsWith("/")) {
+      try { dataConn.close(); } catch { /* noop */ }
+      const pasv2 = await send("PASV");
+      const m2 = pasv2.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+      if (m2) {
+        const dh = `${m2[1]}.${m2[2]}.${m2[3]}.${m2[4]}`;
+        const dp = parseInt(m2[5], 10) * 256 + parseInt(m2[6], 10);
+        dataConn = await Deno.connect({ hostname: dh, port: dp });
+        retrResp = await send(`RETR ${path.replace(/^\/+/, "")}`);
+      }
+    }
     if (!/^1\d\d/.test(retrResp)) {
       try { dataConn.close(); } catch { /* noop */ }
       throw new Error(`RETR failed: ${retrResp.trim()}`);
