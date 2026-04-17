@@ -204,24 +204,65 @@ Deno.serve(async (req) => {
       mapping.stock_quantity = "stock_quantity";
       mapping.sku = "supplier_sku";
     } else {
-      if (!supplier.feed_url) throw new Error("No feed URL configured");
+      const mappingAny = mapping as Record<string, string>;
+      const isFtp = supplier.feed_type === "ftp";
+
+      if (!isFtp) {
+        if (!supplier.feed_url) throw new Error("No feed URL configured");
+      }
       if (!mapping.ean) throw new Error("EAN mapping not configured");
       if (!mapping.purchase_price) throw new Error("Purchase price mapping not configured");
 
       const delimiter = mapping._delimiter || ";";
 
-      const res = await fetch(supplier.feed_url);
-      if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
-      const text = await res.text();
+      let text: string;
+
+      if (isFtp) {
+        const host = mappingAny._ftp_host?.trim();
+        const user = mappingAny._ftp_user?.trim();
+        const pass = mappingAny._ftp_pass?.trim();
+        const path = mappingAny._ftp_path?.trim();
+        if (!host || !path) throw new Error("FTP host og filsti er påkrævet");
+
+        const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+        // Try HTTP(S) first (many FTP servers also serve files via HTTP)
+        let fetched = false;
+        for (const scheme of ["https", "http"]) {
+          try {
+            const url = user && pass
+              ? `${scheme}://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}${cleanPath}`
+              : `${scheme}://${host}${cleanPath}`;
+            console.log(`Trying ${scheme} download from ${host}${cleanPath}`);
+            const res = await fetch(url, { redirect: "follow" });
+            if (res.ok) {
+              text = await res.text();
+              fetched = true;
+              break;
+            }
+            console.log(`${scheme} returned ${res.status}`);
+          } catch (e) {
+            console.log(`${scheme} failed:`, (e as Error).message);
+          }
+        }
+
+        if (!fetched) {
+          // Fallback: real FTP over TCP (passive mode)
+          text = await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath);
+        }
+
+        text = text!;
+      } else {
+        const res = await fetch(supplier.feed_url!);
+        if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
+        text = await res.text();
+      }
 
       if (supplier.feed_type === "xml") {
         feedRows = parseXml(text);
       } else {
         feedRows = parseCsv(text, delimiter);
       }
-
-      if (!mapping.ean) throw new Error("EAN mapping not configured");
-      if (!mapping.purchase_price) throw new Error("Purchase price mapping not configured");
     }
 
     if (feedRows.length === 0) throw new Error("No rows found in feed");
