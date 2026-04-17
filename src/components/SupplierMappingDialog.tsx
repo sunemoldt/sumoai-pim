@@ -67,6 +67,8 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
         toast.success(`${data.columns.length} kolonner fundet`);
       } else if (data?.error) {
         throw new Error(data.error);
+      } else {
+        throw new Error("Kunne ikke hente kolonner");
       }
     } catch (err: any) {
       toast.error(err?.message || "Kunne ikke hente kolonner");
@@ -107,6 +109,7 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Kolonne-mapping: {supplier.name}</DialogTitle>
+          <p className="text-sm text-muted-foreground">Hent kolonner fra feedet og map dem til systemfelter.</p>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
