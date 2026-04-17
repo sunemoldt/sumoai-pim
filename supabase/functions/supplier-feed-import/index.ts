@@ -485,8 +485,11 @@ Deno.serve(async (req) => {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("Supplier feed import error:", msg);
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500,
+    return new Response(JSON.stringify({
+      error: msg,
+      success: false,
+    }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
