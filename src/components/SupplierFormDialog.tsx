@@ -113,12 +113,29 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
             _api_key: apiKey.trim(),
             _api_language: apiLanguage,
           }
+        : feedType === "ftp"
+        ? {
+            ...existingMapping,
+            _ftp_host: ftpHost.trim(),
+            _ftp_user: ftpUser.trim(),
+            _ftp_pass: ftpPass.trim(),
+            _ftp_path: ftpPath.trim(),
+          }
         : existingMapping;
+
+      const ftpFeedUrl = ftpHost.trim()
+        ? `ftp://${ftpHost.trim()}${ftpPath.trim().startsWith("/") ? "" : "/"}${ftpPath.trim()}`
+        : null;
 
       const row = {
         name: name.trim(),
         feed_type: feedType,
-        feed_url: feedType === "api" ? "https://api.aurdel.com/Prices/getPrice" : (feedUrl.trim() || null),
+        feed_url:
+          feedType === "api"
+            ? "https://api.aurdel.com/Prices/getPrice"
+            : feedType === "ftp"
+            ? ftpFeedUrl
+            : (feedUrl.trim() || null),
         feed_schedule: feedSchedule,
         is_active: isActive,
         column_mapping: columnMapping,
