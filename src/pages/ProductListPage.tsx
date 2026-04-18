@@ -324,12 +324,32 @@ export default function ProductListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Produkter</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Master produktliste – {sorted.length} af {products.length} produkter
           </p>
+        </div>
+        <div className="flex items-center gap-1 rounded-md border border-border bg-card p-0.5">
+          <Button
+            variant={view === "grid" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-8 px-2"
+            onClick={() => setParam("view", "grid")}
+            title="Kort-visning"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={view === "list" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-8 px-2"
+            onClick={() => setParam("view", "list")}
+            title="Liste-visning"
+          >
+            <List className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
