@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2 } from "lucide-react";
+import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2, LayoutGrid, List } from "lucide-react";
+import ProductCard from "@/components/ProductCard";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -39,11 +40,18 @@ export default function ProductListPage() {
   const duplicateFilter = (searchParams.get("duplicate") ?? "all") as DuplicateFilter;
   const sortField = (searchParams.get("sort") ?? "title") as SortField;
   const sortDir = (searchParams.get("dir") ?? "asc") as SortDir;
+  const view = (searchParams.get("view") ?? "grid") as "grid" | "list";
 
   const setParam = useCallback((key: string, value: string) => {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
-      if (value === "all" || value === "" || (key === "sort" && value === "title") || (key === "dir" && value === "asc")) {
+      const isDefault =
+        value === "all" ||
+        value === "" ||
+        (key === "sort" && value === "title") ||
+        (key === "dir" && value === "asc") ||
+        (key === "view" && value === "grid");
+      if (isDefault) {
         next.delete(key);
       } else {
         next.set(key, value);
@@ -322,12 +330,32 @@ export default function ProductListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Produkter</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Master produktliste – {sorted.length} af {products.length} produkter
           </p>
+        </div>
+        <div className="flex items-center gap-1 rounded-md border border-border bg-card p-0.5">
+          <Button
+            variant={view === "grid" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-8 px-2"
+            onClick={() => setParam("view", "grid")}
+            title="Kort-visning"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={view === "list" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-8 px-2"
+            onClick={() => setParam("view", "list")}
+            title="Liste-visning"
+          >
+            <List className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -499,6 +527,33 @@ export default function ProductListPage() {
         </div>
       )}
 
+      {view === "grid" ? (
+        isLoading ? (
+          <div className="py-20 text-center text-muted-foreground">Indlæser...</div>
+        ) : sorted.length === 0 ? (
+          <div className="py-20 text-center text-muted-foreground">
+            <Package className="mx-auto mb-2 h-8 w-8 opacity-40" />
+            Ingen produkter fundet
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {sorted.map((product) => {
+              const a = analyticsMap?.get(product.id);
+              return (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  globalMarkup={globalMarkup}
+                  pageViews={a?.page_views ?? 0}
+                  convRate={a?.conversion_rate ?? 0}
+                  selected={selectedIds.has(product.id)}
+                  onToggleSelect={(id) => toggleSelect(id)}
+                />
+              );
+            })}
+          </div>
+        )
+      ) : (
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full caption-bottom text-xs">
@@ -652,6 +707,7 @@ export default function ProductListPage() {
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

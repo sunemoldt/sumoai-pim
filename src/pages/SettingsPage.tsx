@@ -13,6 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import WebhookFormDialog from "@/components/WebhookFormDialog";
+import LanguageSettingsCard from "@/components/LanguageSettingsCard";
 
 export default function SettingsPage() {
   const { data: priceSettings = [] } = usePriceSettings();
@@ -401,6 +402,8 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <LanguageSettingsCard />
 
       <WebhookFormDialog
         open={formOpen}
