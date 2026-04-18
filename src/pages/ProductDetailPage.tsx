@@ -400,6 +400,7 @@ export default function ProductDetailPage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="seo">SEO</TabsTrigger>
+          <TabsTrigger value="translations">Oversættelser</TabsTrigger>
           <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
 
