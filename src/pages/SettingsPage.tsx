@@ -402,6 +402,8 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <LanguageSettingsCard />
+
       <WebhookFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
