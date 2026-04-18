@@ -1308,6 +1308,10 @@ export default function ProductDetailPage() {
           )}
         </TabsContent>
 
+        <TabsContent value="translations" className="space-y-4 mt-4">
+          <ProductTranslationsTab product={product} />
+        </TabsContent>
+
         <TabsContent value="changelog" className="space-y-4 mt-4">
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
