@@ -707,6 +707,7 @@ export default function ProductListPage() {
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }
