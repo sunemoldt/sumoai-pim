@@ -45,7 +45,13 @@ export default function ProductListPage() {
   const setParam = useCallback((key: string, value: string) => {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
-      if (value === "all" || value === "" || (key === "sort" && value === "title") || (key === "dir" && value === "asc")) {
+      const isDefault =
+        value === "all" ||
+        value === "" ||
+        (key === "sort" && value === "title") ||
+        (key === "dir" && value === "asc") ||
+        (key === "view" && value === "grid");
+      if (isDefault) {
         next.delete(key);
       } else {
         next.set(key, value);
