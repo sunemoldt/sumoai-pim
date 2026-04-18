@@ -391,6 +391,62 @@ export type Database = {
           },
         ]
       }
+      product_translations: {
+        Row: {
+          attributes: Json | null
+          created_at: string
+          id: string
+          language_code: string
+          long_description: string | null
+          master_product_id: string
+          meta_description: string | null
+          meta_title: string | null
+          short_description: string | null
+          source: string
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          attributes?: Json | null
+          created_at?: string
+          id?: string
+          language_code: string
+          long_description?: string | null
+          master_product_id: string
+          meta_description?: string | null
+          meta_title?: string | null
+          short_description?: string | null
+          source?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attributes?: Json | null
+          created_at?: string
+          id?: string
+          language_code?: string
+          long_description?: string | null
+          master_product_id?: string
+          meta_description?: string | null
+          meta_title?: string | null
+          short_description?: string | null
+          source?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_translations_master_product_id_fkey"
+            columns: ["master_product_id"]
+            isOneToOne: false
+            referencedRelation: "master_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_products: {
         Row: {
           created_at: string
