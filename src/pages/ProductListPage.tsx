@@ -40,6 +40,7 @@ export default function ProductListPage() {
   const duplicateFilter = (searchParams.get("duplicate") ?? "all") as DuplicateFilter;
   const sortField = (searchParams.get("sort") ?? "title") as SortField;
   const sortDir = (searchParams.get("dir") ?? "asc") as SortDir;
+  const view = (searchParams.get("view") ?? "grid") as "grid" | "list";
 
   const setParam = useCallback((key: string, value: string) => {
     setSearchParams(prev => {
