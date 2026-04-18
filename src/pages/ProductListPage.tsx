@@ -527,6 +527,33 @@ export default function ProductListPage() {
         </div>
       )}
 
+      {view === "grid" ? (
+        isLoading ? (
+          <div className="py-20 text-center text-muted-foreground">Indlæser...</div>
+        ) : sorted.length === 0 ? (
+          <div className="py-20 text-center text-muted-foreground">
+            <Package className="mx-auto mb-2 h-8 w-8 opacity-40" />
+            Ingen produkter fundet
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {sorted.map((product) => {
+              const a = analyticsMap?.get(product.id);
+              return (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  globalMarkup={globalMarkup}
+                  pageViews={a?.page_views ?? 0}
+                  convRate={a?.conversion_rate ?? 0}
+                  selected={selectedIds.has(product.id)}
+                  onToggleSelect={(id) => toggleSelect(id)}
+                />
+              );
+            })}
+          </div>
+        )
+      ) : (
       <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full caption-bottom text-xs">
