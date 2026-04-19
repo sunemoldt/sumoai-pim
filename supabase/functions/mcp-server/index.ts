@@ -467,6 +467,69 @@ mcpServer.tool("get_recommendations", {
   },
 });
 
+mcpServer.tool("list_translations", {
+  description: "List all translations for a product across all languages. Returns title, short_description, long_description, meta_title, meta_description, attributes, status, source per language.",
+  inputSchema: { type: "object" as const, properties: { product_id: { type: "string" as const }, language_code: { type: "string" as const } }, required: ["product_id"] },
+  handler: async ({ product_id, language_code }: any) => {
+    let q = supabase.from("product_translations").select("*").eq("master_product_id", product_id);
+    if (language_code) q = q.eq("language_code", language_code);
+    const { data, error } = await q;
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
+});
+
+mcpServer.tool("upsert_translation", {
+  description: "Create or update a product translation for a specific language. Fields: title, short_description, long_description, meta_title, meta_description, attributes (object), status (draft|published).",
+  inputSchema: {
+    type: "object" as const,
+    properties: {
+      product_id: { type: "string" as const },
+      language_code: { type: "string" as const },
+      title: { type: "string" as const },
+      short_description: { type: "string" as const },
+      long_description: { type: "string" as const },
+      meta_title: { type: "string" as const },
+      meta_description: { type: "string" as const },
+      attributes: { type: "object" as const },
+      status: { type: "string" as const },
+      source: { type: "string" as const },
+    },
+    required: ["product_id", "language_code"],
+  },
+  handler: async (args: any) => {
+    const payload: any = {
+      master_product_id: args.product_id,
+      language_code: args.language_code,
+      source: args.source ?? "mcp",
+    };
+    for (const k of ["title", "short_description", "long_description", "meta_title", "meta_description", "attributes", "status"]) {
+      if (args[k] !== undefined) payload[k] = args[k];
+    }
+    const { data, error } = await supabase
+      .from("product_translations")
+      .upsert(payload, { onConflict: "master_product_id,language_code" })
+      .select("*")
+      .single();
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
+});
+
+mcpServer.tool("get_supported_languages", {
+  description: "Get the list of language codes the PIM is configured to support (in addition to primary language 'da').",
+  inputSchema: { type: "object" as const, properties: {} },
+  handler: async () => {
+    const { data, error } = await supabase
+      .from("analytics_settings")
+      .select("setting_value")
+      .eq("setting_key", "supported_languages")
+      .maybeSingle();
+    if (error) return { content: [{ type: "text" as const, text: `Error: ${error.message}` }] };
+    let langs: string[] = [];
+    try { langs = data?.setting_value ? JSON.parse(data.setting_value) : []; } catch {}
+    return { content: [{ type: "text" as const, text: JSON.stringify({ primary: "da", supported: langs }, null, 2) }] };
+  },
+});
+
 mcpServer.tool("sync_analytics", {
   description: "Trigger analytics sync.",
   inputSchema: { type: "object" as const, properties: {} },
