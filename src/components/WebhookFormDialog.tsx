@@ -19,6 +19,8 @@ const EVENT_OPTIONS = [
   { value: "product.updated", label: "Produkt opdateret" },
   { value: "product.price_changed", label: "Pris ændret" },
   { value: "product.stock_changed", label: "Lager ændret" },
+  { value: "product.translation_updated", label: "Oversættelse opdateret" },
+  { value: "product.translation_published", label: "Oversættelse publiceret" },
   { value: "supplier.synced", label: "Leverandør synkroniseret" },
   { value: "import.completed", label: "Import fuldført" },
   { value: "high_traffic_no_sales", label: "⚠️ Høj trafik, nul salg" },
