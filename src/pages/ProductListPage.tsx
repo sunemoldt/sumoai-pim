@@ -408,6 +408,7 @@ export default function ProductListPage() {
           >
             <List className="h-4 w-4" />
           </Button>
+          </div>
         </div>
       </div>
 
