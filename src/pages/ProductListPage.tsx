@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2, LayoutGrid, List } from "lucide-react";
+import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2, LayoutGrid, List, Download } from "lucide-react";
+import { downloadDineroCsv } from "@/lib/dinero-export";
 import ProductCard from "@/components/ProductCard";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -337,7 +338,58 @@ export default function ProductListPage() {
             Master produktliste – {sorted.length} af {products.length} produkter
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-md border border-border bg-card p-0.5">
+        <div className="flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <Download className="h-3.5 w-3.5" />
+                Eksportér til Dinero
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-3" align="end">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium">Dinero CSV-eksport</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Eksporterer i Dinero-skabelonens format (semikolon, UTF-8). Pris konverteres til ekskl. moms.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      const list = sorted.filter(p => selectedIds.size === 0 || selectedIds.has(p.id));
+                      if (list.length === 0) {
+                        toast.error("Ingen produkter at eksportere");
+                        return;
+                      }
+                      downloadDineroCsv(list, `dinero-produkter-${new Date().toISOString().slice(0,10)}.csv`);
+                      toast.success(`${list.length} produkter eksporteret`);
+                    }}
+                  >
+                    {selectedIds.size > 0 ? `Eksportér ${selectedIds.size} valgte` : `Eksportér ${sorted.length} synlige`}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      if (products.length === 0) {
+                        toast.error("Ingen produkter at eksportere");
+                        return;
+                      }
+                      downloadDineroCsv(products, `dinero-produkter-alle-${new Date().toISOString().slice(0,10)}.csv`);
+                      toast.success(`${products.length} produkter eksporteret`);
+                    }}
+                  >
+                    Eksportér alle ({products.length})
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <div className="flex items-center gap-1 rounded-md border border-border bg-card p-0.5">
           <Button
             variant={view === "grid" ? "secondary" : "ghost"}
             size="sm"
