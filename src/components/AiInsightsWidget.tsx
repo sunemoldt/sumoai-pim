@@ -192,8 +192,9 @@ export default function AiInsightsWidget() {
     }
   };
 
-  // Group by title
+  // Group by title — also collect concrete suggested values for display
   const grouped = recommendations.reduce((acc, rec) => {
+    const data = rec.data as any;
     const existing = acc.find(r => r.title === rec.title);
     if (existing) {
       if (rec.master_products) {
@@ -202,21 +203,52 @@ export default function AiInsightsWidget() {
           existing.products.push(mp);
         }
       }
-      // Collect suggested values
-      const data = rec.data as any;
-      if (data?.suggested_price) existing.hasPriceSuggestion = true;
-      if (data?.suggested_stock_status || data?.suggested_stock_quantity !== undefined) existing.hasStockSuggestion = true;
+      if (data?.suggested_price) {
+        existing.hasPriceSuggestion = true;
+        if (existing.suggestedPrice == null) existing.suggestedPrice = data.suggested_price;
+      }
+      if (data?.suggested_stock_status || data?.suggested_stock_quantity !== undefined) {
+        existing.hasStockSuggestion = true;
+        if (!existing.suggestedStockStatus && data?.suggested_stock_status) existing.suggestedStockStatus = data.suggested_stock_status;
+        if (existing.suggestedStockQuantity == null && data?.suggested_stock_quantity !== undefined) existing.suggestedStockQuantity = data.suggested_stock_quantity;
+        if (!existing.suggestedBackorderMode && data?.suggested_backorder_mode) existing.suggestedBackorderMode = data.suggested_backorder_mode;
+      }
     } else {
-      const data = rec.data as any;
       acc.push({
         ...rec,
         products: rec.master_products ? [rec.master_products as any] : [],
         hasPriceSuggestion: !!data?.suggested_price,
         hasStockSuggestion: !!(data?.suggested_stock_status || data?.suggested_stock_quantity !== undefined),
+        suggestedPrice: data?.suggested_price ?? null,
+        suggestedStockStatus: data?.suggested_stock_status ?? null,
+        suggestedStockQuantity: data?.suggested_stock_quantity ?? null,
+        suggestedBackorderMode: data?.suggested_backorder_mode ?? null,
       });
     }
     return acc;
-  }, [] as (typeof recommendations[0] & { products: any[]; hasPriceSuggestion: boolean; hasStockSuggestion: boolean })[]);
+  }, [] as (typeof recommendations[0] & {
+    products: any[];
+    hasPriceSuggestion: boolean;
+    hasStockSuggestion: boolean;
+    suggestedPrice: number | null;
+    suggestedStockStatus: string | null;
+    suggestedStockQuantity: number | null;
+    suggestedBackorderMode: string | null;
+  })[]);
+
+  const stockStatusLabel = (s: string | null) => {
+    if (!s) return "";
+    if (s === "instock") return "På lager";
+    if (s === "outofstock") return "Ikke på lager";
+    if (s === "onbackorder") return "Restordre";
+    return s;
+  };
+  const backorderModeLabel = (m: string | null) => {
+    if (m === "yes") return "tillad restordre";
+    if (m === "notify") return "tillad og notificér kunde";
+    if (m === "no") return "ingen restordre";
+    return null;
+  };
 
   return (
     <Card className="shadow-sm border-primary/20">
