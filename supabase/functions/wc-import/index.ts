@@ -136,6 +136,7 @@ Deno.serve(async (req) => {
         title: p.name,
         brand: p.brands?.[0]?.name || p.tags?.[0]?.name || null,
         category: p.categories?.[0]?.name || null,
+        categories: Array.isArray(p.categories) ? p.categories.map((c: any) => c?.name).filter(Boolean) : [],
         image_url: p.images?.[0]?.src || null,
         short_description: p.short_description || null,
         long_description: p.description || null,
