@@ -92,6 +92,7 @@ export type Database = {
           auto_stock_sync: boolean
           backorders_allowed: boolean | null
           brand: string | null
+          categories: string[]
           category: string | null
           created_at: string
           custom_markup_percentage: number | null
@@ -122,6 +123,7 @@ export type Database = {
           auto_stock_sync?: boolean
           backorders_allowed?: boolean | null
           brand?: string | null
+          categories?: string[]
           category?: string | null
           created_at?: string
           custom_markup_percentage?: number | null
@@ -152,6 +154,7 @@ export type Database = {
           auto_stock_sync?: boolean
           backorders_allowed?: boolean | null
           brand?: string | null
+          categories?: string[]
           category?: string | null
           created_at?: string
           custom_markup_percentage?: number | null
