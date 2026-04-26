@@ -315,9 +315,38 @@ export default function AiInsightsWidget() {
                       </p>
                     )}
 
+                    {/* Concrete suggestion preview */}
+                    {(rec.hasPriceSuggestion || rec.hasStockSuggestion) && (
+                      <div className="mt-2 rounded-md border border-border/60 bg-background/60 px-2.5 py-1.5 text-xs">
+                        <span className="text-muted-foreground">Konkret forslag: </span>
+                        {rec.hasPriceSuggestion && rec.suggestedPrice != null && (
+                          <span className="font-semibold text-foreground">
+                            Sæt webshop-pris til {applyRounding(rec.suggestedPrice, roundingMode).toLocaleString("da-DK", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} kr
+                            {applyRounding(rec.suggestedPrice, roundingMode) !== rec.suggestedPrice && (
+                              <span className="font-normal text-muted-foreground"> (AI foreslog {rec.suggestedPrice} kr, justeret efter afrundingsregel)</span>
+                            )}
+                          </span>
+                        )}
+                        {rec.hasStockSuggestion && (
+                          <span className="font-semibold text-foreground">
+                            {rec.suggestedStockStatus && <>Sæt status til <span>{stockStatusLabel(rec.suggestedStockStatus)}</span></>}
+                            {rec.suggestedStockStatus === "onbackorder" && backorderModeLabel(rec.suggestedBackorderMode ?? backorderMode) && (
+                              <span className="font-normal text-muted-foreground"> ({backorderModeLabel(rec.suggestedBackorderMode ?? backorderMode)})</span>
+                            )}
+                            {rec.suggestedStockQuantity != null && (
+                              <>
+                                {rec.suggestedStockStatus ? ", " : ""}
+                                lagerantal: {rec.suggestedStockQuantity}
+                              </>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {/* Action buttons */}
                     <div className="flex items-center gap-2 mt-3">
-                      {(rec.recommendation_type === "pricing" || rec.recommendation_type === "margin") && rec.hasPriceSuggestion && (
+                      {(rec.recommendation_type === "pricing" || rec.recommendation_type === "margin") && rec.hasPriceSuggestion && rec.suggestedPrice != null && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -330,7 +359,7 @@ export default function AiInsightsWidget() {
                           ) : (
                             <Check className="h-3 w-3" />
                           )}
-                          Følg prisanbefaling
+                          Sæt pris til {applyRounding(rec.suggestedPrice, roundingMode).toLocaleString("da-DK", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} kr
                         </Button>
                       )}
                       {rec.recommendation_type === "stock" && rec.hasStockSuggestion && (
@@ -346,7 +375,11 @@ export default function AiInsightsWidget() {
                           ) : (
                             <Check className="h-3 w-3" />
                           )}
-                          Følg lageranbefaling
+                          {rec.suggestedStockStatus
+                            ? `Skift til ${stockStatusLabel(rec.suggestedStockStatus).toLowerCase()}`
+                            : rec.suggestedStockQuantity != null
+                              ? `Sæt lager til ${rec.suggestedStockQuantity}`
+                              : "Følg lageranbefaling"}
                         </Button>
                       )}
                     </div>
