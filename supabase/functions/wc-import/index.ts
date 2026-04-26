@@ -168,6 +168,7 @@ Deno.serve(async (req) => {
         title: attrStr ? `${v._parent_name} - ${attrStr}` : v._parent_name,
         brand: v._parent_brand,
         category: v._parent_categories?.[0]?.name || null,
+        categories: Array.isArray(v._parent_categories) ? v._parent_categories.map((c: any) => c?.name).filter(Boolean) : [],
         image_url: v.image?.src || v._parent_image || null,
         short_description: v.description || v._parent_short_description || null,
         long_description: v._parent_long_description || null,
