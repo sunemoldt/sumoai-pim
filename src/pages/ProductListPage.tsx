@@ -196,15 +196,23 @@ export default function ProductListPage() {
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
 
+  // Brands available given the current category selection (so brand list narrows when category is set, but not when brand itself changes)
   const brands = useMemo(() => {
-    const set = new Set(products.map((p) => p.brand).filter(Boolean) as string[]);
-    return Array.from(set).sort();
-  }, [products]);
+    const pool = categoryFilter === "all"
+      ? products
+      : products.filter((p) => p.category === categoryFilter);
+    const set = new Set(pool.map((p) => p.brand).filter(Boolean) as string[]);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "da"));
+  }, [products, categoryFilter]);
 
+  // Categories available given the current brand selection
   const categories = useMemo(() => {
-    const set = new Set(products.map((p) => p.category).filter(Boolean) as string[]);
-    return Array.from(set).sort();
-  }, [products]);
+    const pool = brandFilter === "all"
+      ? products
+      : products.filter((p) => p.brand === brandFilter);
+    const set = new Set(pool.map((p) => p.category).filter(Boolean) as string[]);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "da"));
+  }, [products, brandFilter]);
 
   const filtered = useMemo(() => {
     return products.filter((product) => {
