@@ -196,21 +196,29 @@ export default function ProductListPage() {
   const globalMarkup = priceSettings.find((s) => s.scope === "global")?.markup_percentage ?? 30;
 
 
+  // Helper: get all categories for a product (new categories[] field, fall back to single category)
+  const getProductCategories = (p: typeof products[number]): string[] => {
+    const arr = (p as any).categories;
+    if (Array.isArray(arr) && arr.length > 0) return arr.filter(Boolean) as string[];
+    return p.category ? [p.category] : [];
+  };
+
   // Brands available given the current category selection (so brand list narrows when category is set, but not when brand itself changes)
   const brands = useMemo(() => {
     const pool = categoryFilter === "all"
       ? products
-      : products.filter((p) => p.category === categoryFilter);
+      : products.filter((p) => getProductCategories(p).includes(categoryFilter));
     const set = new Set(pool.map((p) => p.brand).filter(Boolean) as string[]);
     return Array.from(set).sort((a, b) => a.localeCompare(b, "da"));
   }, [products, categoryFilter]);
 
-  // Categories available given the current brand selection
+  // Categories available given the current brand selection — includes ALL categories (incl. subcategories)
   const categories = useMemo(() => {
     const pool = brandFilter === "all"
       ? products
       : products.filter((p) => p.brand === brandFilter);
-    const set = new Set(pool.map((p) => p.category).filter(Boolean) as string[]);
+    const set = new Set<string>();
+    for (const p of pool) for (const c of getProductCategories(p)) set.add(c);
     return Array.from(set).sort((a, b) => a.localeCompare(b, "da"));
   }, [products, brandFilter]);
 
@@ -220,7 +228,7 @@ export default function ProductListPage() {
       if (stockFilter === "outofstock" && product.stock_status !== "outofstock") return false;
       if (stockFilter === "backorder" && !product.backorders_allowed) return false;
       if (brandFilter !== "all" && product.brand !== brandFilter) return false;
-      if (categoryFilter !== "all" && product.category !== categoryFilter) return false;
+      if (categoryFilter !== "all" && !getProductCategories(product).includes(categoryFilter)) return false;
       if (priceFilter === "has_price" && !product.webshop_price) return false;
       if (priceFilter === "no_price" && product.webshop_price) return false;
       if (priceFilter === "on_sale" && !product.sale_price) return false;
