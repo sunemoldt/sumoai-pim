@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
     for (const vp of variableProducts) {
       let vPage = 1;
       while (true) {
-        const url = `${baseUrl}/wp-json/wc/v3/products/${vp.id}/variations?per_page=${perPage}&page=${vPage}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
+        const url = `${baseUrl}/wp-json/wc/v3/products/${vp.id}/variations?per_page=${perPage}&page=${vPage}${modifiedAfterParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
         const res = await fetch(url);
         if (!res.ok) break;
         const vars = await res.json();
