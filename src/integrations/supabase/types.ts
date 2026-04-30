@@ -578,7 +578,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_change_log_daily: {
+        Args: { days?: number }
+        Returns: {
+          count: number
+          day: string
+          source: string
+        }[]
+      }
+      get_db_stats: { Args: never; Returns: Json }
     }
     Enums: {
       [_ in never]: never
