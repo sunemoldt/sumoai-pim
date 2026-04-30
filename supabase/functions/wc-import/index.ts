@@ -337,9 +337,19 @@ Deno.serve(async (req) => {
       }).eq("id", logId);
     }
 
+    // Persist last successful import timestamp for next incremental run
+    if (errors.length === 0) {
+      await supabase
+        .from("analytics_settings")
+        .update({ setting_value: importStartedAt, updated_at: new Date().toISOString() })
+        .eq("setting_key", "wc_last_import_at");
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
+        mode: modifiedAfter ? "incremental" : "full",
+        modified_after: modifiedAfter,
         total_fetched: allProducts.length + variations.length,
         imported,
         deduplicated: rows.length - dedupedRows.length,
