@@ -44,14 +44,39 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+  // Allow caller to force a full re-import (e.g. after schema change)
+  let forceFull = false;
   try {
+    if (req.method === "POST") {
+      const body = await req.clone().json().catch(() => ({}));
+      forceFull = body?.full === true;
+    }
+  } catch (_) { /* ignore */ }
+
+  try {
+    // Determine incremental cutoff
+    let modifiedAfter: string | null = null;
+    if (!forceFull) {
+      const { data: lastSetting } = await supabase
+        .from("analytics_settings")
+        .select("setting_value")
+        .eq("setting_key", "wc_last_import_at")
+        .maybeSingle();
+      const v = lastSetting?.setting_value?.trim();
+      if (v) modifiedAfter = v;
+    }
+    const importStartedAt = new Date().toISOString();
+
     let page = 1;
     let allProducts: any[] = [];
     const perPage = 100;
     const baseUrl = WC_STORE_URL.replace(/\/$/, "");
+    const modifiedAfterParam = modifiedAfter
+      ? `&modified_after=${encodeURIComponent(modifiedAfter)}&dates_are_gmt=true`
+      : "";
 
     while (true) {
-      const url = `${baseUrl}/wp-json/wc/v3/products?per_page=${perPage}&page=${page}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
+      const url = `${baseUrl}/wp-json/wc/v3/products?per_page=${perPage}&page=${page}${modifiedAfterParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
       const res = await fetch(url);
       if (!res.ok) {
         const body = await res.text();
@@ -70,7 +95,7 @@ Deno.serve(async (req) => {
     for (const vp of variableProducts) {
       let vPage = 1;
       while (true) {
-        const url = `${baseUrl}/wp-json/wc/v3/products/${vp.id}/variations?per_page=${perPage}&page=${vPage}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
+        const url = `${baseUrl}/wp-json/wc/v3/products/${vp.id}/variations?per_page=${perPage}&page=${vPage}${modifiedAfterParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
         const res = await fetch(url);
         if (!res.ok) break;
         const vars = await res.json();
@@ -312,9 +337,19 @@ Deno.serve(async (req) => {
       }).eq("id", logId);
     }
 
+    // Persist last successful import timestamp for next incremental run
+    if (errors.length === 0) {
+      await supabase
+        .from("analytics_settings")
+        .update({ setting_value: importStartedAt, updated_at: new Date().toISOString() })
+        .eq("setting_key", "wc_last_import_at");
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
+        mode: modifiedAfter ? "incremental" : "full",
+        modified_after: modifiedAfter,
         total_fetched: allProducts.length + variations.length,
         imported,
         deduplicated: rows.length - dedupedRows.length,
