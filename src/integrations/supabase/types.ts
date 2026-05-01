@@ -662,6 +662,14 @@ export type Database = {
         Args: { p_master_product_id: string }
         Returns: undefined
       }
+      recompute_stock_for_supplier: {
+        Args: { p_supplier_id: string }
+        Returns: number
+      }
+      set_bulk_supplier_import: {
+        Args: { enabled: boolean }
+        Returns: undefined
+      }
       set_change_source: { Args: { source: string }; Returns: undefined }
     }
     Enums: {
