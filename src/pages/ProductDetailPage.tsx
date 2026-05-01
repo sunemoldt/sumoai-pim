@@ -17,6 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import ManualSupplierPriceDialog from "@/components/ManualSupplierPriceDialog";
 import ProductTranslationsTab from "@/components/ProductTranslationsTab";
+import InlineEditField from "@/components/InlineEditField";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
@@ -408,71 +409,85 @@ export default function ProductDetailPage() {
         <TabsContent value="details" className="space-y-4 mt-4">
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-medium">Beskrivelser</CardTitle>
+              <CardTitle className="text-base font-medium">Grundoplysninger</CardTitle>
+              <p className="text-xs text-muted-foreground">Hover over et felt og klik på blyanten for at redigere. Alle ændringer logges automatisk.</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
+                <Label>Titel</Label>
+                <InlineEditField productId={product.id} field="title" value={product.title} />
+              </div>
+              <div className="space-y-2">
+                <Label>Billede-URL</Label>
+                <InlineEditField productId={product.id} field="image_url" value={product.image_url} />
+              </div>
+              <div className="space-y-2">
                 <Label>Kort beskrivelse</Label>
-                <div
-                  className="rounded-md border border-border bg-secondary/30 p-3 text-sm text-foreground min-h-[60px] prose prose-sm max-w-none overflow-hidden break-words"
-                  dangerouslySetInnerHTML={{ __html: (product as any).short_description || "<span class='text-muted-foreground'>Ingen kort beskrivelse</span>" }}
-                />
+                <InlineEditField productId={product.id} field="short_description" value={(product as any).short_description} type="html" placeholder="Ingen kort beskrivelse" />
               </div>
               <div className="space-y-2">
                 <Label>Lang beskrivelse</Label>
-                <div
-                  className="rounded-md border border-border bg-secondary/30 p-3 text-sm text-foreground min-h-[100px] prose prose-sm max-w-none overflow-hidden break-words"
-                  dangerouslySetInnerHTML={{ __html: (product as any).long_description || "<span class='text-muted-foreground'>Ingen lang beskrivelse</span>" }}
-                />
+                <InlineEditField productId={product.id} field="long_description" value={(product as any).long_description} type="html" placeholder="Ingen lang beskrivelse" />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
                   <Label className="text-muted-foreground text-xs">Brand</Label>
-                  <p className="text-sm text-foreground">{product.brand || "—"}</p>
+                  <InlineEditField productId={product.id} field="brand" value={product.brand} />
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Kategori</Label>
-                  <p className="text-sm text-foreground">{product.category || "—"}</p>
+                  <InlineEditField productId={product.id} field="category" value={product.category} />
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">SKU</Label>
-                  <p className="text-sm font-mono text-foreground">{(product as any).sku || "—"}</p>
+                  <InlineEditField productId={product.id} field="sku" value={(product as any).sku} />
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">EAN</Label>
-                  <p className="text-sm font-mono text-foreground">{product.ean}</p>
+                  <InlineEditField productId={product.id} field="ean" value={product.ean} />
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Lagerbeholdning</Label>
-                  <p className="text-sm font-mono text-foreground">
-                    {(product as any).stock_quantity !== null && (product as any).stock_quantity !== undefined
-                      ? (product as any).stock_quantity
-                      : "—"}
-                  </p>
+                  <InlineEditField productId={product.id} field="stock_quantity" value={(product as any).stock_quantity} type="number" />
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Lagerstatus</Label>
-                  <p className="text-sm text-foreground">
-                    {(product as any).stock_status === "instock" ? (
-                      <Badge variant="outline" className="text-success border-success/30">På lager</Badge>
-                    ) : (product as any).stock_status === "onbackorder" ? (
-                      <Badge variant="outline" className="text-warning border-warning/30">Restordre</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-destructive border-destructive/30">Udsolgt</Badge>
-                    )}
-                  </p>
+                  <InlineEditField
+                    productId={product.id}
+                    field="stock_status"
+                    value={(product as any).stock_status}
+                    type="select"
+                    options={[
+                      { value: "instock", label: "På lager" },
+                      { value: "onbackorder", label: "Restordre" },
+                      { value: "outofstock", label: "Udsolgt" },
+                    ]}
+                    display={(v) => v === "instock" ? <Badge variant="outline" className="text-success border-success/30">På lager</Badge>
+                      : v === "onbackorder" ? <Badge variant="outline" className="text-warning border-warning/30">Restordre</Badge>
+                      : <Badge variant="outline" className="text-destructive border-destructive/30">Udsolgt</Badge>}
+                  />
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Restordre tilladt</Label>
-                  <p className="text-sm text-foreground">
-                    {(product as any).backorders_allowed ? (
-                      <Badge variant="outline" className="text-success border-success/30">
-                        {backorderMode === "notify" ? "Ja, med besked" : "Ja"}
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-muted-foreground">Nej</Badge>
-                    )}
-                  </p>
+                  <InlineEditField productId={product.id} field="backorders_allowed" value={(product as any).backorders_allowed} type="boolean" />
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Webshop pris (inkl. moms)</Label>
+                  <InlineEditField productId={product.id} field="webshop_price" value={product.webshop_price} type="number" />
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Tilbudspris (inkl. moms)</Label>
+                  <InlineEditField productId={product.id} field="sale_price" value={(product as any).sale_price} type="number" />
+                </div>
+                <div className="col-span-2 sm:col-span-3">
+                  <Label className="text-muted-foreground text-xs">Kategorier (komma-separeret)</Label>
+                  <InlineEditField
+                    productId={product.id}
+                    field="categories"
+                    value={(product.categories ?? []).join(", ")}
+                    parse={(raw) => raw.split(",").map((s) => s.trim()).filter(Boolean)}
+                    display={(v) => <span className="text-sm">{v && v.length ? v : "—"}</span>}
+                  />
                 </div>
               </div>
             </CardContent>
@@ -504,15 +519,11 @@ export default function ProductDetailPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Meta titel</Label>
-                <p className="rounded-md border border-border bg-secondary/30 p-3 text-sm text-foreground">
-                  {(product as any).meta_title || <span className="text-muted-foreground">Ingen meta titel</span>}
-                </p>
+                <InlineEditField productId={product.id} field="meta_title" value={(product as any).meta_title} placeholder="Ingen meta titel" />
               </div>
               <div className="space-y-2">
                 <Label>Meta beskrivelse</Label>
-                <p className="rounded-md border border-border bg-secondary/30 p-3 text-sm text-foreground min-h-[60px]">
-                  {(product as any).meta_description || <span className="text-muted-foreground">Ingen meta beskrivelse</span>}
-                </p>
+                <InlineEditField productId={product.id} field="meta_description" value={(product as any).meta_description} type="textarea" placeholder="Ingen meta beskrivelse" />
               </div>
               {/* SEO preview */}
               <div className="space-y-1">
