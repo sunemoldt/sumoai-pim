@@ -28,18 +28,15 @@ interface ConnectionRow {
 type ShopifyTestResult = Record<string, unknown>;
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
-const getFunctionUrl = (functionName: string, params?: Record<string, string>) => {
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-  const url = new URL(`https://${projectId}.supabase.co/functions/v1/${functionName}`);
-  Object.entries(params ?? {}).forEach(([key, value]) => url.searchParams.set(key, value));
-  return url.toString();
-};
+const isValidShopDomain = (domain: string) => /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(domain);
 
 const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref) {
   const [status, setStatus] = useState<Status | null>(null);
   const [connections, setConnections] = useState<ConnectionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [shopDomainInput, setShopDomainInput] = useState("comtek-webshop.myshopify.com");
+  const [installUrl, setInstallUrl] = useState<string | null>(null);
+  const [installUrlLoading, setInstallUrlLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ShopifyTestResult | null>(null);
 
@@ -57,39 +54,64 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
 
   useEffect(() => { loadStatus(); }, []);
 
-  const startInstall = (e?: React.MouseEvent) => {
-    e?.preventDefault();
-    e?.stopPropagation();
+  useEffect(() => {
     const domain = shopDomainInput.trim();
-    if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(domain)) {
+    if (!isValidShopDomain(domain)) {
+      setInstallUrl(null);
+      setInstallUrlLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setInstallUrlLoading(true);
+    setInstallUrl(null);
+
+    const timer = window.setTimeout(async () => {
+      const { data, error } = await supabase.functions.invoke<{ install_url: string }>("shopify-oauth-start", {
+        body: { shop_domain: domain },
+      });
+      if (cancelled) return;
+      if (error || !data?.install_url) {
+        console.error(error);
+        setInstallUrl(null);
+      } else {
+        setInstallUrl(data.install_url);
+      }
+      setInstallUrlLoading(false);
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [shopDomainInput]);
+
+  const validateInstallLink = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    const domain = shopDomainInput.trim();
+    if (!isValidShopDomain(domain)) {
+      e.preventDefault();
       toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
-    const url = getFunctionUrl("shopify-oauth-start", { shop_domain: domain });
-    // Bryd ud af enhver iframe (Lovable preview) og åbn altid i en top-level ny fane
-    try {
-      const target = window.top ?? window;
-      const opened = target.open(url, "_blank", "noopener,noreferrer");
-      if (!opened) throw new Error("popup blocked");
-      toast({ title: "Shopify-installation åbner", description: "Godkend appen i den nye browserfane." });
-    } catch {
-      // Fallback: kopiér link
-      navigator.clipboard.writeText(url).catch(() => {});
-      toast({
-        title: "Kunne ikke åbne ny fane",
-        description: "Install-linket er kopieret til udklipsholderen — indsæt det i en ny browserfane.",
-        variant: "destructive",
-      });
+    if (!installUrl) {
+      e.preventDefault();
+      toast({ title: "Install-link ikke klar", description: "Vent et øjeblik og prøv igen.", variant: "destructive" });
+      return;
     }
+    toast({ title: "Shopify-installation åbner", description: "Godkend appen i den nye browserfane." });
   };
 
   const copyInstallLink = async () => {
     const domain = shopDomainInput.trim();
-    if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(domain)) {
+    if (!isValidShopDomain(domain)) {
       toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
-    await navigator.clipboard.writeText(getFunctionUrl("shopify-oauth-start", { shop_domain: domain }));
+    if (!installUrl) {
+      toast({ title: "Install-link ikke klar", description: "Vent et øjeblik og prøv igen.", variant: "destructive" });
+      return;
+    }
+    await navigator.clipboard.writeText(installUrl);
     toast({ title: "Install-link kopieret", description: "Indsæt i en ny browserfane for at godkende på Shopify." });
   };
 
@@ -227,12 +249,13 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
           <div className="flex flex-wrap gap-2">
             <Button asChild>
               <a
-                href={getFunctionUrl("shopify-oauth-start", { shop_domain: shopDomainInput.trim() || "comtek-webshop.myshopify.com" })}
+                href={installUrl ?? "#"}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={startInstall}
+                onClick={validateInstallLink}
+                aria-disabled={!installUrl || installUrlLoading}
               >
-                <ExternalLink className="h-4 w-4" />
+                {installUrlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
                 Installér på {shopDomainInput.trim() || "..."}
               </a>
             </Button>
