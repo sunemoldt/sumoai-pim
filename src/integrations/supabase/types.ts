@@ -666,6 +666,7 @@ export type Database = {
         Args: { p_supplier_id: string }
         Returns: number
       }
+      revert_change_log_entry: { Args: { p_log_id: string }; Returns: Json }
       set_bulk_supplier_import: {
         Args: { enabled: boolean }
         Returns: undefined
