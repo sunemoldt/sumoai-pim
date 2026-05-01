@@ -135,6 +135,7 @@ Deno.serve(async (req) => {
       correct: results.filter(r => r.is_correct).length,
       incorrect: results.filter(r => !r.is_correct).length,
       skipped_duplicate_mapping: skippedDupes,
+      skipped_fallback_ean: skippedFallback,
       applied,
       apply_errors,
     };
