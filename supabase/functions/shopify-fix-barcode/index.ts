@@ -67,27 +67,35 @@ Deno.serve(async (req) => {
     const map = new Map<string, any>();
     for (const n of data.nodes ?? []) if (n) map.set(n.id.replace("gid://shopify/ProductVariant/", ""), n);
 
-    // Group by product for bulk update
-    const updatesByProduct = new Map<string, Array<{ id: string; barcode: string }>>();
+    // Detect duplicates: flere PIM-rækker peger på samme shopify_variant_id
+    const variantCounts = new Map<string, number>();
+    for (const r of rows ?? []) variantCounts.set(r.shopify_variant_id, (variantCounts.get(r.shopify_variant_id) ?? 0) + 1);
+
+    // Group by product for bulk update — undgå duplikate variant-id'er pr. produkt
+    const updatesByProduct = new Map<string, Map<string, string>>(); // productGid -> variantGid -> barcode
     const results: any[] = [];
+    let skippedDupes = 0;
 
     for (const r of rows ?? []) {
       const sv = map.get(r.shopify_variant_id);
       const shopBarcode = sv?.barcode ?? "";
       const correct = r.ean === shopBarcode;
-      const entry = {
+      const isDupe = (variantCounts.get(r.shopify_variant_id) ?? 0) > 1;
+      const entry: any = {
         ean: r.ean, sku: r.sku, title: r.title,
         shopify_variant_id: r.shopify_variant_id,
         shopify_barcode: shopBarcode,
         is_correct: correct,
-        action: correct ? "ok" : (mode === "apply" ? "will_update" : "needs_update"),
+        is_duplicate_mapping: isDupe,
+        action: correct ? "ok" : (isDupe ? "skipped_duplicate" : (mode === "apply" ? "will_update" : "needs_update")),
       };
-      if (!correct && mode === "apply" && r.ean) {
+      if (!correct && !isDupe && mode === "apply" && r.ean) {
         const pid = `gid://shopify/Product/${r.shopify_product_id}`;
-        const arr = updatesByProduct.get(pid) ?? [];
-        arr.push({ id: `gid://shopify/ProductVariant/${r.shopify_variant_id}`, barcode: r.ean });
-        updatesByProduct.set(pid, arr);
+        const vmap = updatesByProduct.get(pid) ?? new Map<string, string>();
+        vmap.set(`gid://shopify/ProductVariant/${r.shopify_variant_id}`, r.ean);
+        updatesByProduct.set(pid, vmap);
       }
+      if (isDupe) skippedDupes++;
       results.push(entry);
     }
 
