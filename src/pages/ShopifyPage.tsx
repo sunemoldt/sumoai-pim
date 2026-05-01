@@ -34,6 +34,12 @@ interface ShopifyInstallResponse {
 type ShopifyTestResult = Record<string, unknown>;
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const getFunctionUrl = (functionName: string, params?: Record<string, string>) => {
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const url = new URL(`https://${projectId}.supabase.co/functions/v1/${functionName}`);
+  Object.entries(params ?? {}).forEach(([key, value]) => url.searchParams.set(key, value));
+  return url.toString();
+};
 
 const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref) {
   const [status, setStatus] = useState<Status | null>(null);
@@ -64,24 +70,13 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
-    const installWindow = window.open("", "_blank");
-    setInstalling(true);
-    const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", {
-      body: { shop_domain: domain },
-    });
-    setInstalling(false);
-    if (error || !data?.install_url) {
-      installWindow?.close();
-      toast({ title: "Kunne ikke starte installation", description: error?.message || data?.error || "Prøv igen", variant: "destructive" });
-      return;
-    }
+    const installUrl = getFunctionUrl("shopify-oauth-start", { shop_domain: domain });
+    const installWindow = window.open(installUrl, "_blank", "noopener,noreferrer");
     if (installWindow) {
-      installWindow.opener = null;
-      installWindow.location.href = data.install_url;
       toast({ title: "Shopify-installation åbnet", description: "Godkend appen i den nye fane." });
       return;
     }
-    await navigator.clipboard.writeText(data.install_url);
+    await navigator.clipboard.writeText(installUrl);
     toast({ title: "Install-link kopieret", description: "Browseren blokerede ny fane. Indsæt linket i en ny fane." });
   };
 
