@@ -12,6 +12,7 @@ import SupplierListPage from "@/pages/SupplierListPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ImportPage from "@/pages/ImportPage";
 import MonitoringPage from "@/pages/MonitoringPage";
+import N8nWorkflowsPage from "@/pages/N8nWorkflowsPage";
 import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "@/pages/NotFound";
@@ -43,6 +44,7 @@ function AuthenticatedApp() {
         <Route path="/suppliers" element={<SupplierListPage />} />
         <Route path="/import" element={<ImportPage />} />
         <Route path="/monitoring" element={<MonitoringPage />} />
+        <Route path="/automations/n8n" element={<N8nWorkflowsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
