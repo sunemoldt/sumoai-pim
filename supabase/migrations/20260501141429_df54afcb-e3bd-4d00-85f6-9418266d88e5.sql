@@ -1,0 +1,1 @@
+ALTER VIEW public.shopify_connection_status SET (security_invoker = true);

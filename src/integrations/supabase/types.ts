@@ -464,6 +464,7 @@ export type Database = {
           access_token: string
           id: string
           installed_at: string
+          is_active: boolean
           scope: string | null
           shop_domain: string
           updated_at: string
@@ -472,6 +473,7 @@ export type Database = {
           access_token: string
           id?: string
           installed_at?: string
+          is_active?: boolean
           scope?: string | null
           shop_domain: string
           updated_at?: string
@@ -480,6 +482,7 @@ export type Database = {
           access_token?: string
           id?: string
           installed_at?: string
+          is_active?: boolean
           scope?: string | null
           shop_domain?: string
           updated_at?: string
@@ -636,26 +639,11 @@ export type Database = {
         Row: {
           id: string | null
           installed_at: string | null
+          is_active: boolean | null
           is_connected: boolean | null
           scope: string | null
           shop_domain: string | null
           updated_at: string | null
-        }
-        Insert: {
-          id?: string | null
-          installed_at?: string | null
-          is_connected?: never
-          scope?: string | null
-          shop_domain?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string | null
-          installed_at?: string | null
-          is_connected?: never
-          scope?: string | null
-          shop_domain?: string | null
-          updated_at?: string | null
         }
         Relationships: []
       }

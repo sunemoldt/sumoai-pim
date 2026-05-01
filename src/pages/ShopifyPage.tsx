@@ -3,18 +3,31 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingBag, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, Copy } from "lucide-react";
+import { ShoppingBag, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, Copy, Trash2, Star } from "lucide-react";
 
 interface Status {
   shop_domain: string | null;
   scope: string | null;
   installed_at: string | null;
   is_connected: boolean;
+  is_active?: boolean;
+}
+
+interface ConnectionRow {
+  id: string;
+  shop_domain: string;
+  scope: string | null;
+  is_active: boolean;
+  installed_at: string;
+  updated_at: string;
 }
 
 interface ShopifyInstallResponse {
   install_url?: string;
+  shop_domain?: string;
   error?: string;
 }
 
@@ -24,58 +37,82 @@ const getErrorMessage = (error: unknown) => (error instanceof Error ? error.mess
 
 const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref) {
   const [status, setStatus] = useState<Status | null>(null);
+  const [connections, setConnections] = useState<ConnectionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
-  const [installUrl, setInstallUrl] = useState<string | null>(null);
+  const [shopDomainInput, setShopDomainInput] = useState("comtek-webshop.myshopify.com");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ShopifyTestResult | null>(null);
 
-  const oauthStartUrl = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/shopify-oauth-start`;
-
   const loadStatus = async () => {
     setLoading(true);
-    const [{ data, error }, installResponse] = await Promise.all([
-      supabase
-      .from("shopify_connection_status")
-      .select("*")
-        .maybeSingle(),
-      supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", { body: {} }),
+    const [{ data: statusData, error: statusErr }, connsRes] = await Promise.all([
+      supabase.from("shopify_connection_status").select("*").maybeSingle(),
+      supabase.functions.invoke<{ connections: ConnectionRow[] }>("shopify-connections"),
     ]);
-    if (error) {
-      console.error(error);
-      setStatus(null);
-    } else {
-      setStatus(data ?? { shop_domain: null, scope: null, installed_at: null, is_connected: false });
-    }
-    if (installResponse.data?.install_url) {
-      setInstallUrl(oauthStartUrl);
-    } else if (installResponse.error) {
-      console.error(installResponse.error);
-    }
+    if (statusErr) console.error(statusErr);
+    setStatus(statusData ?? { shop_domain: null, scope: null, installed_at: null, is_connected: false });
+    if (connsRes.data?.connections) setConnections(connsRes.data.connections);
     setLoading(false);
   };
 
   useEffect(() => { loadStatus(); }, []);
 
   const startInstall = async () => {
-    if (installUrl) {
+    const domain = shopDomainInput.trim();
+    if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(domain)) {
+      toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
     setInstalling(true);
-    const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", { body: {} });
+    const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", {
+      body: { shop_domain: domain },
+    });
     setInstalling(false);
     if (error || !data?.install_url) {
-      toast({ title: "Kunne ikke hente Shopify-link", description: error?.message || data?.error || "Prøv igen", variant: "destructive" });
+      toast({ title: "Kunne ikke starte installation", description: error?.message || data?.error || "Prøv igen", variant: "destructive" });
       return;
     }
-    setInstallUrl(oauthStartUrl);
-    window.location.href = oauthStartUrl;
+    window.location.href = data.install_url;
   };
 
-  const copyInstallUrl = async () => {
-    if (!installUrl) return;
-    await navigator.clipboard.writeText(installUrl);
-    toast({ title: "Shopify-link kopieret", description: "Indsæt linket i adressefeltet i en ny browserfane." });
+  const copyInstallLink = async () => {
+    const domain = shopDomainInput.trim();
+    if (!domain) return;
+    const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", {
+      body: { shop_domain: domain },
+    });
+    if (error || !data?.install_url) {
+      toast({ title: "Kunne ikke generere link", description: error?.message || data?.error, variant: "destructive" });
+      return;
+    }
+    await navigator.clipboard.writeText(data.install_url);
+    toast({ title: "Install-link kopieret", description: "Indsæt i en ny browserfane for at godkende på Shopify." });
+  };
+
+  const activateConnection = async (id: string, shop: string) => {
+    const { error } = await supabase.functions.invoke("shopify-connections", {
+      body: { action: "activate", id },
+    });
+    if (error) {
+      toast({ title: "Kunne ikke skifte tenant", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Aktiv Shopify-tenant skiftet", description: shop });
+    await loadStatus();
+  };
+
+  const deleteConnection = async (id: string, shop: string) => {
+    if (!confirm(`Slet forbindelsen til ${shop}? Du kan altid geninstallere bagefter.`)) return;
+    const { error } = await supabase.functions.invoke("shopify-connections", {
+      body: { action: "delete", id },
+    });
+    if (error) {
+      toast({ title: "Kunne ikke slette", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Forbindelse slettet", description: shop });
+    await loadStatus();
   };
 
   const testConnection = async () => {
@@ -110,7 +147,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            Status
+            Aktiv tenant
             {!loading && status?.is_connected && (
               <Badge variant="default">
                 <CheckCircle2 className="mr-1 h-3 w-3" /> Forbundet
@@ -123,7 +160,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
             )}
           </CardTitle>
           <CardDescription>
-            Aktuel forbindelse til Shopify Admin API
+            Den Shopify-butik PIM'et arbejder mod lige nu
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -139,47 +176,19 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              App'en er endnu ikke installeret. Klik nedenfor for at starte OAuth install-flowet.
+              App'en er endnu ikke installeret. Indtast shop-domæne nedenfor og klik installér.
             </p>
           )}
 
-          <div className="flex flex-wrap gap-2 pt-2">
-            {installUrl ? (
-              <>
-                <Button asChild>
-                  <a href={installUrl} target="_top">
-                    <ExternalLink className="h-4 w-4" />
-                    Start Shopify-installation
-                  </a>
-                </Button>
-                <Button variant="outline" onClick={copyInstallUrl}>
-                  <Copy className="h-4 w-4" />
-                  Kopiér link
-                </Button>
-              </>
-            ) : (
-              <Button onClick={startInstall} disabled={installing}>
-                {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                Hent Shopify-link
+          {status?.is_connected && (
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button variant="outline" onClick={testConnection} disabled={testing}>
+                {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Test forbindelse
               </Button>
-            )}
-            {status?.is_connected && (
-              <>
-                <Button variant="outline" onClick={testConnection} disabled={testing}>
-                  {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  Test forbindelse
-                </Button>
-                <Button variant="ghost" onClick={loadStatus}>
-                  <RefreshCw className="h-4 w-4" /> Genindlæs
-                </Button>
-              </>
-            )}
-          </div>
-
-          {installUrl && !status?.is_connected && (
-            <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-              <p>Brug dette backend-startlink i browserens adressefelt. Det videresender automatisk til Shopify og undgår preview-blokeringen.</p>
-              <p className="break-all font-mono text-xs text-foreground">{installUrl}</p>
+              <Button variant="ghost" onClick={loadStatus}>
+                <RefreshCw className="h-4 w-4" /> Genindlæs
+              </Button>
             </div>
           )}
 
@@ -193,12 +202,86 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
 
       <Card>
         <CardHeader>
+          <CardTitle>Installér / skift Shopify-butik</CardTitle>
+          <CardDescription>
+            Indtast butikkens myshopify-domæne for at installere appen. Den nyligt installerede bliver automatisk aktiv.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="shop-domain">Shop-domæne</Label>
+            <Input
+              id="shop-domain"
+              placeholder="comtek-webshop.myshopify.com"
+              value={shopDomainInput}
+              onChange={(e) => setShopDomainInput(e.target.value)}
+              className="font-mono"
+            />
+            <p className="text-xs text-muted-foreground">
+              Format: <code>navn.myshopify.com</code> — find det i Shopify-admin under Indstillinger → Domæner.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={startInstall} disabled={installing}>
+              {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+              Installér på {shopDomainInput.trim() || "..."}
+            </Button>
+            <Button variant="outline" onClick={copyInstallLink}>
+              <Copy className="h-4 w-4" /> Kopiér install-link
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {connections.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Alle forbindelser ({connections.length})</CardTitle>
+            <CardDescription>Skift mellem registrerede Shopify-butikker eller slet ubrugte</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {connections.map((c) => (
+                <div key={c.id} className={`flex items-center justify-between rounded-md border p-3 ${c.is_active ? "border-primary bg-primary/5" : "border-border"}`}>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm">{c.shop_domain}</span>
+                      {c.is_active && (
+                        <Badge variant="default" className="text-xs">
+                          <Star className="mr-1 h-3 w-3" /> Aktiv
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Installeret {new Date(c.installed_at).toLocaleString("da-DK")}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {!c.is_active && (
+                      <Button size="sm" variant="outline" onClick={() => activateConnection(c.id, c.shop_domain)}>
+                        Aktiver
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => deleteConnection(c.id, c.shop_domain)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Sådan virker det</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>1. Klik <strong>Installér Shopify-app</strong> — du sendes til Shopify hvor du godkender app'en på din butik.</p>
-          <p>2. Shopify sender dig tilbage til PIM'en med et access token, som gemmes sikkert i backenden.</p>
-          <p>3. Når forbundet kan PIM'en læse og opdatere produkter, varianter og lager via Shopify Admin GraphQL API (2025-10).</p>
+          <p>1. Indtast butikkens shop-domæne (f.eks. <code>comtek-webshop.myshopify.com</code>) og klik installér.</p>
+          <p>2. Du sendes til Shopify hvor du godkender app'en. Shopify sender dig tilbage med et access token.</p>
+          <p>3. Den nyligt installerede butik bliver automatisk **aktiv tenant** — alle PIM-handlinger arbejder herefter mod den.</p>
+          <p>4. Du kan registrere flere butikker (f.eks. dev-store + produktion) og skifte mellem dem ovenfor.</p>
           <p className="pt-2 text-xs">Scopes: <code className="text-xs">read_products, write_products, read_inventory, write_inventory, read_product_listings</code></p>
         </CardContent>
       </Card>
