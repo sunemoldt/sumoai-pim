@@ -50,7 +50,9 @@ Deno.serve(async (req) => {
 
   try {
     if (req.method === "GET") {
-      const { installUrl } = await createInstallUrl();
+      const url = new URL(req.url);
+      const shopDomainOverride = url.searchParams.get("shop_domain") || undefined;
+      const { installUrl } = await createInstallUrl(shopDomainOverride);
       return Response.redirect(installUrl, 302);
     }
 
