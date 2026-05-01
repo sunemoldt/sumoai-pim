@@ -157,10 +157,10 @@ export default function N8nWorkflowsPage() {
     }
   };
 
-  const PIM_TAGS = ["pim", "sumoai-pim", "sumoai", "comtek-pim"];
+  const tagSet = new Set(pimTags.map((t) => t.toLowerCase().trim()));
   const allWorkflows = workflowsQuery.data ?? [];
   const workflows = allWorkflows.filter((w) =>
-    (w.tags ?? []).some((t) => PIM_TAGS.includes(t.name.toLowerCase().trim()))
+    (w.tags ?? []).some((t) => tagSet.has(t.name.toLowerCase().trim()))
   );
   const hiddenCount = allWorkflows.length - workflows.length;
   const pimWorkflowIds = new Set(workflows.map((w) => w.id));
