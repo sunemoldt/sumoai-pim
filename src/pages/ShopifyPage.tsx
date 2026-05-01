@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,24 +13,33 @@ interface Status {
   is_connected: boolean;
 }
 
-export default function ShopifyPage() {
+interface ShopifyInstallResponse {
+  install_url?: string;
+  error?: string;
+}
+
+type ShopifyTestResult = Record<string, unknown>;
+
+const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref) {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
+  const [testResult, setTestResult] = useState<ShopifyTestResult | null>(null);
 
   const loadStatus = async () => {
     setLoading(true);
     const { data, error } = await supabase
-      .from("shopify_connection_status" as any)
+      .from("shopify_connection_status")
       .select("*")
       .maybeSingle();
     if (error) {
       console.error(error);
       setStatus(null);
     } else {
-      setStatus((data as any) ?? { shop_domain: null, scope: null, installed_at: null, is_connected: false });
+      setStatus(data ?? { shop_domain: null, scope: null, installed_at: null, is_connected: false });
     }
     setLoading(false);
   };
@@ -39,16 +48,23 @@ export default function ShopifyPage() {
 
   const startInstall = async () => {
     setInstalling(true);
+    const installWindow = window.open("about:blank", "_blank");
     try {
-      const { data, error } = await supabase.functions.invoke("shopify-oauth-start", { body: {} });
+      const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", { body: {} });
       if (error) throw error;
       if (data?.install_url) {
-        window.location.href = data.install_url;
+        if (installWindow) {
+          installWindow.opener = null;
+          installWindow.location.href = data.install_url;
+        } else {
+          window.location.href = data.install_url;
+        }
       } else {
         throw new Error(data?.error || "No install URL returned");
       }
-    } catch (e: any) {
-      toast({ title: "Kunne ikke starte install", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      installWindow?.close();
+      toast({ title: "Kunne ikke starte install", description: getErrorMessage(e), variant: "destructive" });
       setInstalling(false);
     }
   };
@@ -65,15 +81,15 @@ export default function ShopifyPage() {
       } else {
         toast({ title: "Test fejlede", description: JSON.stringify(data?.error || data), variant: "destructive" });
       }
-    } catch (e: any) {
-      toast({ title: "Test fejlede", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Test fejlede", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setTesting(false);
     }
   };
 
   return (
-    <div className="container mx-auto max-w-4xl space-y-6 p-6">
+    <div ref={ref} className="container mx-auto max-w-4xl space-y-6 p-6">
       <div className="flex items-center gap-3">
         <ShoppingBag className="h-8 w-8 text-primary" />
         <div>
@@ -87,7 +103,7 @@ export default function ShopifyPage() {
           <CardTitle className="flex items-center gap-2">
             Status
             {!loading && status?.is_connected && (
-              <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+              <Badge variant="default">
                 <CheckCircle2 className="mr-1 h-3 w-3" /> Forbundet
               </Badge>
             )}
@@ -157,4 +173,6 @@ export default function ShopifyPage() {
       </Card>
     </div>
   );
-}
+});
+
+export default ShopifyPage;
