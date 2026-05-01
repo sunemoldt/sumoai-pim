@@ -33,6 +33,8 @@ Deno.serve(async (req) => {
     const { data: conn } = await supabase
       .from("shopify_connection")
       .select("shop_domain, access_token, scope")
+      .order("is_active", { ascending: false })
+      .order("installed_at", { ascending: false })
       .limit(1).maybeSingle();
 
     if (!conn) {
