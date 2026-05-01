@@ -113,11 +113,15 @@ Deno.serve(async (req) => {
       return htmlResponse("Token mangler", "Shopify returnerede ingen access token.", false);
     }
 
-    // Upsert connection (single-row table by shop_domain unique)
+    // Deaktiver alle eksisterende forbindelser før ny aktiveres (sikrer unique-index)
+    await supabase.from("shopify_connection").update({ is_active: false }).eq("is_active", true);
+
+    // Upsert connection og marker som aktiv (nyligt installeret = master tenant)
     await supabase.from("shopify_connection").upsert({
       shop_domain: shop,
       access_token: accessToken,
       scope,
+      is_active: true,
       installed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }, { onConflict: "shop_domain" });
