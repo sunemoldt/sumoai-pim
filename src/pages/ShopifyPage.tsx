@@ -48,7 +48,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
     setLoading(true);
     const [{ data: statusData, error: statusErr }, connsRes] = await Promise.all([
       supabase.from("shopify_connection_status").select("*").maybeSingle(),
-      supabase.functions.invoke<{ connections: ConnectionRow[] }>("shopify-connections"),
+      supabase.functions.invoke<{ connections: ConnectionRow[] }>("shopify-connections", { method: "GET" }),
     ]);
     if (statusErr) console.error(statusErr);
     setStatus(statusData ?? { shop_domain: null, scope: null, installed_at: null, is_connected: false });
