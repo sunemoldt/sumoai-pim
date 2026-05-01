@@ -244,7 +244,7 @@ export default function N8nWorkflowsPage() {
             <div className="space-y-1 py-2">
               <p className="text-sm text-muted-foreground">Ingen PIM-koblede workflows fundet.</p>
               <p className="text-xs text-muted-foreground">
-                Tilføj tagget <code className="rounded bg-muted px-1">pim</code> til de workflows i n8n du vil se her.
+                Tilføj et af tags ({pimTags.join(", ") || "ingen konfigureret"}) til de workflows i n8n du vil se her.
                 {allWorkflows.length > 0 && ` (${allWorkflows.length} andre workflows ignoreret.)`}
               </p>
             </div>
