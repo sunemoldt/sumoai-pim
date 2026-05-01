@@ -102,7 +102,8 @@ Deno.serve(async (req) => {
     let applied = 0;
     const apply_errors: any[] = [];
     if (mode === "apply") {
-      for (const [productId, variants] of updatesByProduct) {
+      for (const [productId, vmap] of updatesByProduct) {
+        const variants = Array.from(vmap.entries()).map(([id, barcode]) => ({ id, barcode }));
         try {
           const r = await gql(conn.shop_domain, conn.access_token, `
             mutation($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
@@ -124,6 +125,7 @@ Deno.serve(async (req) => {
       total: results.length,
       correct: results.filter(r => r.is_correct).length,
       incorrect: results.filter(r => !r.is_correct).length,
+      skipped_duplicate_mapping: skippedDupes,
       applied,
       apply_errors,
     };
