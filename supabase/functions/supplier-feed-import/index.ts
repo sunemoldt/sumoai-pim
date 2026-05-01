@@ -393,10 +393,21 @@ Deno.serve(async (req) => {
       existingMap.set(sp.master_product_id, sp);
     }
 
+    // Build all upsert rows in memory first (no per-row DB calls)
+    const spRows: Array<{
+      supplier_id: string;
+      master_product_id: string;
+      purchase_price: number;
+      stock_quantity: number | null;
+      in_stock: boolean;
+      supplier_sku: string | null;
+      last_updated: string;
+    }> = [];
+    const nowIso = new Date().toISOString();
+
     for (const row of feedRows) {
       const rawEan = row[mapping.ean]?.trim();
       if (!rawEan) { skipped++; continue; }
-      // Normalize: strip leading zeros
       const ean = rawEan.replace(/^0+/, "") || rawEan;
 
       const masterProductId = eanToId.get(ean);
@@ -432,31 +443,36 @@ Deno.serve(async (req) => {
           changeLogs.push({ master_product_id: masterProductId, change_type: "stock_update", field_name: "supplier_in_stock", old_value: String(existing.in_stock), new_value: String(inStock), source: `supplier:${supplier.name}` });
         }
       } else {
-        // New supplier product link
         changeLogs.push({ master_product_id: masterProductId, change_type: "supplier_added", field_name: "supplier_product", old_value: null, new_value: `${supplier.name}: ${price} DKK`, source: `supplier:${supplier.name}` });
       }
 
-      const spRow = {
+      spRows.push({
         supplier_id: supplier.id,
         master_product_id: masterProductId,
         purchase_price: price,
         stock_quantity: stockQty !== null && !isNaN(stockQty) ? stockQty : null,
         in_stock: inStock,
         supplier_sku: supplierSku,
-        last_updated: new Date().toISOString(),
-      };
+        last_updated: nowIso,
+      });
+    }
 
-      // Upsert on (supplier_id, master_product_id)
+    // Bulk upsert in batches of 500. Triggers are bypassed via app.bulk_supplier_import flag.
+    for (let i = 0; i < spRows.length; i += 500) {
+      const batch = spRows.slice(i, i + 500);
+      // Set bulk flag (session-scoped) right before each batch
+      await supabase.rpc("set_bulk_supplier_import", { enabled: true });
       const { error: upsErr } = await supabase
         .from("supplier_products")
-        .upsert(spRow, { onConflict: "supplier_id,master_product_id" });
-
+        .upsert(batch, { onConflict: "supplier_id,master_product_id" });
       if (upsErr) {
-        errors.push(`EAN ${ean}: ${upsErr.message}`);
+        errors.push(`Batch ${i}: ${upsErr.message}`);
       } else {
-        imported++;
+        imported += batch.length;
       }
     }
+    // Always reset flag
+    await supabase.rpc("set_bulk_supplier_import", { enabled: false });
 
     // Insert change logs in batches
     if (changeLogs.length > 0) {
@@ -464,6 +480,14 @@ Deno.serve(async (req) => {
         await supabase.from("product_change_log").insert(changeLogs.slice(i, i + 500));
       }
       console.log(`Logged ${changeLogs.length} changes`);
+    }
+
+    // Recompute master stock for all products linked to this supplier (single batch call)
+    const { error: recomputeErr } = await supabase.rpc("recompute_stock_for_supplier", {
+      p_supplier_id: supplier.id,
+    });
+    if (recomputeErr) {
+      console.error("Stock recompute error:", recomputeErr.message);
     }
 
     // Update last_sync_at
