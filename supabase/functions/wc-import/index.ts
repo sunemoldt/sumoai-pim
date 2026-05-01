@@ -263,15 +263,8 @@ Deno.serve(async (req) => {
       existingByEan.set(ep.ean, ep);
     }
 
-    // For products with auto_stock_sync = true, do NOT overwrite stock from WC.
-    // Stock is owned by supplier sync (DB trigger recompute_product_stock).
-    for (const row of dedupedRows) {
-      const existing = existingByEan.get(row.ean);
-      if (existing && (existing as any).auto_stock_sync) {
-        delete row.stock_quantity;
-        delete row.stock_status;
-      }
-    }
+    // Note: stock_quantity/stock_status/backorders_allowed will be stripped per-row
+    // below for products with auto_stock_sync = true (supplier sync owns stock).
 
     const changeLogs: { master_product_id?: string; change_type: string; field_name: string; old_value: string | null; new_value: string | null; source: string; _ean?: string }[] = [];
 
