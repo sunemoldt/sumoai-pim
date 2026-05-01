@@ -17,6 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import ManualSupplierPriceDialog from "@/components/ManualSupplierPriceDialog";
 import ProductTranslationsTab from "@/components/ProductTranslationsTab";
+import InlineEditField from "@/components/InlineEditField";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
