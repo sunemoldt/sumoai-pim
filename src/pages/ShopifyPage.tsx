@@ -57,13 +57,30 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
 
   useEffect(() => { loadStatus(); }, []);
 
-  const startInstall = async () => {
+  const startInstall = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     const domain = shopDomainInput.trim();
     if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(domain)) {
       toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
-    toast({ title: "Shopify-installation åbner", description: "Godkend appen i den nye browserfane." });
+    const url = getFunctionUrl("shopify-oauth-start", { shop_domain: domain });
+    // Bryd ud af enhver iframe (Lovable preview) og åbn altid i en top-level ny fane
+    try {
+      const target = window.top ?? window;
+      const opened = target.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) throw new Error("popup blocked");
+      toast({ title: "Shopify-installation åbner", description: "Godkend appen i den nye browserfane." });
+    } catch {
+      // Fallback: kopiér link
+      navigator.clipboard.writeText(url).catch(() => {});
+      toast({
+        title: "Kunne ikke åbne ny fane",
+        description: "Install-linket er kopieret til udklipsholderen — indsæt det i en ny browserfane.",
+        variant: "destructive",
+      });
+    }
   };
 
   const copyInstallLink = async () => {
