@@ -464,6 +464,7 @@ export type Database = {
           access_token: string
           id: string
           installed_at: string
+          is_active: boolean
           scope: string | null
           shop_domain: string
           updated_at: string
@@ -472,6 +473,7 @@ export type Database = {
           access_token: string
           id?: string
           installed_at?: string
+          is_active?: boolean
           scope?: string | null
           shop_domain: string
           updated_at?: string
@@ -480,6 +482,7 @@ export type Database = {
           access_token?: string
           id?: string
           installed_at?: string
+          is_active?: boolean
           scope?: string | null
           shop_domain?: string
           updated_at?: string
