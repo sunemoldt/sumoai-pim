@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
     const mode: "report" | "apply" = body.mode === "apply" ? "apply" : "report";
     const eans: string[] | null = Array.isArray(body.eans) ? body.eans : null;
     const limit = Math.min(Number(body.limit) || 50, 250);
+    const offset = Math.max(Number(body.offset) || 0, 0);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: conn } = await supabase
@@ -52,7 +53,7 @@ Deno.serve(async (req) => {
       .select("id, ean, sku, title, shopify_product_id, shopify_variant_id")
       .not("shopify_variant_id", "is", null);
     if (eans?.length) q = q.in("ean", eans);
-    q = q.order("title").limit(limit);
+    q = q.order("title").range(offset, offset + limit - 1);
     const { data: rows, error } = await q;
     if (error) throw error;
 
@@ -67,34 +68,51 @@ Deno.serve(async (req) => {
     const map = new Map<string, any>();
     for (const n of data.nodes ?? []) if (n) map.set(n.id.replace("gid://shopify/ProductVariant/", ""), n);
 
-    // Group by product for bulk update
-    const updatesByProduct = new Map<string, Array<{ id: string; barcode: string }>>();
+    // Detect duplicates: flere PIM-rækker peger på samme shopify_variant_id
+    const variantCounts = new Map<string, number>();
+    for (const r of rows ?? []) variantCounts.set(r.shopify_variant_id, (variantCounts.get(r.shopify_variant_id) ?? 0) + 1);
+
+    // Group by product for bulk update — undgå duplikate variant-id'er pr. produkt
+    const updatesByProduct = new Map<string, Map<string, string>>(); // productGid -> variantGid -> barcode
     const results: any[] = [];
+    let skippedDupes = 0;
+    let skippedFallback = 0;
 
     for (const r of rows ?? []) {
       const sv = map.get(r.shopify_variant_id);
       const shopBarcode = sv?.barcode ?? "";
       const correct = r.ean === shopBarcode;
-      const entry = {
+      const isDupe = (variantCounts.get(r.shopify_variant_id) ?? 0) > 1;
+      // Fallback-EAN ('wc-' prefix) er ikke et rigtigt EAN — skal IKKE skrives til Shopify barcode
+      const isFallbackEan = typeof r.ean === "string" && r.ean.startsWith("wc-");
+      const entry: any = {
         ean: r.ean, sku: r.sku, title: r.title,
         shopify_variant_id: r.shopify_variant_id,
         shopify_barcode: shopBarcode,
         is_correct: correct,
-        action: correct ? "ok" : (mode === "apply" ? "will_update" : "needs_update"),
+        is_duplicate_mapping: isDupe,
+        is_fallback_ean: isFallbackEan,
+        action: correct ? "ok" :
+                isDupe ? "skipped_duplicate" :
+                isFallbackEan ? "skipped_fallback_ean" :
+                (mode === "apply" ? "will_update" : "needs_update"),
       };
-      if (!correct && mode === "apply" && r.ean) {
+      if (!correct && !isDupe && !isFallbackEan && mode === "apply" && r.ean) {
         const pid = `gid://shopify/Product/${r.shopify_product_id}`;
-        const arr = updatesByProduct.get(pid) ?? [];
-        arr.push({ id: `gid://shopify/ProductVariant/${r.shopify_variant_id}`, barcode: r.ean });
-        updatesByProduct.set(pid, arr);
+        const vmap = updatesByProduct.get(pid) ?? new Map<string, string>();
+        vmap.set(`gid://shopify/ProductVariant/${r.shopify_variant_id}`, r.ean);
+        updatesByProduct.set(pid, vmap);
       }
+      if (isDupe) skippedDupes++;
+      if (isFallbackEan) skippedFallback++;
       results.push(entry);
     }
 
     let applied = 0;
     const apply_errors: any[] = [];
     if (mode === "apply") {
-      for (const [productId, variants] of updatesByProduct) {
+      for (const [productId, vmap] of updatesByProduct) {
+        const variants = Array.from(vmap.entries()).map(([id, barcode]) => ({ id, barcode }));
         try {
           const r = await gql(conn.shop_domain, conn.access_token, `
             mutation($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
@@ -116,6 +134,8 @@ Deno.serve(async (req) => {
       total: results.length,
       correct: results.filter(r => r.is_correct).length,
       incorrect: results.filter(r => !r.is_correct).length,
+      skipped_duplicate_mapping: skippedDupes,
+      skipped_fallback_ean: skippedFallback,
       applied,
       apply_errors,
     };
