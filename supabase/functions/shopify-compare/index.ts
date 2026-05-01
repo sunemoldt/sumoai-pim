@@ -32,6 +32,42 @@ function stripHtml(s: string | null | undefined): string {
   if (!s) return "";
   return String(s).replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 }
+
+// Udtræk plain text fra Shopify rich_text_field JSON-AST
+function extractRichText(node: any): string {
+  if (!node) return "";
+  if (typeof node === "string") return node;
+  if (Array.isArray(node)) return node.map(extractRichText).join(" ");
+  if (typeof node === "object") {
+    if (typeof node.value === "string") return node.value;
+    if (Array.isArray(node.children)) return node.children.map(extractRichText).join(" ");
+  }
+  return "";
+}
+
+// Normalisér en metafield-værdi til plain text uanset type (rich_text_field JSON eller HTML)
+function normalizeMetafieldText(value: string | null | undefined, type?: string | null): string {
+  if (!value) return "";
+  const v = String(value).trim();
+  if (type === "rich_text_field" || (v.startsWith("{") && v.includes('"type"'))) {
+    try { return extractRichText(JSON.parse(v)).replace(/\s+/g, " ").trim(); }
+    catch { /* fall through */ }
+  }
+  return stripHtml(v);
+}
+
+// Konvertér PIM HTML/plain-text til Shopify rich_text_field JSON-AST
+function htmlToRichText(html: string | null | undefined): string {
+  const text = stripHtml(html);
+  if (!text) return JSON.stringify({ type: "root", children: [] });
+  // Split på dobbelt newline / punktum-grænser? Hold det enkelt: ét paragraph pr. blok
+  const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  const blocks = (paragraphs.length ? paragraphs : [text]).map(p => ({
+    type: "paragraph",
+    children: [{ type: "text", value: p }],
+  }));
+  return JSON.stringify({ type: "root", children: blocks });
+}
 function normNum(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
