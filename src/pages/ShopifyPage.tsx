@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ interface Status {
   is_connected: boolean;
 }
 
-export default function ShopifyPage() {
+const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref) {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
@@ -73,7 +73,7 @@ export default function ShopifyPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl space-y-6 p-6">
+    <div ref={ref} className="container mx-auto max-w-4xl space-y-6 p-6">
       <div className="flex items-center gap-3">
         <ShoppingBag className="h-8 w-8 text-primary" />
         <div>
@@ -87,7 +87,7 @@ export default function ShopifyPage() {
           <CardTitle className="flex items-center gap-2">
             Status
             {!loading && status?.is_connected && (
-              <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+              <Badge variant="default">
                 <CheckCircle2 className="mr-1 h-3 w-3" /> Forbundet
               </Badge>
             )}
@@ -157,4 +157,6 @@ export default function ShopifyPage() {
       </Card>
     </div>
   );
-}
+});
+
+export default ShopifyPage;
