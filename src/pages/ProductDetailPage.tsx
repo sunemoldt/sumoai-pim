@@ -218,7 +218,8 @@ export default function ProductDetailPage() {
       if (pushStockStatus) payload.stock_status = pushStockStatus;
       if (pushBackorders) payload.backorders = pushBackorders;
 
-      const { data, error } = await supabase.functions.invoke("wc-update-product", {
+      const updateFunction = product.shopify_variant_id ? "shopify-update-product" : "wc-update-product";
+      const { data, error } = await supabase.functions.invoke(updateFunction, {
         body: payload,
       });
 
