@@ -339,18 +339,220 @@ mcpServer.tool("get_product", {
   },
 });
 
+// Full list of writable columns on master_products
+const WRITABLE_FIELDS = [
+  "title", "ean", "sku", "brand", "category", "categories", "image_url",
+  "short_description", "long_description", "meta_title", "meta_description",
+  "webshop_price", "sale_price", "custom_markup_percentage",
+  "stock_quantity", "stock_status", "backorders_allowed",
+  "attributes", "webshop_product_id", "webshop_parent_id", "webshop_platform",
+  "auto_stock_sync", "stock_sync_supplier_ids", "stock_sync_supplier_id",
+  "stock_sync_interval", "min_sync_margin",
+  "shopify_product_id", "shopify_variant_id", "shopify_sync_enabled",
+];
+
+async function withChangeSource<T>(source: string | undefined, fn: () => Promise<T>): Promise<T> {
+  if (source) {
+    await supabase.rpc("set_change_source", { source }).catch(() => {});
+  }
+  return fn();
+}
+
+mcpServer.tool("describe_schema", {
+  description: "Returns the full schema of master_products: all writable fields, their types, and descriptions. Use this first to know what fields are available.",
+  inputSchema: { type: "object" as const, properties: {} },
+  handler: async () => {
+    const schema = {
+      table: "master_products",
+      writable_fields: WRITABLE_FIELDS,
+      field_descriptions: {
+        title: "string — product display title",
+        ean: "string — barcode (strip leading zeros)",
+        sku: "string — stock keeping unit",
+        brand: "string",
+        category: "string — primary category",
+        categories: "string[] — all categories",
+        image_url: "string — main image URL",
+        short_description: "string (HTML allowed)",
+        long_description: "string (HTML allowed)",
+        meta_title: "string — SEO title",
+        meta_description: "string — SEO description",
+        webshop_price: "number — selling price INCL. 25% VAT (DKK)",
+        sale_price: "number — sale price INCL. VAT",
+        custom_markup_percentage: "number — overrides global markup if set",
+        stock_quantity: "number",
+        stock_status: "instock | onbackorder | outofstock",
+        backorders_allowed: "boolean",
+        attributes: "object — JSONB technical attributes",
+        webshop_product_id: "string — WooCommerce/Shopify product id",
+        webshop_parent_id: "string — parent id for variants",
+        webshop_platform: "woocommerce | shopify",
+        auto_stock_sync: "boolean — enable automatic stock sync",
+        stock_sync_supplier_ids: "uuid[]",
+        stock_sync_interval: "hourly | daily | weekly",
+        min_sync_margin: "number — minimum margin % for auto-push",
+        shopify_product_id: "string",
+        shopify_variant_id: "string",
+        shopify_sync_enabled: "boolean",
+      },
+      related_tables: {
+        supplier_products: "purchase prices & stock per supplier (use upsert_supplier_product / delete_supplier_product)",
+        product_translations: "translations per language (use list_translations / upsert_translation)",
+        product_change_log: "audit log of every field change (use get_change_log)",
+        product_recommendations: "AI suggestions (use get_recommendations)",
+      },
+      conventions: {
+        vat_rate: "0.25 — webshop_price is INCL. VAT, supplier purchase_price is EXCL. VAT",
+        ean_normalization: "Strip leading zeros before storing",
+        change_logging: "All updates auto-logged. Pass change_source on writes to label the entry (default 'n8n').",
+      },
+    };
+    return { content: [{ type: "text" as const, text: JSON.stringify(schema, null, 2) }] };
+  },
+});
+
 mcpServer.tool("update_product", {
-  description: "Update fields on a product. Updatable: title, brand, category, sku, webshop_price, sale_price, stock_quantity, stock_status, image_url, short_description, long_description, meta_title, meta_description, backorders_allowed, custom_markup_percentage, attributes.",
-  inputSchema: { type: "object" as const, properties: { product_id: { type: "string" as const }, updates: { type: "object" as const } }, required: ["product_id", "updates"] },
-  handler: async ({ product_id, updates }: any) => {
-    const allowed = new Set(["title", "brand", "category", "sku", "webshop_price", "sale_price", "stock_quantity", "stock_status", "image_url", "short_description", "long_description", "meta_title", "meta_description", "backorders_allowed", "custom_markup_percentage", "attributes"]);
+  description: "Update any writable field on a product. Use describe_schema to see all available fields. Pass change_source to label the audit log entry (default 'n8n').",
+  inputSchema: {
+    type: "object" as const,
+    properties: {
+      product_id: { type: "string" as const, description: "UUID or EAN" },
+      updates: { type: "object" as const, description: "Object of field:value pairs from writable_fields" },
+      change_source: { type: "string" as const, description: "Source label for audit log (default: n8n)" },
+    },
+    required: ["product_id", "updates"],
+  },
+  handler: async ({ product_id, updates, change_source = "n8n" }: any) => {
+    const allowed = new Set(WRITABLE_FIELDS);
     const f: any = {};
+    const rejected: string[] = [];
     for (const [k, v] of Object.entries(updates)) {
-      if (allowed.has(k)) f[k] = v;
+      if (allowed.has(k)) f[k] = v; else rejected.push(k);
     }
-    if (!Object.keys(f).length) return { content: [{ type: "text" as const, text: "No valid fields" }] };
-    const { data, error } = await supabase.from("master_products").update(f).eq("id", product_id).select(ALL).single();
+    if (!Object.keys(f).length) return { content: [{ type: "text" as const, text: `No valid fields. Rejected: ${rejected.join(", ")}` }] };
+    let q = supabase.from("master_products").update(f);
+    q = /^[0-9a-f]{8}-/.test(product_id) ? q.eq("id", product_id) : q.eq("ean", product_id);
+    const { data, error } = await withChangeSource(change_source, () => q.select(ALL).single());
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify({ updated: data, rejected_fields: rejected }, null, 2) }] };
+  },
+});
+
+mcpServer.tool("create_product", {
+  description: "Create a new product. EAN and title are required.",
+  inputSchema: {
+    type: "object" as const,
+    properties: {
+      ean: { type: "string" as const },
+      title: { type: "string" as const },
+      fields: { type: "object" as const, description: "Additional fields from writable_fields" },
+      change_source: { type: "string" as const },
+    },
+    required: ["ean", "title"],
+  },
+  handler: async ({ ean, title, fields = {}, change_source = "n8n" }: any) => {
+    const allowed = new Set(WRITABLE_FIELDS);
+    const payload: any = { ean, title };
+    for (const [k, v] of Object.entries(fields)) if (allowed.has(k)) payload[k] = v;
+    const { data, error } = await withChangeSource(change_source, () =>
+      supabase.from("master_products").insert(payload).select(ALL).single()
+    );
     return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
+});
+
+mcpServer.tool("delete_product", {
+  description: "Delete a product by ID or EAN. WARNING: also removes supplier mappings via cascade.",
+  inputSchema: {
+    type: "object" as const,
+    properties: { product_id: { type: "string" as const } },
+    required: ["product_id"],
+  },
+  handler: async ({ product_id }: any) => {
+    let q = supabase.from("master_products").delete();
+    q = /^[0-9a-f]{8}-/.test(product_id) ? q.eq("id", product_id) : q.eq("ean", product_id);
+    const { error } = await q;
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : `Deleted ${product_id}` }] };
+  },
+});
+
+mcpServer.tool("bulk_update_products", {
+  description: "Apply the same updates to multiple products by EAN. Returns per-EAN result.",
+  inputSchema: {
+    type: "object" as const,
+    properties: {
+      eans: { type: "array" as const, items: { type: "string" as const } },
+      updates: { type: "object" as const },
+      change_source: { type: "string" as const },
+    },
+    required: ["eans", "updates"],
+  },
+  handler: async ({ eans, updates, change_source = "n8n" }: any) => {
+    const allowed = new Set(WRITABLE_FIELDS);
+    const f: any = {};
+    for (const [k, v] of Object.entries(updates)) if (allowed.has(k)) f[k] = v;
+    if (!Object.keys(f).length) return { content: [{ type: "text" as const, text: "No valid fields" }] };
+    const { data, error } = await withChangeSource(change_source, () =>
+      supabase.from("master_products").update(f).in("ean", eans).select("id, ean")
+    );
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify({ updated_count: data?.length ?? 0, products: data }, null, 2) }] };
+  },
+});
+
+mcpServer.tool("upsert_supplier_product", {
+  description: "Create or update a supplier-product mapping (purchase price + stock). Identified by master_product_id + supplier_id.",
+  inputSchema: {
+    type: "object" as const,
+    properties: {
+      master_product_id: { type: "string" as const },
+      supplier_id: { type: "string" as const },
+      supplier_sku: { type: "string" as const },
+      purchase_price: { type: "number" as const, description: "EXCL. VAT" },
+      in_stock: { type: "boolean" as const },
+      stock_quantity: { type: "number" as const },
+    },
+    required: ["master_product_id", "supplier_id", "purchase_price"],
+  },
+  handler: async (args: any) => {
+    const payload: any = {
+      master_product_id: args.master_product_id,
+      supplier_id: args.supplier_id,
+      purchase_price: args.purchase_price,
+      in_stock: args.in_stock ?? true,
+    };
+    if (args.supplier_sku !== undefined) payload.supplier_sku = args.supplier_sku;
+    if (args.stock_quantity !== undefined) payload.stock_quantity = args.stock_quantity;
+    const { data, error } = await supabase
+      .from("supplier_products")
+      .upsert(payload, { onConflict: "master_product_id,supplier_id" })
+      .select("*")
+      .single();
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify(data, null, 2) }] };
+  },
+});
+
+mcpServer.tool("delete_supplier_product", {
+  description: "Remove a supplier-product mapping by id.",
+  inputSchema: {
+    type: "object" as const,
+    properties: { supplier_product_id: { type: "string" as const } },
+    required: ["supplier_product_id"],
+  },
+  handler: async ({ supplier_product_id }: any) => {
+    const { error } = await supabase.from("supplier_products").delete().eq("id", supplier_product_id);
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : `Deleted ${supplier_product_id}` }] };
+  },
+});
+
+mcpServer.tool("dismiss_recommendation", {
+  description: "Mark an AI recommendation as dismissed.",
+  inputSchema: {
+    type: "object" as const,
+    properties: { recommendation_id: { type: "string" as const } },
+    required: ["recommendation_id"],
+  },
+  handler: async ({ recommendation_id }: any) => {
+    const { error } = await supabase.from("product_recommendations").update({ is_dismissed: true }).eq("id", recommendation_id);
+    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : `Dismissed ${recommendation_id}` }] };
   },
 });
 
