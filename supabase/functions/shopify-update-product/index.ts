@@ -43,6 +43,13 @@ function toInventoryPolicy(backorders?: string) {
   return backorders === "yes" || backorders === "notify" ? "CONTINUE" : "DENY";
 }
 
+function toGid(type: "Product" | "ProductVariant" | "InventoryItem" | "Location", id: string | number | null | undefined): string | null {
+  if (id == null || id === "") return null;
+  const s = String(id);
+  if (s.startsWith("gid://")) return s;
+  return `gid://shopify/${type}/${s}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
