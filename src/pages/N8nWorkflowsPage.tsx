@@ -88,8 +88,15 @@ export default function N8nWorkflowsPage() {
     }
   };
 
-  const workflows = workflowsQuery.data ?? [];
-  const executions = executionsQuery.data ?? [];
+  const PIM_TAGS = ["pim", "sumoai-pim", "sumoai", "comtek-pim"];
+  const allWorkflows = workflowsQuery.data ?? [];
+  const workflows = allWorkflows.filter((w) =>
+    (w.tags ?? []).some((t) => PIM_TAGS.includes(t.name.toLowerCase().trim()))
+  );
+  const hiddenCount = allWorkflows.length - workflows.length;
+  const pimWorkflowIds = new Set(workflows.map((w) => w.id));
+  const allExecutions = executionsQuery.data ?? [];
+  const executions = allExecutions.filter((ex) => pimWorkflowIds.has(ex.workflowId));
   const activeCount = workflows.filter((w) => w.active).length;
 
   const workflowMap = new Map(workflows.map((w) => [w.id, w.name]));
