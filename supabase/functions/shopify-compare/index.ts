@@ -28,9 +28,27 @@ async function gql(shop: string, token: string, query: string, variables: Record
   return json.data;
 }
 
+// Afkod HTML-entities (numeriske + navngivne) til rigtige unicode-tegn
+function decodeHtmlEntities(s: string): string {
+  if (!s) return "";
+  const named: Record<string, string> = {
+    amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+    ndash: "–", mdash: "—", hellip: "…", laquo: "«", raquo: "»",
+    lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”", copy: "©", reg: "®",
+    trade: "™", deg: "°", euro: "€", pound: "£", yen: "¥", cent: "¢",
+    middot: "·", bull: "•", times: "×", divide: "÷", plusmn: "±",
+    aelig: "æ", oslash: "ø", aring: "å", AElig: "Æ", Oslash: "Ø", Aring: "Å",
+  };
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch { return _; } })
+    .replace(/&#(\d+);/g, (_, d) => { try { return String.fromCodePoint(parseInt(d, 10)); } catch { return _; } })
+    .replace(/&([a-zA-Z]+);/g, (m, n) => named[n] ?? named[n.toLowerCase()] ?? m);
+}
+
 function stripHtml(s: string | null | undefined): string {
   if (!s) return "";
-  return String(s).replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  const decoded = decodeHtmlEntities(String(s));
+  return decoded.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
 // Udtræk plain text fra Shopify rich_text_field JSON-AST
