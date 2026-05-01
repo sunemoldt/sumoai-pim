@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingBag, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw } from "lucide-react";
+import { ShoppingBag, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, Copy } from "lucide-react";
 
 interface Status {
   shop_domain: string | null;
@@ -68,6 +68,12 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
     }
     setInstallUrl(data.install_url);
     window.open(data.install_url, "_blank", "noopener,noreferrer");
+  };
+
+  const copyInstallUrl = async () => {
+    if (!installUrl) return;
+    await navigator.clipboard.writeText(installUrl);
+    toast({ title: "Shopify-link kopieret", description: "Indsæt linket i adressefeltet i en ny browserfane." });
   };
 
   const testConnection = async () => {
@@ -137,12 +143,18 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
 
           <div className="flex flex-wrap gap-2 pt-2">
             {installUrl ? (
-              <Button asChild>
-                <a href={installUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink className="h-4 w-4" />
-                  {status?.is_connected ? "Geninstallér app" : "Installér Shopify-app"}
-                </a>
-              </Button>
+              <>
+                <Button asChild>
+                  <a href={installUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4" />
+                    Åbn Shopify i ny fane
+                  </a>
+                </Button>
+                <Button variant="outline" onClick={copyInstallUrl}>
+                  <Copy className="h-4 w-4" />
+                  Kopiér link
+                </Button>
+              </>
             ) : (
               <Button onClick={startInstall} disabled={installing}>
                 {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
@@ -161,6 +173,13 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
               </>
             )}
           </div>
+
+          {installUrl && !status?.is_connected && (
+            <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              <p>Hvis Shopify viser “ERR_BLOCKED_BY_RESPONSE”, så kopiér linket og indsæt det i adressefeltet i en helt ny browserfane udenfor Lovable-previewet.</p>
+              <p className="break-all font-mono text-xs text-foreground">{installUrl}</p>
+            </div>
+          )}
 
           {testResult && (
             <pre className="mt-4 max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
