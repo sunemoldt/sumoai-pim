@@ -282,6 +282,10 @@ Deno.serve(async (req) => {
 
           // Short description som metafield via metafieldsSet
           if (pimShort !== shopShort && p.short_description) {
+            const mfType = shortMf?.type ?? "rich_text_field";
+            const mfValue = mfType === "rich_text_field"
+              ? htmlToRichText(p.short_description)
+              : p.short_description;
             const r = await gql(conn.shop_domain, conn.access_token, `
               mutation($metafields: [MetafieldsSetInput!]!) {
                 metafieldsSet(metafields: $metafields) {
@@ -293,8 +297,8 @@ Deno.serve(async (req) => {
                   ownerId: `gid://shopify/Product/${p.shopify_product_id}`,
                   namespace: shortDescMf.namespace,
                   key: shortDescMf.key,
-                  type: shortMf?.type ?? "multi_line_text_field",
-                  value: p.short_description,
+                  type: mfType,
+                  value: mfValue,
                 }],
               });
             const errs = r.metafieldsSet?.userErrors;
