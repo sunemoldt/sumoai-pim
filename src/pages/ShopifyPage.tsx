@@ -48,15 +48,22 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
 
   const startInstall = async () => {
     setInstalling(true);
+    const installWindow = window.open("about:blank", "_blank");
     try {
       const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", { body: {} });
       if (error) throw error;
       if (data?.install_url) {
-        window.location.href = data.install_url;
+        if (installWindow) {
+          installWindow.opener = null;
+          installWindow.location.href = data.install_url;
+        } else {
+          window.location.href = data.install_url;
+        }
       } else {
         throw new Error(data?.error || "No install URL returned");
       }
     } catch (e: unknown) {
+      installWindow?.close();
       toast({ title: "Kunne ikke starte install", description: getErrorMessage(e), variant: "destructive" });
       setInstalling(false);
     }
