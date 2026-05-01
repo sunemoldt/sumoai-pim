@@ -12,6 +12,7 @@ import SupplierListPage from "@/pages/SupplierListPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ImportPage from "@/pages/ImportPage";
 import MonitoringPage from "@/pages/MonitoringPage";
+import N8nWorkflowsPage from "@/pages/N8nWorkflowsPage";
 import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "@/pages/NotFound";
