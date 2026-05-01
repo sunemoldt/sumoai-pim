@@ -519,15 +519,11 @@ export default function ProductDetailPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Meta titel</Label>
-                <p className="rounded-md border border-border bg-secondary/30 p-3 text-sm text-foreground">
-                  {(product as any).meta_title || <span className="text-muted-foreground">Ingen meta titel</span>}
-                </p>
+                <InlineEditField productId={product.id} field="meta_title" value={(product as any).meta_title} placeholder="Ingen meta titel" />
               </div>
               <div className="space-y-2">
                 <Label>Meta beskrivelse</Label>
-                <p className="rounded-md border border-border bg-secondary/30 p-3 text-sm text-foreground min-h-[60px]">
-                  {(product as any).meta_description || <span className="text-muted-foreground">Ingen meta beskrivelse</span>}
-                </p>
+                <InlineEditField productId={product.id} field="meta_description" value={(product as any).meta_description} type="textarea" placeholder="Ingen meta beskrivelse" />
               </div>
               {/* SEO preview */}
               <div className="space-y-1">
