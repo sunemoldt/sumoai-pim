@@ -289,10 +289,15 @@ Deno.serve(async (req) => {
           const fields: [string, any, any, string][] = [
             ["webshop_price", existing.webshop_price, row.webshop_price, "price_update"],
             ["sale_price", existing.sale_price, row.sale_price, "price_update"],
-            ["stock_quantity", existing.stock_quantity, row.stock_quantity, "stock_update"],
-            ["stock_status", existing.stock_status, row.stock_status, "stock_update"],
-            ["backorders_allowed", existing.backorders_allowed, row.backorders_allowed, "stock_update"],
           ];
+          // Only diff stock fields when WC is the source of truth (auto_stock_sync = false)
+          if (!(existing as any).auto_stock_sync) {
+            fields.push(
+              ["stock_quantity", existing.stock_quantity, row.stock_quantity, "stock_update"],
+              ["stock_status", existing.stock_status, row.stock_status, "stock_update"],
+              ["backorders_allowed", existing.backorders_allowed, row.backorders_allowed, "stock_update"],
+            );
+          }
           for (const [field, oldVal, newVal, changeType] of fields) {
             if (String(oldVal ?? "null") !== String(newVal ?? "null")) {
               changeLogs.push({ change_type: changeType, field_name: field, old_value: String(oldVal ?? "null"), new_value: String(newVal ?? "null"), source: "wc-import", _ean: row.ean });
