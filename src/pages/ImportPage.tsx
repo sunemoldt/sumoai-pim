@@ -95,16 +95,18 @@ export default function ImportPage() {
     }
   };
 
-  const runImport = async () => {
+  const runImport = async (full = false) => {
     setLoading(true);
     setResult(null);
     try {
       // WooCommerce er master - import altid fra WooCommerce
-      const { data, error } = await supabase.functions.invoke("wc-import");
+      const { data, error } = await supabase.functions.invoke("wc-import", {
+        body: full ? { full: true } : {},
+      });
       if (error) throw error;
       setResult(data as ImportResult);
       if (data?.success) {
-        toast.success(`${data.imported} produkter importeret fra WooCommerce`);
+        toast.success(`${data.imported} produkter importeret fra WooCommerce${full ? " (fuld)" : ""}`);
         queryClient.invalidateQueries({ queryKey: ["master_products"] });
         queryClient.invalidateQueries({ queryKey: ["import_logs"] });
       } else {
