@@ -25,21 +25,20 @@ interface ConnectionRow {
   updated_at: string;
 }
 
-interface ShopifyInstallResponse {
-  install_url?: string;
-  shop_domain?: string;
-  error?: string;
-}
-
 type ShopifyTestResult = Record<string, unknown>;
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const getFunctionUrl = (functionName: string, params?: Record<string, string>) => {
+  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const url = new URL(`https://${projectId}.supabase.co/functions/v1/${functionName}`);
+  Object.entries(params ?? {}).forEach(([key, value]) => url.searchParams.set(key, value));
+  return url.toString();
+};
 
 const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref) {
   const [status, setStatus] = useState<Status | null>(null);
   const [connections, setConnections] = useState<ConnectionRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [installing, setInstalling] = useState(false);
   const [shopDomainInput, setShopDomainInput] = useState("comtek-webshop.myshopify.com");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ShopifyTestResult | null>(null);
@@ -64,38 +63,23 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
-    const installWindow = window.open("", "_blank");
-    setInstalling(true);
-    const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", {
-      body: { shop_domain: domain },
-    });
-    setInstalling(false);
-    if (error || !data?.install_url) {
-      installWindow?.close();
-      toast({ title: "Kunne ikke starte installation", description: error?.message || data?.error || "Prøv igen", variant: "destructive" });
-      return;
-    }
+    const installUrl = getFunctionUrl("shopify-oauth-start", { shop_domain: domain });
+    const installWindow = window.open(installUrl, "_blank", "noopener,noreferrer");
     if (installWindow) {
-      installWindow.opener = null;
-      installWindow.location.href = data.install_url;
       toast({ title: "Shopify-installation åbnet", description: "Godkend appen i den nye fane." });
       return;
     }
-    await navigator.clipboard.writeText(data.install_url);
+    await navigator.clipboard.writeText(installUrl);
     toast({ title: "Install-link kopieret", description: "Browseren blokerede ny fane. Indsæt linket i en ny fane." });
   };
 
   const copyInstallLink = async () => {
     const domain = shopDomainInput.trim();
-    if (!domain) return;
-    const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", {
-      body: { shop_domain: domain },
-    });
-    if (error || !data?.install_url) {
-      toast({ title: "Kunne ikke generere link", description: error?.message || data?.error, variant: "destructive" });
+    if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(domain)) {
+      toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
-    await navigator.clipboard.writeText(data.install_url);
+    await navigator.clipboard.writeText(getFunctionUrl("shopify-oauth-start", { shop_domain: domain }));
     toast({ title: "Install-link kopieret", description: "Indsæt i en ny browserfane for at godkende på Shopify." });
   };
 
@@ -231,8 +215,8 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={startInstall} disabled={installing}>
-              {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+            <Button onClick={startInstall}>
+              <ExternalLink className="h-4 w-4" />
               Installér på {shopDomainInput.trim() || "..."}
             </Button>
             <Button variant="outline" onClick={copyInstallLink}>
