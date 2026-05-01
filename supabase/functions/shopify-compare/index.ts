@@ -68,7 +68,7 @@ function normalizeMetafieldText(value: string | null | undefined, type?: string 
   if (!value) return "";
   const v = String(value).trim();
   if (type === "rich_text_field" || (v.startsWith("{") && v.includes('"type"'))) {
-    try { return extractRichText(JSON.parse(v)).replace(/\s+/g, " ").trim(); }
+    try { return decodeHtmlEntities(extractRichText(JSON.parse(v))).replace(/\s+/g, " ").trim(); }
     catch { /* fall through */ }
   }
   return stripHtml(v);
