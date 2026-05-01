@@ -92,7 +92,7 @@ function normNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 function normText(s: string | null | undefined): string {
-  return (s ?? "").trim();
+  return decodeHtmlEntities((s ?? "").trim()).trim();
 }
 
 Deno.serve(async (req) => {
