@@ -249,12 +249,13 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
           <div className="flex flex-wrap gap-2">
             <Button asChild>
               <a
-                href={getFunctionUrl("shopify-oauth-start", { shop_domain: shopDomainInput.trim() || "comtek-webshop.myshopify.com" })}
+                href={installUrl ?? "#"}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={startInstall}
+                onClick={validateInstallLink}
+                aria-disabled={!installUrl || installUrlLoading}
               >
-                <ExternalLink className="h-4 w-4" />
+                {installUrlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
                 Installér på {shopDomainInput.trim() || "..."}
               </a>
             </Button>
