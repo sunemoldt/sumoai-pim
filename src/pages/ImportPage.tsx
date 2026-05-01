@@ -263,18 +263,18 @@ export default function ImportPage() {
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Import & Backup</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Importér produkter fra WooCommerce, eksportér CSV-backup eller gendan fra backup
+          Importér produkter fra den forbundne webshop, eksportér CSV-backup eller gendan fra backup
         </p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base font-medium">WooCommerce import</CardTitle>
+            <CardTitle className="text-base font-medium">Webshop import</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Henter alle produkter (inkl. varianter) fra WooCommerce og opretter/opdaterer dem i
+              Henter alle produkter (inkl. varianter) fra {shopifyStatus?.is_connected ? "Shopify" : "WooCommerce"} og opretter/opdaterer dem i
               produktkataloget. Eksisterende produkter matches på EAN.
             </p>
 
@@ -303,7 +303,7 @@ export default function ImportPage() {
               ) : (
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              {loading ? "Importerer..." : "Start WooCommerce import"}
+              {loading ? "Importerer..." : `Start ${shopifyStatus?.is_connected ? "Shopify" : "WooCommerce"} import`}
             </Button>
 
             {result && (
