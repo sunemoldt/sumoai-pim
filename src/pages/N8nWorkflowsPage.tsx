@@ -107,7 +107,8 @@ export default function N8nWorkflowsPage() {
         <div>
           <h1 className="text-2xl font-semibold">n8n Workflows</h1>
           <p className="text-sm text-muted-foreground">
-            Administrer dine n8n workflows og se executions direkte fra PIM
+            Viser kun workflows tagget med <code className="rounded bg-muted px-1">pim</code> i n8n
+            {hiddenCount > 0 && ` · ${hiddenCount} skjult`}
           </p>
         </div>
         <div className="flex gap-2">
