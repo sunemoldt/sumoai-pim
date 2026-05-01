@@ -658,6 +658,10 @@ export type Database = {
         }[]
       }
       get_db_stats: { Args: never; Returns: Json }
+      recompute_product_stock: {
+        Args: { p_master_product_id: string }
+        Returns: undefined
+      }
       set_change_source: { Args: { source: string }; Returns: undefined }
     }
     Enums: {
