@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Package, Truck, Settings, Download, LogOut, Activity, Workflow } from "lucide-react";
+import { LayoutDashboard, Package, Truck, Settings, Download, LogOut, Activity, Workflow, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
@@ -7,6 +7,7 @@ const navItems = [
   { to: "/products", icon: Package, label: "Produkter" },
   { to: "/suppliers", icon: Truck, label: "Leverandører" },
   { to: "/import", icon: Download, label: "WC Import" },
+  { to: "/shopify", icon: ShoppingBag, label: "Shopify" },
   { to: "/monitoring", icon: Activity, label: "Monitoring" },
   { to: "/automations/n8n", icon: Workflow, label: "n8n Workflows" },
   { to: "/settings", icon: Settings, label: "Indstillinger" },

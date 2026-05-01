@@ -459,6 +459,54 @@ export type Database = {
           },
         ]
       }
+      shopify_connection: {
+        Row: {
+          access_token: string
+          id: string
+          installed_at: string
+          scope: string | null
+          shop_domain: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          id?: string
+          installed_at?: string
+          scope?: string | null
+          shop_domain: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          id?: string
+          installed_at?: string
+          scope?: string | null
+          shop_domain?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shopify_oauth_state: {
+        Row: {
+          created_at: string
+          expires_at: string
+          shop_domain: string
+          state: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          shop_domain: string
+          state: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          shop_domain?: string
+          state?: string
+        }
+        Relationships: []
+      }
       supplier_products: {
         Row: {
           created_at: string
@@ -584,7 +632,33 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      shopify_connection_status: {
+        Row: {
+          id: string | null
+          installed_at: string | null
+          is_connected: boolean | null
+          scope: string | null
+          shop_domain: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string | null
+          installed_at?: string | null
+          is_connected?: never
+          scope?: string | null
+          shop_domain?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string | null
+          installed_at?: string | null
+          is_connected?: never
+          scope?: string | null
+          shop_domain?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_change_log_daily: {
