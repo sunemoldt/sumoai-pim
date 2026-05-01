@@ -218,7 +218,8 @@ export default function ProductDetailPage() {
       if (pushStockStatus) payload.stock_status = pushStockStatus;
       if (pushBackorders) payload.backorders = pushBackorders;
 
-      const { data, error } = await supabase.functions.invoke("wc-update-product", {
+      const updateFunction = product.shopify_variant_id ? "shopify-update-product" : "wc-update-product";
+      const { data, error } = await supabase.functions.invoke(updateFunction, {
         body: payload,
       });
 
@@ -912,7 +913,7 @@ export default function ProductDetailPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-medium">Godkend & opdater webshop</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Justér værdierne nedenfor og tryk "Opdater shop" for at pushe ændringerne til WooCommerce. Intet sker automatisk.
+                Justér værdierne nedenfor og tryk "Opdater shop" for at pushe ændringerne til den forbundne webshop. Intet sker automatisk.
               </p>
             </CardHeader>
             <CardContent className="space-y-6">
