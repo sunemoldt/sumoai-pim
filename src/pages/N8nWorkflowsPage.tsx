@@ -216,6 +216,56 @@ export default function N8nWorkflowsPage() {
         </Card>
       )}
 
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Tag className="h-4 w-4" /> PIM-tags
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Workflows i n8n med ét af disse tags vises her. Tilføj samme tag på workflowet i n8n.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {pimTags.length === 0 ? (
+              <span className="text-xs text-muted-foreground">Ingen tags – tilføj mindst ét nedenfor</span>
+            ) : (
+              pimTags.map((t) => (
+                <Badge key={t} variant="secondary" className="gap-1 pr-1">
+                  {t}
+                  <button
+                    type="button"
+                    onClick={() => removeTag(t)}
+                    disabled={saveTagsMutation.isPending}
+                    className="ml-1 rounded p-0.5 hover:bg-background/60"
+                    aria-label={`Fjern ${t}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addTag();
+                }
+              }}
+              placeholder="fx pim, sumoai-pim"
+              className="max-w-xs"
+            />
+            <Button onClick={addTag} disabled={saveTagsMutation.isPending || !tagInput.trim()} variant="outline">
+              <Plus className="mr-1 h-4 w-4" /> Tilføj
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Workflows total</CardTitle></CardHeader>
