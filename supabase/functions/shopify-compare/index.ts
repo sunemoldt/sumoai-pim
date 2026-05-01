@@ -87,14 +87,14 @@ Deno.serve(async (req) => {
     const productGids = Array.from(new Set(pimRows.map(r => `gid://shopify/Product/${r.shopify_product_id}`)));
     const variantGids = pimRows.map(r => `gid://shopify/ProductVariant/${r.shopify_variant_id}`);
 
-    // Hent produkt-data inkl. SEO + alle metafields (custom + global)
+    // Hent produkt-data inkl. SEO + alle metafields (op til 250)
     const productData = await gql(conn.shop_domain, conn.access_token, `
       query($ids: [ID!]!) {
         nodes(ids: $ids) {
           ... on Product {
             id title descriptionHtml
             seo { title description }
-            metafields(first: 30) {
+            metafields(first: 250) {
               nodes { namespace key value type }
             }
           }
