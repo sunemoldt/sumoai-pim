@@ -88,8 +88,15 @@ export default function N8nWorkflowsPage() {
     }
   };
 
-  const workflows = workflowsQuery.data ?? [];
-  const executions = executionsQuery.data ?? [];
+  const PIM_TAGS = ["pim", "sumoai-pim", "sumoai", "comtek-pim"];
+  const allWorkflows = workflowsQuery.data ?? [];
+  const workflows = allWorkflows.filter((w) =>
+    (w.tags ?? []).some((t) => PIM_TAGS.includes(t.name.toLowerCase().trim()))
+  );
+  const hiddenCount = allWorkflows.length - workflows.length;
+  const pimWorkflowIds = new Set(workflows.map((w) => w.id));
+  const allExecutions = executionsQuery.data ?? [];
+  const executions = allExecutions.filter((ex) => pimWorkflowIds.has(ex.workflowId));
   const activeCount = workflows.filter((w) => w.active).length;
 
   const workflowMap = new Map(workflows.map((w) => [w.id, w.name]));
@@ -100,7 +107,8 @@ export default function N8nWorkflowsPage() {
         <div>
           <h1 className="text-2xl font-semibold">n8n Workflows</h1>
           <p className="text-sm text-muted-foreground">
-            Administrer dine n8n workflows og se executions direkte fra PIM
+            Viser kun workflows tagget med <code className="rounded bg-muted px-1">pim</code> i n8n
+            {hiddenCount > 0 && ` · ${hiddenCount} skjult`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -164,7 +172,13 @@ export default function N8nWorkflowsPage() {
           ) : workflowsQuery.error ? (
             <p className="text-sm text-destructive">Fejl: {(workflowsQuery.error as Error).message}</p>
           ) : workflows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ingen workflows fundet</p>
+            <div className="space-y-1 py-2">
+              <p className="text-sm text-muted-foreground">Ingen PIM-koblede workflows fundet.</p>
+              <p className="text-xs text-muted-foreground">
+                Tilføj tagget <code className="rounded bg-muted px-1">pim</code> til de workflows i n8n du vil se her.
+                {allWorkflows.length > 0 && ` (${allWorkflows.length} andre workflows ignoreret.)`}
+              </p>
+            </div>
           ) : (
             <div className="divide-y divide-border">
               {workflows.map((wf) => (
