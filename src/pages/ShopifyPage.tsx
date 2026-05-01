@@ -13,24 +13,33 @@ interface Status {
   is_connected: boolean;
 }
 
+interface ShopifyInstallResponse {
+  install_url?: string;
+  error?: string;
+}
+
+type ShopifyTestResult = Record<string, unknown>;
+
+const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
 const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref) {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
+  const [testResult, setTestResult] = useState<ShopifyTestResult | null>(null);
 
   const loadStatus = async () => {
     setLoading(true);
     const { data, error } = await supabase
-      .from("shopify_connection_status" as any)
+      .from("shopify_connection_status")
       .select("*")
       .maybeSingle();
     if (error) {
       console.error(error);
       setStatus(null);
     } else {
-      setStatus((data as any) ?? { shop_domain: null, scope: null, installed_at: null, is_connected: false });
+      setStatus(data ?? { shop_domain: null, scope: null, installed_at: null, is_connected: false });
     }
     setLoading(false);
   };
@@ -40,15 +49,15 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
   const startInstall = async () => {
     setInstalling(true);
     try {
-      const { data, error } = await supabase.functions.invoke("shopify-oauth-start", { body: {} });
+      const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", { body: {} });
       if (error) throw error;
       if (data?.install_url) {
         window.location.href = data.install_url;
       } else {
         throw new Error(data?.error || "No install URL returned");
       }
-    } catch (e: any) {
-      toast({ title: "Kunne ikke starte install", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Kunne ikke starte install", description: getErrorMessage(e), variant: "destructive" });
       setInstalling(false);
     }
   };
@@ -65,8 +74,8 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       } else {
         toast({ title: "Test fejlede", description: JSON.stringify(data?.error || data), variant: "destructive" });
       }
-    } catch (e: any) {
-      toast({ title: "Test fejlede", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Test fejlede", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setTesting(false);
     }
