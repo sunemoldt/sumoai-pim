@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
     const mode: "report" | "apply" = body.mode === "apply" ? "apply" : "report";
     const eans: string[] | null = Array.isArray(body.eans) ? body.eans : null;
     const limit = Math.min(Number(body.limit) || 50, 250);
+    const offset = Math.max(Number(body.offset) || 0, 0);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: conn } = await supabase
@@ -52,7 +53,7 @@ Deno.serve(async (req) => {
       .select("id, ean, sku, title, shopify_product_id, shopify_variant_id")
       .not("shopify_variant_id", "is", null);
     if (eans?.length) q = q.in("ean", eans);
-    q = q.order("title").limit(limit);
+    q = q.order("title").range(offset, offset + limit - 1);
     const { data: rows, error } = await q;
     if (error) throw error;
 
