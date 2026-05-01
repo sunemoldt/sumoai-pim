@@ -201,11 +201,12 @@ Deno.serve(async (req) => {
       const mfNodes = sp.metafields?.nodes ?? [];
       const shortMf = mfNodes.find((m: any) => m.namespace === shortDescMf.namespace && m.key === shortDescMf.key);
       const pimShort = stripHtml(p.short_description);
-      const shopShort = stripHtml(shortMf?.value);
+      const shopShort = normalizeMetafieldText(shortMf?.value, shortMf?.type);
       if (pimShort !== shopShort) {
         diffs.push({
           field: "short_description",
           metafield: `${shortDescMf.namespace}.${shortDescMf.key}`,
+          shopify_metafield_type: shortMf?.type ?? null,
           pim_len: pimShort.length,
           shopify_len: shopShort.length,
           pim_preview: pimShort.slice(0, 100),
