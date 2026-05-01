@@ -353,7 +353,7 @@ const WRITABLE_FIELDS = [
 
 async function withChangeSource<T>(source: string | undefined, fn: () => Promise<T>): Promise<T> {
   if (source) {
-    await supabase.rpc("set_config", { parameter: "app.change_source", value: source, is_local: false }).catch(() => {});
+    await supabase.rpc("set_change_source", { source }).catch(() => {});
   }
   return fn();
 }
