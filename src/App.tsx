@@ -44,6 +44,7 @@ function AuthenticatedApp() {
         <Route path="/suppliers" element={<SupplierListPage />} />
         <Route path="/import" element={<ImportPage />} />
         <Route path="/monitoring" element={<MonitoringPage />} />
+        <Route path="/automations/n8n" element={<N8nWorkflowsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
