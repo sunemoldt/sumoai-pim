@@ -26,20 +26,29 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
+  const [installUrl, setInstallUrl] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ShopifyTestResult | null>(null);
 
   const loadStatus = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const [{ data, error }, installResponse] = await Promise.all([
+      supabase
       .from("shopify_connection_status")
       .select("*")
-      .maybeSingle();
+        .maybeSingle(),
+      supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", { body: {} }),
+    ]);
     if (error) {
       console.error(error);
       setStatus(null);
     } else {
       setStatus(data ?? { shop_domain: null, scope: null, installed_at: null, is_connected: false });
+    }
+    if (installResponse.data?.install_url) {
+      setInstallUrl(installResponse.data.install_url);
+    } else if (installResponse.error) {
+      console.error(installResponse.error);
     }
     setLoading(false);
   };
@@ -47,26 +56,18 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
   useEffect(() => { loadStatus(); }, []);
 
   const startInstall = async () => {
-    setInstalling(true);
-    const installWindow = window.open("about:blank", "_blank");
-    try {
-      const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", { body: {} });
-      if (error) throw error;
-      if (data?.install_url) {
-        if (installWindow) {
-          installWindow.opener = null;
-          installWindow.location.href = data.install_url;
-        } else {
-          window.location.href = data.install_url;
-        }
-      } else {
-        throw new Error(data?.error || "No install URL returned");
-      }
-    } catch (e: unknown) {
-      installWindow?.close();
-      toast({ title: "Kunne ikke starte install", description: getErrorMessage(e), variant: "destructive" });
-      setInstalling(false);
+    if (installUrl) {
+      return;
     }
+    setInstalling(true);
+    const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", { body: {} });
+    setInstalling(false);
+    if (error || !data?.install_url) {
+      toast({ title: "Kunne ikke hente Shopify-link", description: error?.message || data?.error || "Prøv igen", variant: "destructive" });
+      return;
+    }
+    setInstallUrl(data.install_url);
+    window.open(data.install_url, "_blank", "noopener,noreferrer");
   };
 
   const testConnection = async () => {
@@ -135,10 +136,19 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
           )}
 
           <div className="flex flex-wrap gap-2 pt-2">
-            <Button onClick={startInstall} disabled={installing}>
-              {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-              {status?.is_connected ? "Geninstallér app" : "Installér Shopify-app"}
-            </Button>
+            {installUrl ? (
+              <Button asChild>
+                <a href={installUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-4 w-4" />
+                  {status?.is_connected ? "Geninstallér app" : "Installér Shopify-app"}
+                </a>
+              </Button>
+            ) : (
+              <Button onClick={startInstall} disabled={installing}>
+                {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                Hent Shopify-link
+              </Button>
+            )}
             {status?.is_connected && (
               <>
                 <Button variant="outline" onClick={testConnection} disabled={testing}>
