@@ -291,14 +291,19 @@ export default function ImportPage() {
               </Select>
             </div>
 
-            <Button onClick={runImport} disabled={loading} className="w-full">
-              {loading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={() => runImport(false)} disabled={loading} className="w-full">
+                {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                {loading ? "Importerer..." : "Inkrementel import"}
+              </Button>
+              <Button onClick={() => runImport(true)} disabled={loading} variant="outline" className="w-full">
                 <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              {loading ? "Importerer..." : "Start WooCommerce import"}
-            </Button>
+                Tving fuld import
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Inkrementel henter kun ændrede produkter siden sidste import. Fuld henter alt — brug ved rydning eller skemaændringer.
+            </p>
 
             {result && (
               <div className="rounded-md border border-border p-4 space-y-2">
