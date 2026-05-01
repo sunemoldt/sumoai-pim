@@ -5,10 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, RefreshCw, CheckCircle2, XCircle, Workflow, ExternalLink } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, RefreshCw, CheckCircle2, XCircle, Workflow, ExternalLink, X, Tag, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
+
+const DEFAULT_PIM_TAGS = ["pim", "sumoai-pim", "sumoai", "comtek-pim"];
+const TAGS_SETTING_KEY = "n8n_pim_tags";
 
 interface N8nWorkflow {
   id: string;
@@ -42,6 +46,71 @@ export default function N8nWorkflowsPage() {
   const qc = useQueryClient();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; baseUrl?: string } | null>(null);
+  const [tagInput, setTagInput] = useState("");
+
+  const tagsQuery = useQuery({
+    queryKey: ["n8n-pim-tags"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analytics_settings")
+        .select("setting_value")
+        .eq("setting_key", TAGS_SETTING_KEY)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data?.setting_value) return DEFAULT_PIM_TAGS;
+      try {
+        const parsed = JSON.parse(data.setting_value);
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed.map(String) : DEFAULT_PIM_TAGS;
+      } catch {
+        return DEFAULT_PIM_TAGS;
+      }
+    },
+  });
+
+  const pimTags = tagsQuery.data ?? DEFAULT_PIM_TAGS;
+
+  const saveTagsMutation = useMutation({
+    mutationFn: async (next: string[]) => {
+      const value = JSON.stringify(next);
+      const { data: existing } = await supabase
+        .from("analytics_settings")
+        .select("id")
+        .eq("setting_key", TAGS_SETTING_KEY)
+        .maybeSingle();
+      if (existing) {
+        const { error } = await supabase
+          .from("analytics_settings")
+          .update({ setting_value: value, updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("analytics_settings")
+          .insert({ setting_key: TAGS_SETTING_KEY, setting_value: value });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["n8n-pim-tags"] });
+      toast({ title: "Tags gemt" });
+    },
+    onError: (err: Error) => toast({ title: "Kunne ikke gemme", description: err.message, variant: "destructive" }),
+  });
+
+  const addTag = () => {
+    const v = tagInput.trim().toLowerCase();
+    if (!v) return;
+    if (pimTags.map((t) => t.toLowerCase()).includes(v)) {
+      setTagInput("");
+      return;
+    }
+    saveTagsMutation.mutate([...pimTags, v]);
+    setTagInput("");
+  };
+
+  const removeTag = (tag: string) => {
+    saveTagsMutation.mutate(pimTags.filter((t) => t !== tag));
+  };
 
   const workflowsQuery = useQuery({
     queryKey: ["n8n-workflows"],
@@ -88,10 +157,10 @@ export default function N8nWorkflowsPage() {
     }
   };
 
-  const PIM_TAGS = ["pim", "sumoai-pim", "sumoai", "comtek-pim"];
+  const tagSet = new Set(pimTags.map((t) => t.toLowerCase().trim()));
   const allWorkflows = workflowsQuery.data ?? [];
   const workflows = allWorkflows.filter((w) =>
-    (w.tags ?? []).some((t) => PIM_TAGS.includes(t.name.toLowerCase().trim()))
+    (w.tags ?? []).some((t) => tagSet.has(t.name.toLowerCase().trim()))
   );
   const hiddenCount = allWorkflows.length - workflows.length;
   const pimWorkflowIds = new Set(workflows.map((w) => w.id));
@@ -107,7 +176,7 @@ export default function N8nWorkflowsPage() {
         <div>
           <h1 className="text-2xl font-semibold">n8n Workflows</h1>
           <p className="text-sm text-muted-foreground">
-            Viser kun workflows tagget med <code className="rounded bg-muted px-1">pim</code> i n8n
+            Viser kun workflows tagget med {pimTags.length === 0 ? <em>ingen tags konfigureret</em> : pimTags.map((t) => <code key={t} className="mr-1 rounded bg-muted px-1">{t}</code>)} i n8n
             {hiddenCount > 0 && ` · ${hiddenCount} skjult`}
           </p>
         </div>
@@ -147,6 +216,56 @@ export default function N8nWorkflowsPage() {
         </Card>
       )}
 
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Tag className="h-4 w-4" /> PIM-tags
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Workflows i n8n med ét af disse tags vises her. Tilføj samme tag på workflowet i n8n.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {pimTags.length === 0 ? (
+              <span className="text-xs text-muted-foreground">Ingen tags – tilføj mindst ét nedenfor</span>
+            ) : (
+              pimTags.map((t) => (
+                <Badge key={t} variant="secondary" className="gap-1 pr-1">
+                  {t}
+                  <button
+                    type="button"
+                    onClick={() => removeTag(t)}
+                    disabled={saveTagsMutation.isPending}
+                    className="ml-1 rounded p-0.5 hover:bg-background/60"
+                    aria-label={`Fjern ${t}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Input
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addTag();
+                }
+              }}
+              placeholder="fx pim, sumoai-pim"
+              className="max-w-xs"
+            />
+            <Button onClick={addTag} disabled={saveTagsMutation.isPending || !tagInput.trim()} variant="outline">
+              <Plus className="mr-1 h-4 w-4" /> Tilføj
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Workflows total</CardTitle></CardHeader>
@@ -175,7 +294,7 @@ export default function N8nWorkflowsPage() {
             <div className="space-y-1 py-2">
               <p className="text-sm text-muted-foreground">Ingen PIM-koblede workflows fundet.</p>
               <p className="text-xs text-muted-foreground">
-                Tilføj tagget <code className="rounded bg-muted px-1">pim</code> til de workflows i n8n du vil se her.
+                Tilføj et af tags ({pimTags.join(", ") || "ingen konfigureret"}) til de workflows i n8n du vil se her.
                 {allWorkflows.length > 0 && ` (${allWorkflows.length} andre workflows ignoreret.)`}
               </p>
             </div>
