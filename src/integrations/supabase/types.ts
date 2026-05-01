@@ -658,6 +658,7 @@ export type Database = {
         }[]
       }
       get_db_stats: { Args: never; Returns: Json }
+      set_change_source: { Args: { source: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
