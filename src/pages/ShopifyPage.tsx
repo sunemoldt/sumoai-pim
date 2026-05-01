@@ -81,15 +81,11 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
 
   const copyInstallLink = async () => {
     const domain = shopDomainInput.trim();
-    if (!domain) return;
-    const { data, error } = await supabase.functions.invoke<ShopifyInstallResponse>("shopify-oauth-start", {
-      body: { shop_domain: domain },
-    });
-    if (error || !data?.install_url) {
-      toast({ title: "Kunne ikke generere link", description: error?.message || data?.error, variant: "destructive" });
+    if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(domain)) {
+      toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
-    await navigator.clipboard.writeText(data.install_url);
+    await navigator.clipboard.writeText(getFunctionUrl("shopify-oauth-start", { shop_domain: domain }));
     toast({ title: "Install-link kopieret", description: "Indsæt i en ny browserfane for at godkende på Shopify." });
   };
 
