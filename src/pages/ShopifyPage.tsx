@@ -25,12 +25,6 @@ interface ConnectionRow {
   updated_at: string;
 }
 
-interface ShopifyInstallResponse {
-  install_url?: string;
-  shop_domain?: string;
-  error?: string;
-}
-
 type ShopifyTestResult = Record<string, unknown>;
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
