@@ -913,7 +913,7 @@ export default function ProductDetailPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-medium">Godkend & opdater webshop</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Justér værdierne nedenfor og tryk "Opdater shop" for at pushe ændringerne til WooCommerce. Intet sker automatisk.
+                Justér værdierne nedenfor og tryk "Opdater shop" for at pushe ændringerne til den forbundne webshop. Intet sker automatisk.
               </p>
             </CardHeader>
             <CardContent className="space-y-6">
