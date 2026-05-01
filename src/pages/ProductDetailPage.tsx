@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History, TrendingUp, AlertTriangle, Lightbulb, Eye, ShoppingCart, MousePointerClick, ExternalLink, RefreshCw, Check, X } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Package, Save, Loader2, Upload, History, TrendingUp, AlertTriangle, Lightbulb, Eye, ShoppingCart, MousePointerClick, ExternalLink, RefreshCw, Check, X, Undo2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
@@ -1344,10 +1345,23 @@ export default function ProductDetailPage() {
                       <TableHead>Gammel værdi</TableHead>
                       <TableHead>Ny værdi</TableHead>
                       <TableHead>Kilde</TableHead>
+                      <TableHead className="text-right">Handling</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {changeLog.map((log) => (
+                    {changeLog.map((log) => {
+                      const REVERTABLE = new Set([
+                        "title","image_url","brand","category","sku",
+                        "short_description","long_description","meta_title","meta_description",
+                        "stock_status","webshop_platform","webshop_product_id","webshop_parent_id",
+                        "stock_sync_interval",
+                        "webshop_price","sale_price","custom_markup_percentage","min_sync_margin",
+                        "stock_quantity",
+                        "auto_stock_sync","shopify_sync_enabled","backorders_allowed",
+                        "attributes","categories","stock_sync_supplier_ids",
+                      ]);
+                      const canRevert = REVERTABLE.has(log.field_name) && log.source !== "revert";
+                      return (
                       <TableRow key={log.id}>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                           {new Date(log.created_at).toLocaleString("da-DK")}
@@ -1367,8 +1381,53 @@ export default function ProductDetailPage() {
                         <TableCell className="font-mono text-xs text-muted-foreground">{log.old_value ?? "—"}</TableCell>
                         <TableCell className="font-mono text-xs text-foreground">{log.new_value ?? "—"}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{log.source}</TableCell>
+                        <TableCell className="text-right">
+                          {canRevert ? (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-7 px-2">
+                                  <Undo2 className="h-3.5 w-3.5 mr-1" /> Rul tilbage
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Rul ændring tilbage?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Feltet <span className="font-mono">{log.field_name}</span> sættes tilbage til værdien:
+                                    <div className="mt-2 p-2 rounded bg-muted font-mono text-xs break-all">
+                                      {log.old_value ?? "—"}
+                                    </div>
+                                    <span className="block mt-2 text-xs text-muted-foreground">
+                                      Tilbagerulningen logges som en ny ændring med kilde "revert".
+                                    </span>
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Annullér</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={async () => {
+                                      const { error } = await supabase.rpc("revert_change_log_entry" as any, { p_log_id: log.id });
+                                      if (error) {
+                                        toast.error("Kunne ikke rulle tilbage: " + error.message);
+                                        return;
+                                      }
+                                      toast.success(`Feltet "${log.field_name}" blev rullet tilbage`);
+                                      queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+                                      queryClient.invalidateQueries({ queryKey: ["product_change_log", id] });
+                                    }}
+                                  >
+                                    Rul tilbage
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
