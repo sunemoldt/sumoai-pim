@@ -98,75 +98,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3. Auto stock sync for products with multi-supplier support + margin check
+    // 3. Auto stock sync — delegated to DB function recompute_product_stock.
+    // Triggers on supplier_products keep stock live; this loop is a safety-net
+    // sweep that respects each product's stock_sync_interval.
     const { data: syncProducts } = await supabase
       .from("master_products")
-      .select("id, auto_stock_sync, stock_sync_supplier_ids, stock_sync_interval, min_sync_margin, webshop_price, sale_price")
+      .select("id, stock_sync_interval")
       .eq("auto_stock_sync", true);
 
     if (syncProducts && syncProducts.length > 0) {
+      const now = new Date();
       for (const product of syncProducts) {
-        const syncIds = (product as any).stock_sync_supplier_ids as string[] | null;
-        if (!syncIds || syncIds.length === 0) continue;
-
         const interval = (product as any).stock_sync_interval ?? "daily";
-        // Simple interval check: hourly=always, daily=hour 6, weekly=hour 6 on Monday
-        const now = new Date();
+        if (interval === "manual") continue;
         if (interval === "daily" && now.getUTCHours() !== 6) continue;
         if (interval === "weekly" && (now.getUTCHours() !== 6 || now.getUTCDay() !== 1)) continue;
+        // hourly = always; realtime relies on DB triggers anyway
 
-        try {
-          // Get supplier products for this master product
-          const { data: supplierProducts } = await supabase
-            .from("supplier_products")
-            .select("supplier_id, purchase_price, in_stock, stock_quantity")
-            .eq("master_product_id", product.id)
-            .in("supplier_id", syncIds);
-
-          if (!supplierProducts || supplierProducts.length === 0) continue;
-
-          const activePrice = product.sale_price ?? product.webshop_price;
-          const minMargin = (product as any).min_sync_margin ?? 15;
-
-          // Filter by margin: only include suppliers where margin >= min_sync_margin
-          const eligibleSuppliers = supplierProducts.filter((sp) => {
-            if (!activePrice || activePrice === 0) return true; // If no webshop price, include all
-            const salePriceExVat = activePrice / 1.25; // Danish VAT
-            const margin = ((salePriceExVat - sp.purchase_price) / salePriceExVat) * 100;
-            return margin >= minMargin;
-          });
-
-          // Aggregate stock from eligible suppliers
-          const totalStock = eligibleSuppliers.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
-          const anyInStock = eligibleSuppliers.some((sp) => sp.in_stock);
-          const stockStatus = anyInStock ? "instock" : "outofstock";
-
-          // Update master product stock
-          const { error } = await supabase
-            .from("master_products")
-            .update({
-              stock_quantity: totalStock,
-              stock_status: stockStatus,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", product.id);
-
-          if (error) {
-            results.push({ type: "stock-sync", product_id: product.id, success: false, error: error.message });
-          } else {
-            const skippedCount = supplierProducts.length - eligibleSuppliers.length;
-            results.push({
-              type: "stock-sync",
-              product_id: product.id,
-              success: true,
-              total_stock: totalStock,
-              status: stockStatus,
-              suppliers_used: eligibleSuppliers.length,
-              suppliers_skipped_margin: skippedCount,
-            });
-          }
-        } catch (err) {
-          results.push({ type: "stock-sync", product_id: product.id, success: false, error: String(err) });
+        const { error } = await supabase.rpc("recompute_product_stock", {
+          p_master_product_id: product.id,
+        });
+        if (error) {
+          results.push({ type: "stock-sync", product_id: product.id, success: false, error: error.message });
+        } else {
+          results.push({ type: "stock-sync", product_id: product.id, success: true });
         }
       }
     }

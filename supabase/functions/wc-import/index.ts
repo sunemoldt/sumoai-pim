@@ -254,14 +254,17 @@ Deno.serve(async (req) => {
       .single();
     const logId = logEntry?.id;
 
-    // Pre-fetch existing master products for diff detection
+    // Pre-fetch existing master products for diff detection + auto_stock_sync flag
     const { data: existingProducts } = await supabase
       .from("master_products")
-      .select("ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, title, brand, category");
+      .select("ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, title, brand, category, auto_stock_sync");
     const existingByEan = new Map<string, typeof existingProducts extends (infer T)[] | null ? T : never>();
     for (const ep of existingProducts ?? []) {
       existingByEan.set(ep.ean, ep);
     }
+
+    // Note: stock_quantity/stock_status/backorders_allowed will be stripped per-row
+    // below for products with auto_stock_sync = true (supplier sync owns stock).
 
     const changeLogs: { master_product_id?: string; change_type: string; field_name: string; old_value: string | null; new_value: string | null; source: string; _ean?: string }[] = [];
 
@@ -279,15 +282,30 @@ Deno.serve(async (req) => {
           const fields: [string, any, any, string][] = [
             ["webshop_price", existing.webshop_price, row.webshop_price, "price_update"],
             ["sale_price", existing.sale_price, row.sale_price, "price_update"],
-            ["stock_quantity", existing.stock_quantity, row.stock_quantity, "stock_update"],
-            ["stock_status", existing.stock_status, row.stock_status, "stock_update"],
-            ["backorders_allowed", existing.backorders_allowed, row.backorders_allowed, "stock_update"],
           ];
+          // Only diff stock fields when WC is the source of truth (auto_stock_sync = false)
+          if (!(existing as any).auto_stock_sync) {
+            fields.push(
+              ["stock_quantity", existing.stock_quantity, row.stock_quantity, "stock_update"],
+              ["stock_status", existing.stock_status, row.stock_status, "stock_update"],
+              ["backorders_allowed", existing.backorders_allowed, row.backorders_allowed, "stock_update"],
+            );
+          }
           for (const [field, oldVal, newVal, changeType] of fields) {
             if (String(oldVal ?? "null") !== String(newVal ?? "null")) {
               changeLogs.push({ change_type: changeType, field_name: field, old_value: String(oldVal ?? "null"), new_value: String(newVal ?? "null"), source: "wc-import", _ean: row.ean });
             }
           }
+        }
+      }
+
+      // Strip stock fields for auto_stock_sync products (supplier sync owns stock)
+      for (const row of batch) {
+        const existing = existingByEan.get(row.ean);
+        if (existing && (existing as any).auto_stock_sync) {
+          delete row.stock_quantity;
+          delete row.stock_status;
+          delete row.backorders_allowed;
         }
       }
 
