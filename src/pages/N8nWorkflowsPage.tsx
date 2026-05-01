@@ -1,14 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, RefreshCw, CheckCircle2, XCircle, Workflow, ExternalLink } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, RefreshCw, CheckCircle2, XCircle, Workflow, ExternalLink, X, Tag, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
+
+const DEFAULT_PIM_TAGS = ["pim", "sumoai-pim", "sumoai", "comtek-pim"];
+const TAGS_SETTING_KEY = "n8n_pim_tags";
 
 interface N8nWorkflow {
   id: string;
