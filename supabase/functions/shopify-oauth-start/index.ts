@@ -12,6 +12,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 const SCOPES = "read_products,write_products,read_inventory,write_inventory,read_product_listings";
+const STATE_TTL_HOURS = 2;
 
 function normalizeShopDomain(value: string) {
   return value.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
@@ -29,8 +30,9 @@ async function createInstallUrl(shopDomainOverride?: string) {
 
   const state = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  await supabase.from("shopify_oauth_state").insert({ state, shop_domain: shopDomain });
-  await supabase.from("shopify_oauth_state").delete().lt("expires_at", new Date().toISOString());
+  const expiresAt = new Date(Date.now() + STATE_TTL_HOURS * 60 * 60 * 1000).toISOString();
+  await supabase.from("shopify_oauth_state").insert({ state, shop_domain: shopDomain, expires_at: expiresAt });
+  await supabase.from("shopify_oauth_state").delete().lt("expires_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
   const redirectUri = `${SUPABASE_URL}/functions/v1/shopify-oauth-callback`;
   const installUrl = `https://${shopDomain}/admin/oauth/authorize?` + new URLSearchParams({
