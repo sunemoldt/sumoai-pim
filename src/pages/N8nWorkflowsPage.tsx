@@ -172,7 +172,13 @@ export default function N8nWorkflowsPage() {
           ) : workflowsQuery.error ? (
             <p className="text-sm text-destructive">Fejl: {(workflowsQuery.error as Error).message}</p>
           ) : workflows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ingen workflows fundet</p>
+            <div className="space-y-1 py-2">
+              <p className="text-sm text-muted-foreground">Ingen PIM-koblede workflows fundet.</p>
+              <p className="text-xs text-muted-foreground">
+                Tilføj tagget <code className="rounded bg-muted px-1">pim</code> til de workflows i n8n du vil se her.
+                {allWorkflows.length > 0 && ` (${allWorkflows.length} andre workflows ignoreret.)`}
+              </p>
+            </div>
           ) : (
             <div className="divide-y divide-border">
               {workflows.map((wf) => (
