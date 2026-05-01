@@ -76,27 +76,35 @@ Deno.serve(async (req) => {
     const updatesByProduct = new Map<string, Map<string, string>>(); // productGid -> variantGid -> barcode
     const results: any[] = [];
     let skippedDupes = 0;
+    let skippedFallback = 0;
 
     for (const r of rows ?? []) {
       const sv = map.get(r.shopify_variant_id);
       const shopBarcode = sv?.barcode ?? "";
       const correct = r.ean === shopBarcode;
       const isDupe = (variantCounts.get(r.shopify_variant_id) ?? 0) > 1;
+      // Fallback-EAN ('wc-' prefix) er ikke et rigtigt EAN — skal IKKE skrives til Shopify barcode
+      const isFallbackEan = typeof r.ean === "string" && r.ean.startsWith("wc-");
       const entry: any = {
         ean: r.ean, sku: r.sku, title: r.title,
         shopify_variant_id: r.shopify_variant_id,
         shopify_barcode: shopBarcode,
         is_correct: correct,
         is_duplicate_mapping: isDupe,
-        action: correct ? "ok" : (isDupe ? "skipped_duplicate" : (mode === "apply" ? "will_update" : "needs_update")),
+        is_fallback_ean: isFallbackEan,
+        action: correct ? "ok" :
+                isDupe ? "skipped_duplicate" :
+                isFallbackEan ? "skipped_fallback_ean" :
+                (mode === "apply" ? "will_update" : "needs_update"),
       };
-      if (!correct && !isDupe && mode === "apply" && r.ean) {
+      if (!correct && !isDupe && !isFallbackEan && mode === "apply" && r.ean) {
         const pid = `gid://shopify/Product/${r.shopify_product_id}`;
         const vmap = updatesByProduct.get(pid) ?? new Map<string, string>();
         vmap.set(`gid://shopify/ProductVariant/${r.shopify_variant_id}`, r.ean);
         updatesByProduct.set(pid, vmap);
       }
       if (isDupe) skippedDupes++;
+      if (isFallbackEan) skippedFallback++;
       results.push(entry);
     }
 
