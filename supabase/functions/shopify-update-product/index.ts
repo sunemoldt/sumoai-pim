@@ -116,7 +116,10 @@ Deno.serve(async (req) => {
       if (oldText !== newText) changeLogs.push({ master_product_id, change_type: type, field_name: field, old_value: oldText, new_value: newText, source: "shopify-update-product" });
     };
 
-    const variantInput: Record<string, unknown> = { id: product.shopify_variant_id };
+    const variantGid = toGid("ProductVariant", product.shopify_variant_id);
+    const productGid = toGid("Product", product.shopify_product_id);
+
+    const variantInput: Record<string, unknown> = { id: variantGid };
     if (regular_price !== undefined && regular_price !== null) {
       variantInput.price = String(regular_price);
       dbUpdate.webshop_price = regular_price;
@@ -147,7 +150,7 @@ Deno.serve(async (req) => {
           }
         }`;
       const data = await shopifyGraphql(conn.shop_domain, conn.access_token, mutation, {
-        productId: product.shopify_product_id,
+        productId: productGid,
         variants: [variantInput],
       });
       const errors = data.productVariantsBulkUpdate.userErrors;
@@ -160,7 +163,7 @@ Deno.serve(async (req) => {
           productVariant(id: $id) { inventoryItem { id } inventoryQuantity }
           locations(first: 1) { nodes { id } }
         }`;
-      const inventoryData = await shopifyGraphql(conn.shop_domain, conn.access_token, inventoryQuery, { id: product.shopify_variant_id });
+      const inventoryData = await shopifyGraphql(conn.shop_domain, conn.access_token, inventoryQuery, { id: variantGid });
       const inventoryItemId = inventoryData.productVariant?.inventoryItem?.id;
       const locationId = inventoryData.locations?.nodes?.[0]?.id;
       const currentQty = inventoryData.productVariant?.inventoryQuantity ?? 0;
