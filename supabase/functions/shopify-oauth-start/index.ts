@@ -13,10 +13,45 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 const SCOPES = "read_products,write_products,read_inventory,write_inventory,read_product_listings";
 
+function normalizeShopDomain(value: string) {
+  return value.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+}
+
+async function createInstallUrl(shopDomainOverride?: string) {
+  if (!SHOPIFY_CLIENT_ID || !SHOPIFY_STORE_DOMAIN) {
+    throw new Error("Shopify credentials not configured");
+  }
+
+  const shopDomain = normalizeShopDomain(shopDomainOverride || SHOPIFY_STORE_DOMAIN);
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(shopDomain)) {
+    throw new Error("Invalid shop_domain — must be xxx.myshopify.com");
+  }
+
+  const state = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  await supabase.from("shopify_oauth_state").insert({ state, shop_domain: shopDomain });
+  await supabase.from("shopify_oauth_state").delete().lt("expires_at", new Date().toISOString());
+
+  const redirectUri = `${SUPABASE_URL}/functions/v1/shopify-oauth-callback`;
+  const installUrl = `https://${shopDomain}/admin/oauth/authorize?` + new URLSearchParams({
+    client_id: SHOPIFY_CLIENT_ID,
+    scope: SCOPES,
+    redirect_uri: redirectUri,
+    state,
+  }).toString();
+
+  return { installUrl, shopDomain };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    if (req.method === "GET") {
+      const { installUrl } = await createInstallUrl();
+      return Response.redirect(installUrl, 302);
+    }
+
     // Auth check
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
@@ -34,42 +69,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!SHOPIFY_CLIENT_ID || !SHOPIFY_STORE_DOMAIN) {
-      return new Response(JSON.stringify({ error: "Shopify credentials not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     // Allow caller to override domain (optional)
-    let shopDomain = SHOPIFY_STORE_DOMAIN.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    let shopDomainOverride: string | undefined;
     try {
       const body = await req.json().catch(() => ({}));
       if (body?.shop_domain) {
-        shopDomain = String(body.shop_domain).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+        shopDomainOverride = String(body.shop_domain);
       }
     } catch { /* no body */ }
 
-    if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(shopDomain)) {
-      return new Response(JSON.stringify({ error: "Invalid shop_domain — must be xxx.myshopify.com" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Generate cryptographic state for CSRF
-    const state = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    await supabase.from("shopify_oauth_state").insert({ state, shop_domain: shopDomain });
-    // Clean up expired states
-    await supabase.from("shopify_oauth_state").delete().lt("expires_at", new Date().toISOString());
-
-    const redirectUri = `${SUPABASE_URL}/functions/v1/shopify-oauth-callback`;
-    const installUrl = `https://${shopDomain}/admin/oauth/authorize?` + new URLSearchParams({
-      client_id: SHOPIFY_CLIENT_ID,
-      scope: SCOPES,
-      redirect_uri: redirectUri,
-      state,
-    }).toString();
+    const { installUrl, shopDomain } = await createInstallUrl(shopDomainOverride);
 
     return new Response(JSON.stringify({ install_url: installUrl, shop_domain: shopDomain }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
