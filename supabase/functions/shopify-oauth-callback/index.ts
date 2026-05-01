@@ -33,6 +33,8 @@ async function verifyHmac(params: URLSearchParams, secret: string): Promise<bool
 
 function htmlResponse(title: string, msg: string, ok: boolean) {
   const color = ok ? "#10b981" : "#ef4444";
+  const buttonText = ok ? "Tilbage til PIM" : "Start Shopify-installation forfra";
+  const buttonHref = ok ? APP_RETURN_URL : `${SUPABASE_URL}/functions/v1/shopify-oauth-start`;
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
 <style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0f172a;color:#fff}
 .card{background:#1e293b;padding:2rem 3rem;border-radius:12px;border:1px solid #334155;max-width:480px;text-align:center}
@@ -41,8 +43,8 @@ p{color:#cbd5e1;line-height:1.5}
 a{color:#3b82f6;text-decoration:none;display:inline-block;margin-top:1rem;padding:.6rem 1.2rem;border:1px solid #3b82f6;border-radius:6px}
 a:hover{background:#3b82f6;color:#fff}</style></head>
 <body><div class="card"><h1>${title}</h1><p>${msg}</p>
-<a href="${APP_RETURN_URL}">Tilbage til PIM</a></div>
-<script>setTimeout(()=>location.href="${APP_RETURN_URL}",2500)</script></body></html>`;
+<a href="${buttonHref}">${buttonText}</a></div>
+${ok ? `<script>setTimeout(()=>location.href="${APP_RETURN_URL}",2500)</script>` : ""}</body></html>`;
   return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
 }
 
@@ -75,7 +77,8 @@ Deno.serve(async (req) => {
     const { data: stateRow } = await supabase
       .from("shopify_oauth_state").select("*").eq("state", state).maybeSingle();
     if (!stateRow || stateRow.shop_domain !== shop) {
-      return htmlResponse("Ugyldig state", "OAuth state matcher ikke. Start install-flowet forfra.", false);
+      console.warn("OAuth state mismatch", { state_found: Boolean(stateRow), expected_shop: stateRow?.shop_domain, received_shop: shop });
+      return htmlResponse("Linket er udløbet", "Shopify-linket er ikke længere gyldigt. Klik nedenfor for at starte installationen med et helt nyt link.", false);
     }
     if (new Date(stateRow.expires_at) < new Date()) {
       await supabase.from("shopify_oauth_state").delete().eq("state", state);
