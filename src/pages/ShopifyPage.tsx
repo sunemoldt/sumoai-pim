@@ -30,6 +30,8 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ShopifyTestResult | null>(null);
 
+  const oauthStartUrl = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/shopify-oauth-start`;
+
   const loadStatus = async () => {
     setLoading(true);
     const [{ data, error }, installResponse] = await Promise.all([
@@ -46,7 +48,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       setStatus(data ?? { shop_domain: null, scope: null, installed_at: null, is_connected: false });
     }
     if (installResponse.data?.install_url) {
-      setInstallUrl(installResponse.data.install_url);
+      setInstallUrl(oauthStartUrl);
     } else if (installResponse.error) {
       console.error(installResponse.error);
     }
@@ -66,8 +68,8 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       toast({ title: "Kunne ikke hente Shopify-link", description: error?.message || data?.error || "Prøv igen", variant: "destructive" });
       return;
     }
-    setInstallUrl(data.install_url);
-    window.open(data.install_url, "_blank", "noopener,noreferrer");
+    setInstallUrl(oauthStartUrl);
+    window.location.href = oauthStartUrl;
   };
 
   const copyInstallUrl = async () => {
@@ -147,7 +149,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
                 <Button asChild>
                   <a href={installUrl} target="_top">
                     <ExternalLink className="h-4 w-4" />
-                    Åbn Shopify udenfor preview
+                    Start Shopify-installation
                   </a>
                 </Button>
                 <Button variant="outline" onClick={copyInstallUrl}>
@@ -176,7 +178,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
 
           {installUrl && !status?.is_connected && (
             <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-              <p>Shopify blokerer indlejrede preview-vinduer. Brug knappen ovenfor, eller kopiér linket og indsæt det direkte i browserens adressefelt — ikke inde i Lovable-previewet.</p>
+              <p>Brug dette backend-startlink i browserens adressefelt. Det videresender automatisk til Shopify og undgår preview-blokeringen.</p>
               <p className="break-all font-mono text-xs text-foreground">{installUrl}</p>
             </div>
           )}
