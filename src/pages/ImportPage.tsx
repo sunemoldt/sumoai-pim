@@ -56,14 +56,6 @@ export default function ImportPage() {
   const [savingSchedule, setSavingSchedule] = useState(false);
   const queryClient = useQueryClient();
   const { data: logs = [] } = useImportLogs();
-  const { data: shopifyStatus } = useQuery({
-    queryKey: ["shopify_connection_status"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("shopify_connection_status").select("*").maybeSingle();
-      if (error) throw error;
-      return data as { is_connected: boolean; shop_domain: string | null } | null;
-    },
-  });
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Load WC schedule from price_settings (reuse table with scope='wc_schedule')
@@ -107,12 +99,12 @@ export default function ImportPage() {
     setLoading(true);
     setResult(null);
     try {
-      const importFunction = shopifyStatus?.is_connected ? "shopify-import" : "wc-import";
-      const { data, error } = await supabase.functions.invoke(importFunction);
+      // WooCommerce er master - import altid fra WooCommerce
+      const { data, error } = await supabase.functions.invoke("wc-import");
       if (error) throw error;
       setResult(data as ImportResult);
       if (data?.success) {
-        toast.success(`${data.imported} produkter importeret fra ${importFunction === "shopify-import" ? "Shopify" : "WooCommerce"}`);
+        toast.success(`${data.imported} produkter importeret fra WooCommerce`);
         queryClient.invalidateQueries({ queryKey: ["master_products"] });
         queryClient.invalidateQueries({ queryKey: ["import_logs"] });
       } else {
@@ -274,8 +266,8 @@ export default function ImportPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Henter alle produkter (inkl. varianter) fra {shopifyStatus?.is_connected ? "Shopify" : "WooCommerce"} og opretter/opdaterer dem i
-              produktkataloget. Eksisterende produkter matches på EAN.
+              Henter alle produkter (inkl. varianter) fra WooCommerce (master) og opretter/opdaterer dem i
+              produktkataloget. Eksisterende produkter matches på EAN. Shopify synkroniseres kun ud manuelt fra produktsiden.
             </p>
 
             <div className="space-y-2">
@@ -303,7 +295,7 @@ export default function ImportPage() {
               ) : (
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}
-              {loading ? "Importerer..." : `Start ${shopifyStatus?.is_connected ? "Shopify" : "WooCommerce"} import`}
+              {loading ? "Importerer..." : "Start WooCommerce import"}
             </Button>
 
             {result && (
