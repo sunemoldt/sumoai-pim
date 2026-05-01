@@ -1,7 +1,9 @@
 // Sammenligner PIM (master_products) med Shopify for udvalgte produkter.
-// Tjekker: titel, beskrivelser, pris, sale_price, lager, stock_status.
+// Tjekker: titel, long_description, short_description (metafield), meta_title (seo.title),
+// meta_description (seo.description), pris, sale_price, lager, stock_status.
 // Mode: 'report' (default) = kun rapport. 'apply' = opdater Shopify ud fra PIM.
-// Filter: { brand?: string, eans?: string[], limit?: number }
+// Filter: { brand?: string, eans?: string[], limit?: number, ignoreVariantTitle?: boolean,
+//          shortDescMetafield?: { namespace: string, key: string } }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
@@ -28,12 +30,15 @@ async function gql(shop: string, token: string, query: string, variables: Record
 
 function stripHtml(s: string | null | undefined): string {
   if (!s) return "";
-  return String(s).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return String(s).replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 }
 function normNum(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+function normText(s: string | null | undefined): string {
+  return (s ?? "").trim();
 }
 
 Deno.serve(async (req) => {
@@ -53,6 +58,9 @@ Deno.serve(async (req) => {
     const brand: string | null = body.brand ?? null;
     const eans: string[] | null = Array.isArray(body.eans) ? body.eans : null;
     const limit: number = Math.min(Number(body.limit) || 20, 100);
+    const ignoreVariantTitle: boolean = body.ignoreVariantTitle !== false; // default true
+    const shortDescMf = body.shortDescMetafield ?? { namespace: "custom", key: "short_description" };
+    const probe: boolean = body.probe === true; // returnerer rå Shopify metafields til debugging
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -64,7 +72,7 @@ Deno.serve(async (req) => {
     if (!conn) throw new Error("Ingen Shopify-forbindelse");
 
     let q = supabase.from("master_products")
-      .select("id, ean, sku, title, short_description, long_description, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, shopify_product_id, shopify_variant_id")
+      .select("id, ean, sku, title, short_description, long_description, meta_title, meta_description, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, shopify_product_id, shopify_variant_id")
       .not("shopify_variant_id", "is", null);
     if (eans && eans.length) q = q.in("ean", eans);
     else if (brand) q = q.or(`brand.ilike.%${brand}%,title.ilike.%${brand}%`);
@@ -76,14 +84,20 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: true, mode, message: "Ingen PIM-produkter matchede filteret", results: [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Hent unikke produkter (for description/title) og varianter (for pris/lager)
     const productGids = Array.from(new Set(pimRows.map(r => `gid://shopify/Product/${r.shopify_product_id}`)));
     const variantGids = pimRows.map(r => `gid://shopify/ProductVariant/${r.shopify_variant_id}`);
 
+    // Hent produkt-data inkl. SEO + alle metafields (custom + global)
     const productData = await gql(conn.shop_domain, conn.access_token, `
       query($ids: [ID!]!) {
         nodes(ids: $ids) {
-          ... on Product { id title descriptionHtml }
+          ... on Product {
+            id title descriptionHtml
+            seo { title description }
+            metafields(first: 30) {
+              nodes { namespace key value type }
+            }
+          }
         }
       }`, { ids: productGids });
 
@@ -103,7 +117,16 @@ Deno.serve(async (req) => {
     const variantMap = new Map<string, any>();
     for (const n of variantData.nodes ?? []) if (n) variantMap.set(n.id.replace("gid://shopify/ProductVariant/", ""), n);
 
-    // Hent én lokation til inventory adjust
+    if (probe) {
+      // returnér rå metafields så vi kan se hvilke namespace/keys der findes
+      const probeOut = Array.from(productMap.entries()).map(([pid, p]) => ({
+        product_id: pid, title: p.title,
+        seo: p.seo,
+        metafields: (p.metafields?.nodes ?? []).map((m: any) => ({ ns: m.namespace, key: m.key, type: m.type, preview: String(m.value ?? "").slice(0, 80) })),
+      }));
+      return new Response(JSON.stringify({ success: true, probe: true, products: probeOut }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     let locationId: string | null = null;
     if (mode === "apply") {
       const loc = await gql(conn.shop_domain, conn.access_token, `query { locations(first: 1) { nodes { id } } }`);
@@ -122,20 +145,62 @@ Deno.serve(async (req) => {
       }
 
       const diffs: any[] = [];
-      const pimDesc = stripHtml(p.long_description);
-      const shopDesc = stripHtml(sp.descriptionHtml);
 
-      if ((p.title || "") !== (sp.title || "")) diffs.push({ field: "title", pim: p.title, shopify: sp.title });
-      if (pimDesc !== shopDesc) diffs.push({ field: "description", pim_len: pimDesc.length, shopify_len: shopDesc.length, pim_preview: pimDesc.slice(0, 80), shopify_preview: shopDesc.slice(0, 80) });
+      // === TITEL ===
+      if (!ignoreVariantTitle) {
+        if (normText(p.title) !== normText(sp.title)) {
+          diffs.push({ field: "title", pim: p.title, shopify: sp.title });
+        }
+      }
 
+      // === LONG DESCRIPTION ===
+      const pimLong = stripHtml(p.long_description);
+      const shopLong = stripHtml(sp.descriptionHtml);
+      if (pimLong !== shopLong) {
+        diffs.push({ field: "long_description", pim_len: pimLong.length, shopify_len: shopLong.length, pim_preview: pimLong.slice(0, 100), shopify_preview: shopLong.slice(0, 100) });
+      }
+
+      // === SHORT DESCRIPTION (metafield) ===
+      const mfNodes = sp.metafields?.nodes ?? [];
+      const shortMf = mfNodes.find((m: any) => m.namespace === shortDescMf.namespace && m.key === shortDescMf.key);
+      const pimShort = stripHtml(p.short_description);
+      const shopShort = stripHtml(shortMf?.value);
+      if (pimShort !== shopShort) {
+        diffs.push({
+          field: "short_description",
+          metafield: `${shortDescMf.namespace}.${shortDescMf.key}`,
+          pim_len: pimShort.length,
+          shopify_len: shopShort.length,
+          pim_preview: pimShort.slice(0, 100),
+          shopify_preview: shopShort.slice(0, 100),
+          shopify_has_metafield: Boolean(shortMf),
+        });
+      }
+
+      // === META TITLE (SEO) ===
+      const pimMetaTitle = normText(p.meta_title);
+      const shopMetaTitle = normText(sp.seo?.title);
+      if (pimMetaTitle !== shopMetaTitle) {
+        diffs.push({ field: "meta_title", pim: pimMetaTitle, shopify: shopMetaTitle });
+      }
+
+      // === META DESCRIPTION (SEO) ===
+      const pimMetaDesc = normText(p.meta_description);
+      const shopMetaDesc = normText(sp.seo?.description);
+      if (pimMetaDesc !== shopMetaDesc) {
+        diffs.push({ field: "meta_description", pim_len: pimMetaDesc.length, shopify_len: shopMetaDesc.length, pim_preview: pimMetaDesc.slice(0, 100), shopify_preview: shopMetaDesc.slice(0, 100) });
+      }
+
+      // === PRIS ===
       const pimPrice = normNum(p.webshop_price);
       const shopPrice = normNum(sv.price);
       if (pimPrice !== shopPrice) diffs.push({ field: "price", pim: pimPrice, shopify: shopPrice });
 
       const pimSale = normNum(p.sale_price);
       const shopSale = normNum(sv.compareAtPrice);
-      if (pimSale !== shopSale) diffs.push({ field: "sale_price/compareAtPrice", pim: pimSale, shopify: shopSale });
+      if (pimSale !== shopSale) diffs.push({ field: "sale_price", pim: pimSale, shopify: shopSale });
 
+      // === LAGER ===
       const pimQty = normNum(p.stock_quantity) ?? 0;
       const shopQty = normNum(sv.inventoryQuantity) ?? 0;
       if (pimQty !== shopQty) diffs.push({ field: "stock_quantity", pim: pimQty, shopify: shopQty });
@@ -154,25 +219,58 @@ Deno.serve(async (req) => {
       if (mode === "apply" && diffs.length > 0) {
         const applied: string[] = [];
         try {
-          // Update product (title + description)
-          const productUpdates: Record<string, unknown> = { id: `gid://shopify/Product/${p.shopify_product_id}` };
-          if (p.title && p.title !== sp.title) { productUpdates.title = p.title; applied.push("title"); }
-          if (p.long_description && stripHtml(p.long_description) !== shopDesc) { productUpdates.descriptionHtml = p.long_description; applied.push("description"); }
-          if (Object.keys(productUpdates).length > 1) {
+          // Product update: title (kun hvis ikke ignoreret), descriptionHtml, seo
+          const productInput: Record<string, unknown> = { id: `gid://shopify/Product/${p.shopify_product_id}` };
+          let productNeedsUpdate = false;
+          if (!ignoreVariantTitle && p.title && p.title !== sp.title) {
+            productInput.title = p.title; applied.push("title"); productNeedsUpdate = true;
+          }
+          if (p.long_description && pimLong !== shopLong) {
+            productInput.descriptionHtml = p.long_description; applied.push("long_description"); productNeedsUpdate = true;
+          }
+          const seoUpdate: Record<string, unknown> = {};
+          if (pimMetaTitle !== shopMetaTitle) { seoUpdate.title = pimMetaTitle; applied.push("meta_title"); }
+          if (pimMetaDesc !== shopMetaDesc) { seoUpdate.description = pimMetaDesc; applied.push("meta_description"); }
+          if (Object.keys(seoUpdate).length) { productInput.seo = seoUpdate; productNeedsUpdate = true; }
+
+          if (productNeedsUpdate) {
             const r = await gql(conn.shop_domain, conn.access_token, `
               mutation($input: ProductInput!) {
                 productUpdate(input: $input) { product { id } userErrors { field message } }
-              }`, { input: productUpdates });
+              }`, { input: productInput });
             const errs = r.productUpdate?.userErrors;
             if (errs?.length) throw new Error(`productUpdate: ${errs.map((e: any) => e.message).join(", ")}`);
           }
 
-          // Update variant (price, compareAtPrice, inventoryPolicy)
+          // Short description som metafield via metafieldsSet
+          if (pimShort !== shopShort && p.short_description) {
+            const r = await gql(conn.shop_domain, conn.access_token, `
+              mutation($metafields: [MetafieldsSetInput!]!) {
+                metafieldsSet(metafields: $metafields) {
+                  metafields { id }
+                  userErrors { field message }
+                }
+              }`, {
+                metafields: [{
+                  ownerId: `gid://shopify/Product/${p.shopify_product_id}`,
+                  namespace: shortDescMf.namespace,
+                  key: shortDescMf.key,
+                  type: shortMf?.type ?? "multi_line_text_field",
+                  value: p.short_description,
+                }],
+              });
+            const errs = r.metafieldsSet?.userErrors;
+            if (errs?.length) throw new Error(`metafieldsSet: ${errs.map((e: any) => e.message).join(", ")}`);
+            applied.push("short_description");
+          }
+
+          // Variant update: pris, sale_price, inventoryPolicy
           const variantInput: Record<string, unknown> = { id: `gid://shopify/ProductVariant/${p.shopify_variant_id}` };
-          if (pimPrice !== null && pimPrice !== shopPrice) { variantInput.price = String(pimPrice); applied.push("price"); }
-          if (pimSale !== shopSale) { variantInput.compareAtPrice = pimSale !== null ? String(pimSale) : null; applied.push("compareAtPrice"); }
-          if (pimPolicy !== sv.inventoryPolicy) { variantInput.inventoryPolicy = pimPolicy; applied.push("inventoryPolicy"); }
-          if (Object.keys(variantInput).length > 1) {
+          let variantNeeds = false;
+          if (pimPrice !== null && pimPrice !== shopPrice) { variantInput.price = String(pimPrice); applied.push("price"); variantNeeds = true; }
+          if (pimSale !== shopSale) { variantInput.compareAtPrice = pimSale !== null ? String(pimSale) : null; applied.push("sale_price"); variantNeeds = true; }
+          if (pimPolicy !== sv.inventoryPolicy) { variantInput.inventoryPolicy = pimPolicy; applied.push("inventoryPolicy"); variantNeeds = true; }
+          if (variantNeeds) {
             const r = await gql(conn.shop_domain, conn.access_token, `
               mutation($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
                 productVariantsBulkUpdate(productId: $productId, variants: $variants) {
@@ -183,7 +281,6 @@ Deno.serve(async (req) => {
             if (errs?.length) throw new Error(`variantsBulkUpdate: ${errs.map((e: any) => e.message).join(", ")}`);
           }
 
-          // Inventory adjust
           if (pimQty !== shopQty && locationId && sv.inventoryItem?.id) {
             const delta = pimQty - shopQty;
             const r = await gql(conn.shop_domain, conn.access_token, `
@@ -215,6 +312,8 @@ Deno.serve(async (req) => {
       out_of_sync: results.filter(r => !r.in_sync && !r.error).length,
       errors: results.filter(r => r.error).length,
       applied: appliedCount,
+      ignored_variant_title: ignoreVariantTitle,
+      short_desc_metafield: `${shortDescMf.namespace}.${shortDescMf.key}`,
     };
 
     return new Response(JSON.stringify({ success: true, summary, results }), {
