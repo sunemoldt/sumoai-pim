@@ -1,6 +1,6 @@
-// Matcher PIM-produkter (master_products) med Shopify-varianter via EAN (barcode).
-// Opretter INTET nyt i PIM. Sætter kun shopify_product_id + shopify_variant_id på eksisterende produkter.
-// Kan køres med ?ean=xxx for at teste et enkelt produkt.
+// Matcher PIM-produkter (master_products) med Shopify-varianter.
+// Match-prioritet: 1) EAN/barcode (normaliseret), 2) SKU (case-insensitive), 3) Titel exact (case-insensitive).
+// Opretter INTET nyt i PIM. Sætter kun shopify_product_id + shopify_variant_id.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
@@ -16,11 +16,18 @@ function normEan(v: string | null | undefined): string {
   if (!v) return "";
   return String(v).trim().replace(/^0+/, "");
 }
+function normSku(v: string | null | undefined): string {
+  if (!v) return "";
+  return String(v).trim().toLowerCase();
+}
+function normTitle(v: string | null | undefined): string {
+  if (!v) return "";
+  return String(v).trim().toLowerCase().replace(/\s+/g, " ");
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // Auth
   const authHeader = req.headers.get("authorization");
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -41,7 +48,6 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Parse body
   let body: any = {};
   try { body = await req.clone().json().catch(() => ({})); } catch (_) {}
   const url = new URL(req.url);
@@ -49,7 +55,6 @@ Deno.serve(async (req) => {
   const dryRun = body.dryRun === true || url.searchParams.get("dryRun") === "true";
 
   try {
-    // 1. Hent Shopify connection
     const { data: conn, error: connErr } = await supabase
       .from("shopify_connection")
       .select("shop_domain, access_token")
@@ -57,13 +62,14 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
     if (connErr) throw connErr;
-    if (!conn) throw new Error("Ingen Shopify-forbindelse fundet. Installer appen først.");
+    if (!conn) throw new Error("Ingen Shopify-forbindelse fundet.");
 
     const shopDomain = conn.shop_domain;
     const token = conn.access_token;
 
-    // 2. Hent alle Shopify-varianter via GraphQL (paginated)
-    const variants: Array<{ productId: string; variantId: string; barcode: string; sku: string; productTitle: string; variantTitle: string }> = [];
+    // Hent alle Shopify-varianter
+    type V = { productId: string; variantId: string; barcode: string; sku: string; productTitle: string; variantTitle: string };
+    const variants: V[] = [];
     let cursor: string | null = null;
     let pages = 0;
     const MAX_PAGES = 50;
@@ -74,10 +80,7 @@ Deno.serve(async (req) => {
           productVariants(first: 250, after: $cursor) {
             pageInfo { hasNextPage endCursor }
             nodes {
-              id
-              barcode
-              sku
-              title
+              id barcode sku title
               product { id title }
             }
           }
@@ -85,19 +88,12 @@ Deno.serve(async (req) => {
       `;
       const res = await fetch(`https://${shopDomain}/admin/api/2025-01/graphql.json`, {
         method: "POST",
-        headers: {
-          "X-Shopify-Access-Token": token,
-          "Content-Type": "application/json",
-        },
+        headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
         body: JSON.stringify({ query, variables: { cursor } }),
       });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Shopify GraphQL error [${res.status}]: ${errText}`);
-      }
+      if (!res.ok) throw new Error(`Shopify GraphQL [${res.status}]: ${await res.text()}`);
       const json = await res.json();
       if (json.errors) throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
-
       const nodes = json.data?.productVariants?.nodes ?? [];
       for (const n of nodes) {
         variants.push({
@@ -109,65 +105,59 @@ Deno.serve(async (req) => {
           variantTitle: n.title,
         });
       }
-      const pageInfo = json.data?.productVariants?.pageInfo;
-      if (!pageInfo?.hasNextPage) break;
-      cursor = pageInfo.endCursor;
+      const pi = json.data?.productVariants?.pageInfo;
+      if (!pi?.hasNextPage) break;
+      cursor = pi.endCursor;
       pages++;
     }
 
-    // 3. Byg EAN-map (normaliseret)
-    const variantsByEan = new Map<string, typeof variants[number]>();
-    let variantsWithBarcode = 0;
+    // Byg lookup-maps
+    const byEan = new Map<string, V>();
+    const bySku = new Map<string, V>();
+    const byTitle = new Map<string, V>();
+    let withBarcode = 0, withSku = 0;
     for (const v of variants) {
       const ean = normEan(v.barcode);
-      if (ean) {
-        variantsWithBarcode++;
-        if (!variantsByEan.has(ean)) variantsByEan.set(ean, v);
-      }
+      const sku = normSku(v.sku);
+      const t = normTitle(v.productTitle);
+      if (ean) { withBarcode++; if (!byEan.has(ean)) byEan.set(ean, v); }
+      if (sku) { withSku++; if (!bySku.has(sku)) bySku.set(sku, v); }
+      if (t && !byTitle.has(t)) byTitle.set(t, v);
     }
 
-    // 4. Hent PIM produkter
-    let pimQuery = supabase
-      .from("master_products")
-      .select("id, ean, title, shopify_product_id, shopify_variant_id");
-    if (filterEan) pimQuery = pimQuery.eq("ean", filterEan);
-    const { data: pimProducts, error: pimErr } = await pimQuery;
+    // Hent PIM
+    let q = supabase.from("master_products").select("id, ean, sku, title, shopify_product_id, shopify_variant_id");
+    if (filterEan) q = q.eq("ean", filterEan);
+    const { data: pimProducts, error: pimErr } = await q;
     if (pimErr) throw pimErr;
 
-    // 5. Match og opdater
-    const matched: Array<{ ean: string; pim_title: string; shopify_title: string; product_id: string; variant_id: string }> = [];
-    const unmatched: Array<{ ean: string; pim_title: string }> = [];
-    let updated = 0;
-    let alreadyMatched = 0;
+    const matched: any[] = [];
+    const unmatched: any[] = [];
+    let updated = 0, alreadyMatched = 0;
+    const matchStats = { ean: 0, sku: 0, title: 0 };
 
     for (const p of pimProducts ?? []) {
       const ean = normEan(p.ean);
-      if (!ean) {
-        unmatched.push({ ean: p.ean ?? "(tom)", pim_title: p.title });
-        continue;
-      }
-      const v = variantsByEan.get(ean);
+      const sku = normSku(p.sku);
+      const title = normTitle(p.title);
+
+      let v: V | undefined;
+      let method = "";
+      if (ean && byEan.has(ean)) { v = byEan.get(ean); method = "ean"; }
+      else if (sku && bySku.has(sku)) { v = bySku.get(sku); method = "sku"; }
+      else if (title && byTitle.has(title)) { v = byTitle.get(title); method = "title"; }
+
       if (!v) {
-        unmatched.push({ ean: p.ean, pim_title: p.title });
+        unmatched.push({ ean: p.ean, sku: p.sku, title: p.title });
         continue;
       }
 
-      const isAlreadyMatched =
-        p.shopify_product_id === v.productId && p.shopify_variant_id === v.variantId;
+      matchStats[method as keyof typeof matchStats]++;
 
-      if (isAlreadyMatched) {
+      const isAlready = p.shopify_product_id === v.productId && p.shopify_variant_id === v.variantId;
+      if (isAlready) {
         alreadyMatched++;
-        matched.push({
-          ean: p.ean,
-          pim_title: p.title,
-          shopify_title: `${v.productTitle} ${v.variantTitle !== "Default Title" ? "/ " + v.variantTitle : ""}`.trim(),
-          product_id: v.productId,
-          variant_id: v.variantId,
-        });
-        continue;
-      }
-
-      if (!dryRun) {
+      } else if (!dryRun) {
         const { error: upErr } = await supabase
           .from("master_products")
           .update({
@@ -176,49 +166,39 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString(),
           })
           .eq("id", p.id);
-        if (upErr) {
-          console.error("Update error", p.ean, upErr);
-          continue;
-        }
+        if (upErr) { console.error("Update", p.ean, upErr); continue; }
         updated++;
       }
 
       matched.push({
-        ean: p.ean,
-        pim_title: p.title,
-        shopify_title: `${v.productTitle} ${v.variantTitle !== "Default Title" ? "/ " + v.variantTitle : ""}`.trim(),
-        product_id: v.productId,
-        variant_id: v.variantId,
+        method,
+        ean: p.ean, sku: p.sku, pim_title: p.title,
+        shopify_title: v.productTitle,
+        shopify_barcode: v.barcode, shopify_sku: v.sku,
+        product_id: v.productId, variant_id: v.variantId,
       });
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        dryRun,
-        shopify: {
-          shop_domain: shopDomain,
-          total_variants: variants.length,
-          variants_with_barcode: variantsWithBarcode,
-          unique_eans: variantsByEan.size,
-        },
-        pim: {
-          total_products: pimProducts?.length ?? 0,
-          matched: matched.length,
-          unmatched: unmatched.length,
-          newly_updated: updated,
-          already_matched: alreadyMatched,
-        },
-        matched_sample: matched.slice(0, 10),
-        unmatched_sample: unmatched.slice(0, 10),
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({
+      success: true, dryRun,
+      shopify: {
+        shop_domain: shopDomain,
+        total_variants: variants.length,
+        with_barcode: withBarcode, with_sku: withSku,
+        unique_eans: byEan.size, unique_skus: bySku.size,
+      },
+      pim: {
+        total: pimProducts?.length ?? 0,
+        matched: matched.length, unmatched: unmatched.length,
+        newly_updated: updated, already_matched: alreadyMatched,
+        match_methods: matchStats,
+      },
+      matched_sample: matched.slice(0, 10),
+      unmatched_sample: unmatched.slice(0, 15),
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err: any) {
     console.error("shopify-match error:", err);
-    return new Response(
-      JSON.stringify({ success: false, error: err?.message ?? String(err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ success: false, error: err?.message ?? String(err) }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
