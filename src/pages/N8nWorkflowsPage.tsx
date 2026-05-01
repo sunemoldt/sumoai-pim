@@ -46,6 +46,71 @@ export default function N8nWorkflowsPage() {
   const qc = useQueryClient();
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; baseUrl?: string } | null>(null);
+  const [tagInput, setTagInput] = useState("");
+
+  const tagsQuery = useQuery({
+    queryKey: ["n8n-pim-tags"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("analytics_settings")
+        .select("setting_value")
+        .eq("setting_key", TAGS_SETTING_KEY)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data?.setting_value) return DEFAULT_PIM_TAGS;
+      try {
+        const parsed = JSON.parse(data.setting_value);
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed.map(String) : DEFAULT_PIM_TAGS;
+      } catch {
+        return DEFAULT_PIM_TAGS;
+      }
+    },
+  });
+
+  const pimTags = tagsQuery.data ?? DEFAULT_PIM_TAGS;
+
+  const saveTagsMutation = useMutation({
+    mutationFn: async (next: string[]) => {
+      const value = JSON.stringify(next);
+      const { data: existing } = await supabase
+        .from("analytics_settings")
+        .select("id")
+        .eq("setting_key", TAGS_SETTING_KEY)
+        .maybeSingle();
+      if (existing) {
+        const { error } = await supabase
+          .from("analytics_settings")
+          .update({ setting_value: value, updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("analytics_settings")
+          .insert({ setting_key: TAGS_SETTING_KEY, setting_value: value });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["n8n-pim-tags"] });
+      toast({ title: "Tags gemt" });
+    },
+    onError: (err: Error) => toast({ title: "Kunne ikke gemme", description: err.message, variant: "destructive" }),
+  });
+
+  const addTag = () => {
+    const v = tagInput.trim().toLowerCase();
+    if (!v) return;
+    if (pimTags.map((t) => t.toLowerCase()).includes(v)) {
+      setTagInput("");
+      return;
+    }
+    saveTagsMutation.mutate([...pimTags, v]);
+    setTagInput("");
+  };
+
+  const removeTag = (tag: string) => {
+    saveTagsMutation.mutate(pimTags.filter((t) => t !== tag));
+  };
 
   const workflowsQuery = useQuery({
     queryKey: ["n8n-workflows"],
