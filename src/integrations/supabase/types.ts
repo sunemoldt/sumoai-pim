@@ -104,6 +104,9 @@ export type Database = {
           meta_title: string | null
           min_sync_margin: number | null
           sale_price: number | null
+          shopify_product_id: string | null
+          shopify_sync_enabled: boolean
+          shopify_variant_id: string | null
           short_description: string | null
           sku: string | null
           stock_quantity: number | null
@@ -135,6 +138,9 @@ export type Database = {
           meta_title?: string | null
           min_sync_margin?: number | null
           sale_price?: number | null
+          shopify_product_id?: string | null
+          shopify_sync_enabled?: boolean
+          shopify_variant_id?: string | null
           short_description?: string | null
           sku?: string | null
           stock_quantity?: number | null
@@ -166,6 +172,9 @@ export type Database = {
           meta_title?: string | null
           min_sync_margin?: number | null
           sale_price?: number | null
+          shopify_product_id?: string | null
+          shopify_sync_enabled?: boolean
+          shopify_variant_id?: string | null
           short_description?: string | null
           sku?: string | null
           stock_quantity?: number | null
