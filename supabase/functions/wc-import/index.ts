@@ -299,6 +299,16 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Strip stock fields for auto_stock_sync products (supplier sync owns stock)
+      for (const row of batch) {
+        const existing = existingByEan.get(row.ean);
+        if (existing && (existing as any).auto_stock_sync) {
+          delete row.stock_quantity;
+          delete row.stock_status;
+          delete row.backorders_allowed;
+        }
+      }
+
       const { error } = await supabase
         .from("master_products")
         .upsert(batch, { onConflict: "ean" });
