@@ -63,14 +63,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
-    const installUrl = getFunctionUrl("shopify-oauth-start", { shop_domain: domain });
-    const installWindow = window.open(installUrl, "_blank", "noopener,noreferrer");
-    if (installWindow) {
-      toast({ title: "Shopify-installation åbnet", description: "Godkend appen i den nye fane." });
-      return;
-    }
-    await navigator.clipboard.writeText(installUrl);
-    toast({ title: "Install-link kopieret", description: "Browseren blokerede ny fane. Indsæt linket i en ny fane." });
+    toast({ title: "Shopify-installation åbner", description: "Godkend appen i den nye browserfane." });
   };
 
   const copyInstallLink = async () => {
@@ -215,9 +208,11 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={startInstall}>
-              <ExternalLink className="h-4 w-4" />
-              Installér på {shopDomainInput.trim() || "..."}
+            <Button asChild onClick={startInstall}>
+              <a href={getFunctionUrl("shopify-oauth-start", { shop_domain: shopDomainInput.trim() || "comtek-webshop.myshopify.com" })} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4" />
+                Installér på {shopDomainInput.trim() || "..."}
+              </a>
             </Button>
             <Button variant="outline" onClick={copyInstallLink}>
               <Copy className="h-4 w-4" /> Kopiér install-link
