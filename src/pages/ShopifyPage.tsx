@@ -45,7 +45,6 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
   const [status, setStatus] = useState<Status | null>(null);
   const [connections, setConnections] = useState<ConnectionRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [installing, setInstalling] = useState(false);
   const [shopDomainInput, setShopDomainInput] = useState("comtek-webshop.myshopify.com");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ShopifyTestResult | null>(null);
@@ -226,8 +225,8 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={startInstall} disabled={installing}>
-              {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+            <Button onClick={startInstall}>
+              <ExternalLink className="h-4 w-4" />
               Installér på {shopDomainInput.trim() || "..."}
             </Button>
             <Button variant="outline" onClick={copyInstallLink}>
