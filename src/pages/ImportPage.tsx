@@ -56,6 +56,14 @@ export default function ImportPage() {
   const [savingSchedule, setSavingSchedule] = useState(false);
   const queryClient = useQueryClient();
   const { data: logs = [] } = useImportLogs();
+  const { data: shopifyStatus } = useQuery({
+    queryKey: ["shopify_connection_status"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("shopify_connection_status").select("*").maybeSingle();
+      if (error) throw error;
+      return data as { is_connected: boolean; shop_domain: string | null } | null;
+    },
+  });
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Load WC schedule from price_settings (reuse table with scope='wc_schedule')
@@ -99,11 +107,12 @@ export default function ImportPage() {
     setLoading(true);
     setResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke("wc-import");
+      const importFunction = shopifyStatus?.is_connected ? "shopify-import" : "wc-import";
+      const { data, error } = await supabase.functions.invoke(importFunction);
       if (error) throw error;
       setResult(data as ImportResult);
       if (data?.success) {
-        toast.success(`${data.imported} produkter importeret fra WooCommerce`);
+        toast.success(`${data.imported} produkter importeret fra ${importFunction === "shopify-import" ? "Shopify" : "WooCommerce"}`);
         queryClient.invalidateQueries({ queryKey: ["master_products"] });
         queryClient.invalidateQueries({ queryKey: ["import_logs"] });
       } else {
