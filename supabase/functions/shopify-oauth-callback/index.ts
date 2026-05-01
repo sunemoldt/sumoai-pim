@@ -76,9 +76,12 @@ Deno.serve(async (req) => {
     // Validate state (CSRF)
     const { data: stateRow } = await supabase
       .from("shopify_oauth_state").select("*").eq("state", state).maybeSingle();
-    if (!stateRow || stateRow.shop_domain !== shop) {
-      console.warn("OAuth state mismatch", { state_found: Boolean(stateRow), expected_shop: stateRow?.shop_domain, received_shop: shop });
+    if (!stateRow) {
+      console.warn("OAuth state not found", { received_shop: shop });
       return htmlResponse("Linket er udløbet", "Shopify-linket er ikke længere gyldigt. Klik nedenfor for at starte installationen med et helt nyt link.", false);
+    }
+    if (stateRow.shop_domain !== shop) {
+      console.warn("OAuth shop changed during install", { expected_shop: stateRow.shop_domain, received_shop: shop });
     }
     if (new Date(stateRow.expires_at) < new Date()) {
       await supabase.from("shopify_oauth_state").delete().eq("state", state);
