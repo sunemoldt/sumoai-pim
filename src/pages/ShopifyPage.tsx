@@ -145,9 +145,9 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
             {installUrl ? (
               <>
                 <Button asChild>
-                  <a href={installUrl} target="_blank" rel="noopener noreferrer">
+                  <a href={installUrl} target="_top">
                     <ExternalLink className="h-4 w-4" />
-                    Åbn Shopify i ny fane
+                    Åbn Shopify udenfor preview
                   </a>
                 </Button>
                 <Button variant="outline" onClick={copyInstallUrl}>
@@ -176,7 +176,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
 
           {installUrl && !status?.is_connected && (
             <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-              <p>Hvis Shopify viser “ERR_BLOCKED_BY_RESPONSE”, så kopiér linket og indsæt det i adressefeltet i en helt ny browserfane udenfor Lovable-previewet.</p>
+              <p>Shopify blokerer indlejrede preview-vinduer. Brug knappen ovenfor, eller kopiér linket og indsæt det direkte i browserens adressefelt — ikke inde i Lovable-previewet.</p>
               <p className="break-all font-mono text-xs text-foreground">{installUrl}</p>
             </div>
           )}
