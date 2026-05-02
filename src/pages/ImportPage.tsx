@@ -302,7 +302,7 @@ export default function ImportPage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Inkrementel henter kun ændrede produkter siden sidste import. Fuld henter alt — brug ved rydning eller skemaændringer.
+              Standard-import henter kun ændrede produkter siden sidste import. Fuld henter alt — brug ved rydning eller skemaændringer.
             </p>
 
             {result && (
