@@ -75,8 +75,22 @@ Deno.serve(async (req) => {
       ? `&modified_after=${encodeURIComponent(modifiedAfter)}&dates_are_gmt=true`
       : "";
 
+    // Field filtering — only fetch what we actually map (~70% smaller payload, less CPU on comtek.dk)
+    const productFields = [
+      "id","name","type","sku","regular_price","sale_price","price",
+      "stock_quantity","stock_status","backorders","short_description","description",
+      "categories","tags","brands","images","attributes","meta_data","date_modified_gmt",
+    ].join(",");
+    const variationFields = [
+      "id","sku","regular_price","sale_price","price",
+      "stock_quantity","stock_status","backorders","description",
+      "image","attributes","meta_data","date_modified_gmt",
+    ].join(",");
+    const fieldsParam = `&_fields=${productFields}`;
+    const varFieldsParam = `&_fields=${variationFields}`;
+
     while (true) {
-      const url = `${baseUrl}/wp-json/wc/v3/products?per_page=${perPage}&page=${page}${modifiedAfterParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
+      const url = `${baseUrl}/wp-json/wc/v3/products?per_page=${perPage}&page=${page}${modifiedAfterParam}${fieldsParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
       const res = await fetch(url);
       if (!res.ok) {
         const body = await res.text();
@@ -89,19 +103,23 @@ Deno.serve(async (req) => {
       page++;
     }
 
-    // Fetch variations for variable products
+    // Fetch variations for variable products — parallelized with concurrency limit
+    // to spread load on comtek.dk while completing faster overall.
     const variableProducts = allProducts.filter((p: any) => p.type === "variable");
     const variations: any[] = [];
-    for (const vp of variableProducts) {
+    const CONCURRENCY = 4;
+
+    async function fetchVariationsForParent(vp: any) {
+      const out: any[] = [];
       let vPage = 1;
       while (true) {
-        const url = `${baseUrl}/wp-json/wc/v3/products/${vp.id}/variations?per_page=${perPage}&page=${vPage}${modifiedAfterParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
+        const url = `${baseUrl}/wp-json/wc/v3/products/${vp.id}/variations?per_page=${perPage}&page=${vPage}${modifiedAfterParam}${varFieldsParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
         const res = await fetch(url);
         if (!res.ok) break;
         const vars = await res.json();
         if (!Array.isArray(vars) || vars.length === 0) break;
         for (const v of vars) {
-          variations.push({
+          out.push({
             ...v,
             _parent_id: vp.id,
             _parent_name: vp.name,
@@ -115,6 +133,13 @@ Deno.serve(async (req) => {
         if (vars.length < perPage) break;
         vPage++;
       }
+      return out;
+    }
+
+    for (let i = 0; i < variableProducts.length; i += CONCURRENCY) {
+      const slice = variableProducts.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(slice.map(fetchVariationsForParent));
+      for (const r of results) variations.push(...r);
     }
 
     // Normalize EAN: strip leading zeros for consistent matching (0810084693650 → 810084693650)
