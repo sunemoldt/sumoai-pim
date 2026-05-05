@@ -491,22 +491,10 @@ export default function ProductDetailPage() {
                   />
                 </div>
                 <div className="col-span-2 sm:col-span-3">
-                  <Label className="text-muted-foreground text-xs">Synk-tags (komma-separeret) — interne tags til fx Shopify-synk</Label>
-                  <InlineEditField
+                  <Label className="text-muted-foreground text-xs">Synk-tags — interne tags til fx Shopify-synk</Label>
+                  <SyncTagsEditor
                     productId={product.id}
-                    field="sync_tags"
-                    value={((product as any).sync_tags ?? []).join(", ")}
-                    parse={(raw) => raw.split(",").map((s) => s.trim()).filter(Boolean)}
-                    display={(v) => {
-                      const arr: string[] = Array.isArray(v) ? v : (typeof v === "string" && v ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
-                      return arr.length ? (
-                        <div className="flex flex-wrap gap-1">
-                          {arr.map((t) => (
-                            <span key={t} className="inline-flex items-center rounded-md bg-secondary text-secondary-foreground px-2 py-0.5 text-xs">{t}</span>
-                          ))}
-                        </div>
-                      ) : <span className="text-sm text-muted-foreground">—</span>;
-                    }}
+                    value={(product as any).sync_tags ?? []}
                   />
                 </div>
               </div>
