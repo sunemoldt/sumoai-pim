@@ -39,6 +39,7 @@ export default function ProductListPage() {
   const supplierFilter = searchParams.get("supplier") ?? "all";
   const statusFilter = (searchParams.get("status") ?? "all") as StatusFilter;
   const duplicateFilter = (searchParams.get("duplicate") ?? "all") as DuplicateFilter;
+  const tagFilter = searchParams.get("tag") ?? "all";
   const sortField = (searchParams.get("sort") ?? "title") as SortField;
   const sortDir = (searchParams.get("dir") ?? "asc") as SortDir;
   const view = (searchParams.get("view") ?? "grid") as "grid" | "list";
