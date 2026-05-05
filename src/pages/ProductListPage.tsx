@@ -71,6 +71,7 @@ export default function ProductListPage() {
   const setSupplierFilter = (v: string) => setParam("supplier", v);
   const setStatusFilter = (v: StatusFilter) => setParam("status", v);
   const setDuplicateFilter = (v: DuplicateFilter) => setParam("duplicate", v);
+  const setTagFilter = (v: string) => setParam("tag", v);
 
   const { data: products = [], isLoading } = useMasterProducts(search || undefined);
   const { data: priceSettings = [] } = usePriceSettings();
