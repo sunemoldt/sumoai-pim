@@ -39,6 +39,7 @@ export default function ProductListPage() {
   const supplierFilter = searchParams.get("supplier") ?? "all";
   const statusFilter = (searchParams.get("status") ?? "all") as StatusFilter;
   const duplicateFilter = (searchParams.get("duplicate") ?? "all") as DuplicateFilter;
+  const tagFilter = searchParams.get("tag") ?? "all";
   const sortField = (searchParams.get("sort") ?? "title") as SortField;
   const sortDir = (searchParams.get("dir") ?? "asc") as SortDir;
   const view = (searchParams.get("view") ?? "grid") as "grid" | "list";
@@ -70,6 +71,7 @@ export default function ProductListPage() {
   const setSupplierFilter = (v: string) => setParam("supplier", v);
   const setStatusFilter = (v: StatusFilter) => setParam("status", v);
   const setDuplicateFilter = (v: DuplicateFilter) => setParam("duplicate", v);
+  const setTagFilter = (v: string) => setParam("tag", v);
 
   const { data: products = [], isLoading } = useMasterProducts(search || undefined);
   const { data: priceSettings = [] } = usePriceSettings();
@@ -261,9 +263,19 @@ export default function ProductListPage() {
       if (duplicateFilter === "fallback_ean" && !product.ean.startsWith("wc-")) return false;
       if (duplicateFilter === "shared_ean" && (!duplicateEans || !duplicateEans.has(product.ean))) return false;
 
+      // Sync-tag filter
+      if (tagFilter !== "all") {
+        const tags = ((product as any).sync_tags ?? []) as string[];
+        if (tagFilter === "__none__") {
+          if (tags.length > 0) return false;
+        } else if (!tags.includes(tagFilter)) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans]);
+  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans, tagFilter]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -330,12 +342,22 @@ export default function ProductListPage() {
     return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
-  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter].filter((f) => f !== "all").length;
+  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, tagFilter].filter((f) => f !== "all").length;
+
+  // All unique sync_tags across products (for filter dropdown)
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of products) {
+      const tags = ((p as any).sync_tags ?? []) as string[];
+      tags.forEach((t) => t && set.add(t));
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "da"));
+  }, [products]);
 
   const clearFilters = () => {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
-      ["stock", "brand", "category", "margin", "price", "supplier", "status", "duplicate"].forEach(k => next.delete(k));
+      ["stock", "brand", "category", "margin", "price", "supplier", "status", "duplicate", "tag"].forEach(k => next.delete(k));
       return next;
     }, { replace: true });
   };
@@ -513,6 +535,19 @@ export default function ProductListPage() {
               <SelectItem value="on_stock">På lager</SelectItem>
               <SelectItem value="out_of_stock">Udsolgt</SelectItem>
               <SelectItem value="no_data">Ingen data</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={tagFilter} onValueChange={(v) => setTagFilter(v)}>
+            <SelectTrigger className="h-8 w-[150px] text-xs">
+              <SelectValue placeholder="Synk-tag" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle tags</SelectItem>
+              <SelectItem value="__none__">Uden tag</SelectItem>
+              {allTags.map((t) => (
+                <SelectItem key={t} value={t}>{t}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
 

@@ -114,6 +114,7 @@ export type Database = {
           stock_sync_interval: string | null
           stock_sync_supplier_id: string | null
           stock_sync_supplier_ids: string[] | null
+          sync_tags: string[]
           title: string
           updated_at: string
           webshop_parent_id: string | null
@@ -148,6 +149,7 @@ export type Database = {
           stock_sync_interval?: string | null
           stock_sync_supplier_id?: string | null
           stock_sync_supplier_ids?: string[] | null
+          sync_tags?: string[]
           title: string
           updated_at?: string
           webshop_parent_id?: string | null
@@ -182,6 +184,7 @@ export type Database = {
           stock_sync_interval?: string | null
           stock_sync_supplier_id?: string | null
           stock_sync_supplier_ids?: string[] | null
+          sync_tags?: string[]
           title?: string
           updated_at?: string
           webshop_parent_id?: string | null
