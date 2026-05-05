@@ -43,8 +43,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Test with GraphQL Admin API 2025-10
-    const gqlRes = await fetch(`https://${conn.shop_domain}/admin/api/2025-10/graphql.json`, {
+    // Test with GraphQL Admin API 2026-04
+    const gqlRes = await fetch(`https://${conn.shop_domain}/admin/api/2026-04/graphql.json`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

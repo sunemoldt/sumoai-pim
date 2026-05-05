@@ -10,7 +10,7 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const API_VERSION = "2025-10";
+const API_VERSION = "2026-04";
 
 async function gql(shop: string, token: string, query: string, variables: Record<string, unknown> = {}) {
   const res = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
