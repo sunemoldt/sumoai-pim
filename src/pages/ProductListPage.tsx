@@ -342,12 +342,22 @@ export default function ProductListPage() {
     return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
-  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter].filter((f) => f !== "all").length;
+  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, tagFilter].filter((f) => f !== "all").length;
+
+  // All unique sync_tags across products (for filter dropdown)
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of products) {
+      const tags = ((p as any).sync_tags ?? []) as string[];
+      tags.forEach((t) => t && set.add(t));
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "da"));
+  }, [products]);
 
   const clearFilters = () => {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
-      ["stock", "brand", "category", "margin", "price", "supplier", "status", "duplicate"].forEach(k => next.delete(k));
+      ["stock", "brand", "category", "margin", "price", "supplier", "status", "duplicate", "tag"].forEach(k => next.delete(k));
       return next;
     }, { replace: true });
   };
