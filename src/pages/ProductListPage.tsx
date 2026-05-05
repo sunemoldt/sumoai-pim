@@ -263,9 +263,19 @@ export default function ProductListPage() {
       if (duplicateFilter === "fallback_ean" && !product.ean.startsWith("wc-")) return false;
       if (duplicateFilter === "shared_ean" && (!duplicateEans || !duplicateEans.has(product.ean))) return false;
 
+      // Sync-tag filter
+      if (tagFilter !== "all") {
+        const tags = ((product as any).sync_tags ?? []) as string[];
+        if (tagFilter === "__none__") {
+          if (tags.length > 0) return false;
+        } else if (!tags.includes(tagFilter)) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans]);
+  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans, tagFilter]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
