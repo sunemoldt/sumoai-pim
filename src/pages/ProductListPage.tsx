@@ -538,6 +538,19 @@ export default function ProductListPage() {
             </SelectContent>
           </Select>
 
+          <Select value={tagFilter} onValueChange={(v) => setTagFilter(v)}>
+            <SelectTrigger className="h-8 w-[150px] text-xs">
+              <SelectValue placeholder="Synk-tag" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle tags</SelectItem>
+              <SelectItem value="__none__">Uden tag</SelectItem>
+              {allTags.map((t) => (
+                <SelectItem key={t} value={t}>{t}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Select value={duplicateFilter} onValueChange={(v) => setDuplicateFilter(v as DuplicateFilter)}>
             <SelectTrigger className="h-8 w-[140px] text-xs">
               <SelectValue placeholder="Dubletter" />
