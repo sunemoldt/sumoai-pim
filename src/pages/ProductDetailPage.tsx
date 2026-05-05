@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import ManualSupplierPriceDialog from "@/components/ManualSupplierPriceDialog";
 import ProductTranslationsTab from "@/components/ProductTranslationsTab";
 import InlineEditField from "@/components/InlineEditField";
+import SyncTagsEditor from "@/components/SyncTagsEditor";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
