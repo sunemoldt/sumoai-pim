@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
           }
         }
       `;
-      const res = await fetch(`https://${shopDomain}/admin/api/2025-01/graphql.json`, {
+      const res = await fetch(`https://${shopDomain}/admin/api/2026-04/graphql.json`, {
         method: "POST",
         headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
         body: JSON.stringify({ query, variables: { cursor } }),

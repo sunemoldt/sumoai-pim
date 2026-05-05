@@ -8,7 +8,7 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const API_VERSION = "2025-10";
+const API_VERSION = "2026-04";
 
 async function requireUser(req: Request) {
   const authHeader = req.headers.get("authorization");
@@ -158,32 +158,33 @@ Deno.serve(async (req) => {
     }
 
     if (stock_quantity !== undefined && stock_quantity !== null) {
+      // 2026-04: use inventorySetQuantities (absolute set, no read-current required)
+      // Also use includeInactive on locations so we don't accidentally write to deactivated ones
       const inventoryQuery = `#graphql
         query VariantInventory($id: ID!) {
-          productVariant(id: $id) { inventoryItem { id } inventoryQuantity }
-          locations(first: 1) { nodes { id } }
+          productVariant(id: $id) { inventoryItem { id } }
+          locations(first: 5, includeInactive: false) { nodes { id } }
         }`;
       const inventoryData = await shopifyGraphql(conn.shop_domain, conn.access_token, inventoryQuery, { id: variantGid });
       const inventoryItemId = inventoryData.productVariant?.inventoryItem?.id;
       const locationId = inventoryData.locations?.nodes?.[0]?.id;
-      const currentQty = inventoryData.productVariant?.inventoryQuantity ?? 0;
-      const delta = Number(stock_quantity) - Number(currentQty);
 
-      if (inventoryItemId && locationId && delta !== 0) {
-        const adjustMutation = `#graphql
-          mutation AdjustInventory($input: InventoryAdjustQuantitiesInput!) {
-            inventoryAdjustQuantities(input: $input) {
+      if (inventoryItemId && locationId) {
+        const setMutation = `#graphql
+          mutation SetInventory($input: InventorySetQuantitiesInput!) {
+            inventorySetQuantities(input: $input) {
               userErrors { field message }
             }
           }`;
-        const adjustData = await shopifyGraphql(conn.shop_domain, conn.access_token, adjustMutation, {
+        const setData = await shopifyGraphql(conn.shop_domain, conn.access_token, setMutation, {
           input: {
             name: "available",
             reason: "correction",
-            changes: [{ inventoryItemId, locationId, delta }],
+            ignoreCompareQuantity: true,
+            quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity) }],
           },
         });
-        const errors = adjustData.inventoryAdjustQuantities.userErrors;
+        const errors = setData.inventorySetQuantities.userErrors;
         if (errors?.length) throw new Error(errors.map((e: { message: string }) => e.message).join(", "));
       }
       dbUpdate.stock_quantity = stock_quantity;
