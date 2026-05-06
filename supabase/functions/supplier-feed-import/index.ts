@@ -348,7 +348,9 @@ Deno.serve(async (req) => {
 
       const delimiter = mapping._delimiter || ";";
 
-      let text: string;
+      let text: string | null = null;
+      // Pre-fetched EAN map (used for streaming FTP path to filter rows on-the-fly)
+      let eanToIdEarly: Map<string, string> | null = null;
 
       if (isFtp) {
         const host = mappingAny._ftp_host?.trim();
@@ -358,36 +360,71 @@ Deno.serve(async (req) => {
         if (!host || !path) throw new Error("FTP host og filsti er påkrævet");
 
         const cleanPath = path.startsWith("/") ? path : `/${path}`;
-
-        // Pure FTP — skip HTTP(S) probes (they cost memory and almost never work for real FTP servers)
         console.log(`FTP download from ${host}${cleanPath} as ${user || "anonymous"}`);
-        text = await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath);
+
+        // Pre-fetch EANs so we can filter on-the-fly and avoid loading the whole CSV in memory
+        const { data: mpsEarly, error: mpEarlyErr } = await supabase
+          .from("master_products").select("id, ean");
+        if (mpEarlyErr) throw new Error(`Failed to fetch master products: ${mpEarlyErr.message}`);
+        eanToIdEarly = new Map<string, string>();
+        for (const mp of mpsEarly ?? []) {
+          const normEan = (mp.ean ?? "").replace(/^0+/, "") || (mp.ean ?? "");
+          if (normEan) eanToIdEarly.set(normEan, mp.id);
+        }
+
+        feedRows = [];
+        let headers: string[] | null = null;
+        const eanCol = mapping.ean;
+        downloadViaFtp(host, user || "anonymous", pass || "", cleanPath); // type hint
+        await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, (line: string) => {
+          if (!line) return;
+          if (headers === null) {
+            headers = line.split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
+            return;
+          }
+          // Quick filter: only parse rows whose EAN matches a known master product
+          const vals = line.split(delimiter);
+          const eanIdx = headers.indexOf(eanCol);
+          if (eanIdx === -1) return;
+          const rawEan = (vals[eanIdx] ?? "").trim().replace(/^["']|["']$/g, "");
+          if (!rawEan) return;
+          const ean = rawEan.replace(/^0+/, "") || rawEan;
+          if (!eanToIdEarly!.has(ean)) return;
+          const row: Record<string, string> = {};
+          headers.forEach((h, idx) => {
+            row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
+          });
+          feedRows.push(row);
+        });
+        console.log(`Streamed CSV: kept ${feedRows.length} matching rows`);
       } else {
         const res = await fetch(supplier.feed_url!);
         if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
         text = await res.text();
-      }
-
-      if (supplier.feed_type === "xml") {
-        feedRows = parseXml(text);
-      } else {
-        feedRows = parseCsv(text, delimiter);
+        if (supplier.feed_type === "xml") {
+          feedRows = parseXml(text);
+        } else {
+          feedRows = parseCsv(text, delimiter);
+        }
       }
     }
 
     if (feedRows.length === 0) throw new Error("No rows found in feed");
 
-    // Get all existing EANs from master_products
-    const { data: masterProducts, error: mpErr } = await supabase
-      .from("master_products")
-      .select("id, ean");
-    if (mpErr) throw new Error(`Failed to fetch master products: ${mpErr.message}`);
-
-    const eanToId = new Map<string, string>();
-    for (const mp of masterProducts ?? []) {
-      // Normalize stored EAN too: strip leading zeros
-      const normEan = mp.ean.replace(/^0+/, "") || mp.ean;
-      eanToId.set(normEan, mp.id);
+    // Get all existing EANs from master_products (skip if already loaded during streaming FTP path)
+    let eanToId: Map<string, string>;
+    if (typeof eanToIdEarlyOuter !== "undefined" && eanToIdEarlyOuter) {
+      eanToId = eanToIdEarlyOuter;
+    } else {
+      const { data: masterProducts, error: mpErr } = await supabase
+        .from("master_products")
+        .select("id, ean");
+      if (mpErr) throw new Error(`Failed to fetch master products: ${mpErr.message}`);
+      eanToId = new Map<string, string>();
+      for (const mp of masterProducts ?? []) {
+        const normEan = mp.ean.replace(/^0+/, "") || mp.ean;
+        eanToId.set(normEan, mp.id);
+      }
     }
 
     // Process feed rows - only those matching existing EANs
