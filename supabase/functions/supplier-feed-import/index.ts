@@ -350,8 +350,6 @@ Deno.serve(async (req) => {
       const delimiter = mapping._delimiter || ";";
 
       let text: string | null = null;
-      // Pre-fetched EAN map (used for streaming FTP path to filter rows on-the-fly)
-      let eanToIdEarly: Map<string, string> | null = null;
 
       if (isFtp) {
         const host = mappingAny._ftp_host?.trim();
