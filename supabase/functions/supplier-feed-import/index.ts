@@ -324,32 +324,9 @@ Deno.serve(async (req) => {
 
         const cleanPath = path.startsWith("/") ? path : `/${path}`;
 
-        // Try HTTP(S) first (many FTP servers also serve files via HTTP)
-        let fetched = false;
-        for (const scheme of ["https", "http"]) {
-          try {
-            const url = user && pass
-              ? `${scheme}://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}${cleanPath}`
-              : `${scheme}://${host}${cleanPath}`;
-            console.log(`Trying ${scheme} download from ${host}${cleanPath}`);
-            const res = await fetch(url, { redirect: "follow" });
-            if (res.ok) {
-              text = await res.text();
-              fetched = true;
-              break;
-            }
-            console.log(`${scheme} returned ${res.status}`);
-          } catch (e) {
-            console.log(`${scheme} failed:`, (e as Error).message);
-          }
-        }
-
-        if (!fetched) {
-          // Fallback: real FTP over TCP (passive mode)
-          text = await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath);
-        }
-
-        text = text!;
+        // Pure FTP — skip HTTP(S) probes (they cost memory and almost never work for real FTP servers)
+        console.log(`FTP download from ${host}${cleanPath} as ${user || "anonymous"}`);
+        text = await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath);
       } else {
         const res = await fetch(supplier.feed_url!);
         if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
