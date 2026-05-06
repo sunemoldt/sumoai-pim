@@ -365,30 +365,29 @@ Deno.serve(async (req) => {
         const { data: mpsEarly, error: mpEarlyErr } = await supabase
           .from("master_products").select("id, ean");
         if (mpEarlyErr) throw new Error(`Failed to fetch master products: ${mpEarlyErr.message}`);
-        eanToIdEarly = new Map<string, string>();
+        eanToIdEarlyOuter = new Map<string, string>();
         for (const mp of mpsEarly ?? []) {
           const normEan = (mp.ean ?? "").replace(/^0+/, "") || (mp.ean ?? "");
-          if (normEan) eanToIdEarly.set(normEan, mp.id);
+          if (normEan) eanToIdEarlyOuter.set(normEan, mp.id);
         }
 
         feedRows = [];
         let headers: string[] | null = null;
+        let eanIdx = -1;
         const eanCol = mapping.ean;
-        downloadViaFtp(host, user || "anonymous", pass || "", cleanPath); // type hint
         await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, (line: string) => {
           if (!line) return;
           if (headers === null) {
             headers = line.split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
+            eanIdx = headers.indexOf(eanCol);
             return;
           }
-          // Quick filter: only parse rows whose EAN matches a known master product
-          const vals = line.split(delimiter);
-          const eanIdx = headers.indexOf(eanCol);
           if (eanIdx === -1) return;
+          const vals = line.split(delimiter);
           const rawEan = (vals[eanIdx] ?? "").trim().replace(/^["']|["']$/g, "");
           if (!rawEan) return;
           const ean = rawEan.replace(/^0+/, "") || rawEan;
-          if (!eanToIdEarly!.has(ean)) return;
+          if (!eanToIdEarlyOuter!.has(ean)) return;
           const row: Record<string, string> = {};
           headers.forEach((h, idx) => {
             row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
