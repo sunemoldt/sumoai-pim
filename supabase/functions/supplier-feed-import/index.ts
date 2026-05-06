@@ -119,8 +119,18 @@ function buildFtpPathCandidates(path: string, user: string): string[] {
   ].filter(Boolean))];
 }
 
-/** Minimal FTP client (passive mode, binary download) using Deno TCP. */
-async function downloadViaFtp(host: string, user: string, pass: string, path: string): Promise<string> {
+/** Minimal FTP client (passive mode, binary download) using Deno TCP.
+ *  If onLine is provided, the data stream is parsed line-by-line and onLine is
+ *  invoked for each complete line — no full-file string is built. Returns "".
+ *  If onLine is omitted, the entire file is decoded and returned as a string.
+ */
+async function downloadViaFtp(
+  host: string,
+  user: string,
+  pass: string,
+  path: string,
+  onLine?: (line: string) => void,
+): Promise<string> {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   const conn = await Deno.connect({ hostname: host, port: 21 });
@@ -171,22 +181,48 @@ async function downloadViaFtp(host: string, user: string, pass: string, path: st
         continue;
       }
 
-      const chunks: Uint8Array[] = [];
+      const streamDecoder = new TextDecoder("utf-8", { fatal: false });
       const dbuf = new Uint8Array(65536);
+      let bytes = 0;
+
+      if (onLine) {
+        let pending = "";
+        let lineCount = 0;
+        while (true) {
+          const n = await dataConn.read(dbuf);
+          if (n === null) break;
+          bytes += n;
+          pending += streamDecoder.decode(dbuf.subarray(0, n), { stream: true });
+          let nl: number;
+          while ((nl = pending.indexOf("\n")) !== -1) {
+            const line = pending.slice(0, nl).replace(/\r$/, "");
+            pending = pending.slice(nl + 1);
+            onLine(line);
+            lineCount++;
+          }
+        }
+        pending += streamDecoder.decode();
+        if (pending.length > 0) { onLine(pending.replace(/\r$/, "")); lineCount++; }
+        dataConn.close();
+        await readResponse();
+        try { await send("QUIT"); } catch { /* noop */ }
+        console.log(`FTP RETR ${candidate} streamed: ${bytes} bytes, ${lineCount} lines`);
+        return "";
+      }
+
+      let text = "";
       while (true) {
         const n = await dataConn.read(dbuf);
         if (n === null) break;
-        chunks.push(dbuf.slice(0, n));
+        bytes += n;
+        text += streamDecoder.decode(dbuf.subarray(0, n), { stream: true });
       }
+      text += streamDecoder.decode();
       dataConn.close();
       await readResponse();
       try { await send("QUIT"); } catch { /* noop */ }
-
-      const total = chunks.reduce((a, c) => a + c.length, 0);
-      const merged = new Uint8Array(total);
-      let off = 0;
-      for (const c of chunks) { merged.set(c, off); off += c.length; }
-      return decoder.decode(merged);
+      console.log(`FTP RETR ${candidate} ok: ${bytes} bytes, ${text.length} chars`);
+      return text;
     }
 
     throw new Error(`RETR failed: ${lastError || "file not found"}`);
@@ -241,6 +277,7 @@ Deno.serve(async (req) => {
     const mapping = (supplier.column_mapping ?? {}) as Record<string, string>;
 
     let feedRows: Record<string, string>[];
+    let eanToIdEarlyOuter: Map<string, string> | null = null;
 
     if (supplier.feed_type === "api") {
       // Aurdel API: build URL from stored credentials
@@ -312,7 +349,7 @@ Deno.serve(async (req) => {
 
       const delimiter = mapping._delimiter || ";";
 
-      let text: string;
+      let text: string | null = null;
 
       if (isFtp) {
         const host = mappingAny._ftp_host?.trim();
@@ -322,59 +359,70 @@ Deno.serve(async (req) => {
         if (!host || !path) throw new Error("FTP host og filsti er påkrævet");
 
         const cleanPath = path.startsWith("/") ? path : `/${path}`;
+        console.log(`FTP download from ${host}${cleanPath} as ${user || "anonymous"}`);
 
-        // Try HTTP(S) first (many FTP servers also serve files via HTTP)
-        let fetched = false;
-        for (const scheme of ["https", "http"]) {
-          try {
-            const url = user && pass
-              ? `${scheme}://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}${cleanPath}`
-              : `${scheme}://${host}${cleanPath}`;
-            console.log(`Trying ${scheme} download from ${host}${cleanPath}`);
-            const res = await fetch(url, { redirect: "follow" });
-            if (res.ok) {
-              text = await res.text();
-              fetched = true;
-              break;
-            }
-            console.log(`${scheme} returned ${res.status}`);
-          } catch (e) {
-            console.log(`${scheme} failed:`, (e as Error).message);
+        // Pre-fetch EANs so we can filter on-the-fly and avoid loading the whole CSV in memory
+        const { data: mpsEarly, error: mpEarlyErr } = await supabase
+          .from("master_products").select("id, ean");
+        if (mpEarlyErr) throw new Error(`Failed to fetch master products: ${mpEarlyErr.message}`);
+        eanToIdEarlyOuter = new Map<string, string>();
+        for (const mp of mpsEarly ?? []) {
+          const normEan = (mp.ean ?? "").replace(/^0+/, "") || (mp.ean ?? "");
+          if (normEan) eanToIdEarlyOuter.set(normEan, mp.id);
+        }
+
+        feedRows = [];
+        let headers: string[] | null = null;
+        let eanIdx = -1;
+        const eanCol = mapping.ean;
+        await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, (line: string) => {
+          if (!line) return;
+          if (headers === null) {
+            headers = line.split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
+            eanIdx = headers.indexOf(eanCol);
+            return;
           }
-        }
-
-        if (!fetched) {
-          // Fallback: real FTP over TCP (passive mode)
-          text = await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath);
-        }
-
-        text = text!;
+          if (eanIdx === -1) return;
+          const vals = line.split(delimiter);
+          const rawEan = (vals[eanIdx] ?? "").trim().replace(/^["']|["']$/g, "");
+          if (!rawEan) return;
+          const ean = rawEan.replace(/^0+/, "") || rawEan;
+          if (!eanToIdEarlyOuter!.has(ean)) return;
+          const row: Record<string, string> = {};
+          headers.forEach((h, idx) => {
+            row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
+          });
+          feedRows.push(row);
+        });
+        console.log(`Streamed CSV: kept ${feedRows.length} matching rows`);
       } else {
         const res = await fetch(supplier.feed_url!);
         if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
         text = await res.text();
-      }
-
-      if (supplier.feed_type === "xml") {
-        feedRows = parseXml(text);
-      } else {
-        feedRows = parseCsv(text, delimiter);
+        if (supplier.feed_type === "xml") {
+          feedRows = parseXml(text);
+        } else {
+          feedRows = parseCsv(text, delimiter);
+        }
       }
     }
 
     if (feedRows.length === 0) throw new Error("No rows found in feed");
 
-    // Get all existing EANs from master_products
-    const { data: masterProducts, error: mpErr } = await supabase
-      .from("master_products")
-      .select("id, ean");
-    if (mpErr) throw new Error(`Failed to fetch master products: ${mpErr.message}`);
-
-    const eanToId = new Map<string, string>();
-    for (const mp of masterProducts ?? []) {
-      // Normalize stored EAN too: strip leading zeros
-      const normEan = mp.ean.replace(/^0+/, "") || mp.ean;
-      eanToId.set(normEan, mp.id);
+    // Get all existing EANs from master_products (skip if already loaded during streaming FTP path)
+    let eanToId: Map<string, string>;
+    if (typeof eanToIdEarlyOuter !== "undefined" && eanToIdEarlyOuter) {
+      eanToId = eanToIdEarlyOuter;
+    } else {
+      const { data: masterProducts, error: mpErr } = await supabase
+        .from("master_products")
+        .select("id, ean");
+      if (mpErr) throw new Error(`Failed to fetch master products: ${mpErr.message}`);
+      eanToId = new Map<string, string>();
+      for (const mp of masterProducts ?? []) {
+        const normEan = mp.ean.replace(/^0+/, "") || mp.ean;
+        eanToId.set(normEan, mp.id);
+      }
     }
 
     // Process feed rows - only those matching existing EANs
