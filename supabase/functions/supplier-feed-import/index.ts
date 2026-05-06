@@ -119,8 +119,18 @@ function buildFtpPathCandidates(path: string, user: string): string[] {
   ].filter(Boolean))];
 }
 
-/** Minimal FTP client (passive mode, binary download) using Deno TCP. */
-async function downloadViaFtp(host: string, user: string, pass: string, path: string): Promise<string> {
+/** Minimal FTP client (passive mode, binary download) using Deno TCP.
+ *  If onLine is provided, the data stream is parsed line-by-line and onLine is
+ *  invoked for each complete line — no full-file string is built. Returns "".
+ *  If onLine is omitted, the entire file is decoded and returned as a string.
+ */
+async function downloadViaFtp(
+  host: string,
+  user: string,
+  pass: string,
+  path: string,
+  onLine?: (line: string) => void,
+): Promise<string> {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   const conn = await Deno.connect({ hostname: host, port: 21 });
@@ -171,11 +181,36 @@ async function downloadViaFtp(host: string, user: string, pass: string, path: st
         continue;
       }
 
-      // Stream-decode to text to avoid holding both raw bytes AND merged buffer in memory
       const streamDecoder = new TextDecoder("utf-8", { fatal: false });
       const dbuf = new Uint8Array(65536);
-      let text = "";
       let bytes = 0;
+
+      if (onLine) {
+        let pending = "";
+        let lineCount = 0;
+        while (true) {
+          const n = await dataConn.read(dbuf);
+          if (n === null) break;
+          bytes += n;
+          pending += streamDecoder.decode(dbuf.subarray(0, n), { stream: true });
+          let nl: number;
+          while ((nl = pending.indexOf("\n")) !== -1) {
+            const line = pending.slice(0, nl).replace(/\r$/, "");
+            pending = pending.slice(nl + 1);
+            onLine(line);
+            lineCount++;
+          }
+        }
+        pending += streamDecoder.decode();
+        if (pending.length > 0) { onLine(pending.replace(/\r$/, "")); lineCount++; }
+        dataConn.close();
+        await readResponse();
+        try { await send("QUIT"); } catch { /* noop */ }
+        console.log(`FTP RETR ${candidate} streamed: ${bytes} bytes, ${lineCount} lines`);
+        return "";
+      }
+
+      let text = "";
       while (true) {
         const n = await dataConn.read(dbuf);
         if (n === null) break;
