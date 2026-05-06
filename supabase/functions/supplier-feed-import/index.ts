@@ -171,22 +171,23 @@ async function downloadViaFtp(host: string, user: string, pass: string, path: st
         continue;
       }
 
-      const chunks: Uint8Array[] = [];
+      // Stream-decode to text to avoid holding both raw bytes AND merged buffer in memory
+      const streamDecoder = new TextDecoder("utf-8", { fatal: false });
       const dbuf = new Uint8Array(65536);
+      let text = "";
+      let bytes = 0;
       while (true) {
         const n = await dataConn.read(dbuf);
         if (n === null) break;
-        chunks.push(dbuf.slice(0, n));
+        bytes += n;
+        text += streamDecoder.decode(dbuf.subarray(0, n), { stream: true });
       }
+      text += streamDecoder.decode();
       dataConn.close();
       await readResponse();
       try { await send("QUIT"); } catch { /* noop */ }
-
-      const total = chunks.reduce((a, c) => a + c.length, 0);
-      const merged = new Uint8Array(total);
-      let off = 0;
-      for (const c of chunks) { merged.set(c, off); off += c.length; }
-      return decoder.decode(merged);
+      console.log(`FTP RETR ${candidate} ok: ${bytes} bytes, ${text.length} chars`);
+      return text;
     }
 
     throw new Error(`RETR failed: ${lastError || "file not found"}`);
