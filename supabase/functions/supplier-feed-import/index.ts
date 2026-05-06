@@ -277,6 +277,7 @@ Deno.serve(async (req) => {
     const mapping = (supplier.column_mapping ?? {}) as Record<string, string>;
 
     let feedRows: Record<string, string>[];
+    let eanToIdEarlyOuter: Map<string, string> | null = null;
 
     if (supplier.feed_type === "api") {
       // Aurdel API: build URL from stored credentials
