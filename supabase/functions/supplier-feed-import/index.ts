@@ -509,9 +509,21 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Deduplicate by (supplier_id, master_product_id) — last row wins.
+    // Some feeds (e.g. DCS) list the same EAN multiple times; without this,
+    // upsert fails with "ON CONFLICT DO UPDATE command cannot affect row a second time".
+    const dedupMap = new Map<string, typeof spRows[number]>();
+    for (const r of spRows) {
+      dedupMap.set(`${r.supplier_id}::${r.master_product_id}`, r);
+    }
+    const dedupedRows = Array.from(dedupMap.values());
+    if (dedupedRows.length !== spRows.length) {
+      console.log(`Deduplicated ${spRows.length - dedupedRows.length} duplicate rows by EAN`);
+    }
+
     // Bulk upsert in batches of 500. Triggers are bypassed via app.bulk_supplier_import flag.
-    for (let i = 0; i < spRows.length; i += 500) {
-      const batch = spRows.slice(i, i + 500);
+    for (let i = 0; i < dedupedRows.length; i += 500) {
+      const batch = dedupedRows.slice(i, i + 500);
       // Set bulk flag (session-scoped) right before each batch
       await supabase.rpc("set_bulk_supplier_import", { enabled: true });
       const { error: upsErr } = await supabase
