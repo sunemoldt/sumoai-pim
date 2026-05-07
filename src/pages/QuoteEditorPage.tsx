@@ -1,0 +1,401 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, Plus, Save, Send, Trash2, Loader2, Search } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+
+type Line = {
+  id?: string;
+  pim_product_id: string | null;
+  product_name: string;
+  quantity: number;
+  purchase_price: number;
+  list_price: number;
+  quote_price: number;
+  sort_order: number;
+};
+
+const VAT = 0.25;
+
+export default function QuoteEditorPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const isNew = !id || id === "new";
+
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [quoteId, setQuoteId] = useState<string | null>(isNew ? null : id!);
+  const [quoteNumber, setQuoteNumber] = useState<number | null>(null);
+  const [voucherGuid, setVoucherGuid] = useState<string | null>(null);
+  const [status, setStatus] = useState("draft");
+
+  const [customerName, setCustomerName] = useState("");
+  const [contactGuid, setContactGuid] = useState("");
+  const [quoteDate, setQuoteDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [validDays, setValidDays] = useState(30);
+  const [noteCustomer, setNoteCustomer] = useState("");
+  const [noteInternal, setNoteInternal] = useState("");
+  const [lines, setLines] = useState<Line[]>([]);
+
+  // Load existing quote
+  useEffect(() => {
+    if (isNew) return;
+    setLoading(true);
+    (async () => {
+      const { data: q } = await supabase.from("quotes" as any).select("*").eq("id", id!).single();
+      if (q) {
+        const qq = q as any;
+        setQuoteNumber(qq.quote_number);
+        setVoucherGuid(qq.dinero_voucher_guid);
+        setStatus(qq.status);
+        setCustomerName(qq.customer_name || "");
+        setContactGuid(qq.dinero_contact_guid || "");
+        setQuoteDate(qq.quote_date);
+        setValidDays(qq.valid_days);
+        setNoteCustomer(qq.note_customer || "");
+        setNoteInternal(qq.note_internal || "");
+      }
+      const { data: ls } = await supabase.from("quote_lines" as any).select("*").eq("quote_id", id!).order("sort_order");
+      if (ls) setLines((ls as any[]).map((l) => ({ ...l, quantity: Number(l.quantity), purchase_price: Number(l.purchase_price), list_price: Number(l.list_price), quote_price: Number(l.quote_price) })));
+      setLoading(false);
+    })();
+  }, [id, isNew]);
+
+  // Totals
+  const totals = useMemo(() => {
+    const subtotal = lines.reduce((s, l) => s + l.quantity * l.quote_price, 0);
+    const purchase = lines.reduce((s, l) => s + l.quantity * l.purchase_price, 0);
+    const marginKr = subtotal - purchase;
+    const marginPct = subtotal > 0 ? (marginKr / subtotal) * 100 : 0;
+    const vat = subtotal * VAT;
+    return { subtotal, purchase, marginKr, marginPct, vat, total: subtotal + vat };
+  }, [lines]);
+
+  const marginColor = (pct: number) =>
+    pct < 20 ? "text-destructive" : pct < 35 ? "text-yellow-600" : "text-green-600";
+
+  const addLine = () => {
+    setLines((prev) => [...prev, {
+      pim_product_id: null, product_name: "", quantity: 1,
+      purchase_price: 0, list_price: 0, quote_price: 0, sort_order: prev.length,
+    }]);
+  };
+
+  const updateLine = (idx: number, patch: Partial<Line>) => {
+    setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  };
+
+  const removeLine = (idx: number) => setLines((prev) => prev.filter((_, i) => i !== idx));
+
+  const saveQuote = async (): Promise<string | null> => {
+    setSaving(true);
+    try {
+      let theId = quoteId;
+      const payload = {
+        customer_name: customerName,
+        dinero_contact_guid: contactGuid || null,
+        quote_date: quoteDate,
+        valid_days: validDays,
+        note_customer: noteCustomer || null,
+        note_internal: noteInternal || null,
+        total_excl_vat: totals.subtotal,
+        total_purchase_price: totals.purchase,
+      };
+
+      if (!theId) {
+        const { data, error } = await supabase.from("quotes" as any).insert(payload as any).select().single();
+        if (error) throw error;
+        theId = (data as any).id;
+        setQuoteId(theId);
+        setQuoteNumber((data as any).quote_number);
+      } else {
+        const { error } = await supabase.from("quotes" as any).update(payload as any).eq("id", theId);
+        if (error) throw error;
+      }
+
+      // Replace lines
+      await supabase.from("quote_lines" as any).delete().eq("quote_id", theId!);
+      if (lines.length > 0) {
+        const rows = lines.map((l, i) => ({
+          quote_id: theId,
+          pim_product_id: l.pim_product_id,
+          product_name: l.product_name,
+          quantity: l.quantity,
+          purchase_price: l.purchase_price,
+          list_price: l.list_price,
+          quote_price: l.quote_price,
+          sort_order: i,
+        }));
+        const { error } = await supabase.from("quote_lines" as any).insert(rows as any);
+        if (error) throw error;
+      }
+      toast({ title: "Tilbud gemt" });
+      qc.invalidateQueries({ queryKey: ["quotes-list"] });
+      if (isNew && theId) navigate(`/quotes/${theId}`, { replace: true });
+      return theId;
+    } catch (err: any) {
+      toast({ title: "Fejl", description: err?.message, variant: "destructive" });
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendToDinero = async () => {
+    const theId = await saveQuote();
+    if (!theId) return;
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("dinero-send-quote", { body: { quote_id: theId } });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const vGuid = (data as any).voucherGuid;
+      const orgId = (data as any).organizationId;
+      setVoucherGuid(vGuid);
+      setStatus("sent");
+      toast({
+        title: "Sendt til Dinero",
+        description: vGuid ? `Kladde oprettet. Åbn i Dinero` : "Kladde oprettet",
+      });
+      if (vGuid && orgId) {
+        window.open(`https://app.dinero.dk/${orgId}/sales/${vGuid}`, "_blank");
+      }
+    } catch (err: any) {
+      toast({ title: "Fejl ved Dinero", description: err?.message, variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+
+  return (
+    <div className="space-y-6 pb-40">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/quotes")}><ArrowLeft className="h-4 w-4" /></Button>
+        <div className="flex-1">
+          <h1 className="text-2xl font-semibold">{isNew ? "Nyt tilbud" : `Tilbud #${quoteNumber ?? ""}`}</h1>
+          {voucherGuid && status === "sent" && (
+            <p className="text-sm text-green-600 mt-1">Sendt til Dinero · {voucherGuid}</p>
+          )}
+        </div>
+        <Button variant="outline" onClick={saveQuote} disabled={saving}>
+          {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+          Gem
+        </Button>
+        <Button onClick={sendToDinero} disabled={sending || saving || lines.length === 0}>
+          {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
+          Send til Dinero
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Kunde og detaljer</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="space-y-2 lg:col-span-2">
+            <Label>Kunde (navn)</Label>
+            <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Søg kunde / indtast navn" />
+          </div>
+          <div className="space-y-2 lg:col-span-2">
+            <Label>Dinero ContactGuid (valgfri)</Label>
+            <Input value={contactGuid} onChange={(e) => setContactGuid(e.target.value)} placeholder="GUID fra Dinero" />
+          </div>
+          <div className="space-y-2">
+            <Label>Tilbudsdato</Label>
+            <Input type="date" value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Gyldighed (dage)</Label>
+            <Input type="number" value={validDays} onChange={(e) => setValidDays(parseInt(e.target.value) || 0)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Produktlinjer</CardTitle>
+          <Button size="sm" variant="outline" onClick={addLine}><Plus className="h-4 w-4 mr-1" /> Tilføj linje</Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-secondary/50">
+                <TableHead className="w-[28%]">Produkt</TableHead>
+                <TableHead className="text-right w-[80px]">Antal</TableHead>
+                <TableHead className="text-right">Indkøb</TableHead>
+                <TableHead className="text-right">Listepris</TableHead>
+                <TableHead className="text-right">Tilbudspris</TableHead>
+                <TableHead className="text-right">Avance kr.</TableHead>
+                <TableHead className="text-right">Avance %</TableHead>
+                <TableHead className="text-right">Subtotal</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {lines.length === 0 ? (
+                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Ingen linjer endnu</TableCell></TableRow>
+              ) : lines.map((l, idx) => {
+                const sub = l.quantity * l.quote_price;
+                const margin = (l.quote_price - l.purchase_price) * l.quantity;
+                const marginPct = l.quote_price > 0 ? ((l.quote_price - l.purchase_price) / l.quote_price) * 100 : 0;
+                return (
+                  <TableRow key={idx}>
+                    <TableCell>
+                      <ProductPicker
+                        value={l.product_name}
+                        onSelect={(p) => updateLine(idx, {
+                          pim_product_id: p.id,
+                          product_name: p.title,
+                          purchase_price: p.purchase_price,
+                          list_price: p.list_price,
+                          quote_price: p.list_price,
+                        })}
+                        onTextChange={(v) => updateLine(idx, { product_name: v })}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Input type="number" className="h-8 text-right font-mono" value={l.quantity} onChange={(e) => updateLine(idx, { quantity: parseFloat(e.target.value) || 0 })} />
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">{l.purchase_price.toFixed(2)}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">{l.list_price.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">
+                      <Input type="number" step="0.01" className="h-8 text-right font-mono" value={l.quote_price} onChange={(e) => updateLine(idx, { quote_price: parseFloat(e.target.value) || 0 })} />
+                    </TableCell>
+                    <TableCell className="text-right font-mono">{margin.toFixed(2)}</TableCell>
+                    <TableCell className={cn("text-right font-mono", marginColor(marginPct))}>{marginPct.toFixed(1)}%</TableCell>
+                    <TableCell className="text-right font-mono">{sub.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => removeLine(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="text-base">Note til kunden</CardTitle></CardHeader>
+          <CardContent>
+            <Textarea rows={4} value={noteCustomer} onChange={(e) => setNoteCustomer(e.target.value)} placeholder="Vises på tilbudet" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="text-base">Intern note</CardTitle></CardHeader>
+          <CardContent>
+            <Textarea rows={4} value={noteInternal} onChange={(e) => setNoteInternal(e.target.value)} placeholder="Kun til intern brug" />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Sticky summary */}
+      <div className="fixed bottom-0 left-60 right-0 border-t border-border bg-card/95 backdrop-blur px-6 py-3 z-40">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
+          <Stat label="Subtotal ekskl. moms" value={`${totals.subtotal.toFixed(2)} kr.`} />
+          <Stat label="Moms (25%)" value={`${totals.vat.toFixed(2)} kr.`} />
+          <Stat label="Total inkl. moms" value={`${totals.total.toFixed(2)} kr.`} bold />
+          <Stat label="Indkøb total" value={`${totals.purchase.toFixed(2)} kr.`} />
+          <Stat label="Avance kr." value={`${totals.marginKr.toFixed(2)} kr.`} />
+          <Stat label="Avance %" value={`${totals.marginPct.toFixed(1)}%`} className={marginColor(totals.marginPct)} bold />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, className, bold }: { label: string; value: string; className?: string; bold?: boolean }) {
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={cn("font-mono", bold && "font-semibold text-base", className)}>{value}</div>
+    </div>
+  );
+}
+
+function ProductPicker({
+  value, onSelect, onTextChange,
+}: {
+  value: string;
+  onSelect: (p: { id: string; title: string; purchase_price: number; list_price: number }) => void;
+  onTextChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const { data: results = [] } = useQuery({
+    queryKey: ["quote-product-search", search],
+    queryFn: async () => {
+      if (search.trim().length < 2) return [];
+      const { data } = await supabase
+        .from("master_products")
+        .select("id, title, ean, webshop_price, supplier_products(purchase_price, in_stock)")
+        .or(`title.ilike.%${search}%,ean.ilike.%${search}%,sku.ilike.%${search}%`)
+        .limit(15);
+      return (data ?? []) as any[];
+    },
+    enabled: open && search.trim().length >= 2,
+  });
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div className="flex items-center gap-2">
+          <Input
+            value={value}
+            onChange={(e) => onTextChange(e.target.value)}
+            onFocus={() => setOpen(true)}
+            placeholder="Søg produkt…"
+            className="h-8"
+          />
+          <Search className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-[420px] p-2" align="start">
+        <Input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Søg på titel, EAN, SKU…" className="h-8 mb-2" />
+        <div className="max-h-72 overflow-y-auto">
+          {search.length < 2 ? (
+            <p className="text-xs text-muted-foreground p-2">Skriv mindst 2 tegn</p>
+          ) : results.length === 0 ? (
+            <p className="text-xs text-muted-foreground p-2">Ingen resultater</p>
+          ) : results.map((p: any) => {
+            const cheapest = (p.supplier_products ?? []).reduce((min: any, sp: any) => !min || sp.purchase_price < min.purchase_price ? sp : min, null);
+            const purchase = cheapest?.purchase_price ?? 0;
+            const list = Number(p.webshop_price) || 0;
+            return (
+              <button
+                key={p.id}
+                className="w-full text-left p-2 rounded hover:bg-accent text-sm"
+                onClick={() => {
+                  onSelect({ id: p.id, title: p.title, purchase_price: Number(purchase), list_price: list });
+                  setOpen(false);
+                  setSearch("");
+                }}
+              >
+                <div className="font-medium truncate">{p.title}</div>
+                <div className="text-xs text-muted-foreground flex gap-3">
+                  <span>EAN: {p.ean}</span>
+                  <span>Indkøb: {Number(purchase).toFixed(2)}</span>
+                  <span>Liste: {list.toFixed(2)}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}

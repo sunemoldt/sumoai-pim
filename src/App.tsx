@@ -15,6 +15,8 @@ import ImportPage from "@/pages/ImportPage";
 import MonitoringPage from "@/pages/MonitoringPage";
 import N8nWorkflowsPage from "@/pages/N8nWorkflowsPage";
 import ShopifyPage from "@/pages/ShopifyPage";
+import QuoteListPage from "@/pages/QuoteListPage";
+import QuoteEditorPage from "@/pages/QuoteEditorPage";
 import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "@/pages/NotFound";
@@ -48,6 +50,9 @@ function AuthenticatedApp() {
         <Route path="/monitoring" element={<MonitoringPage />} />
         <Route path="/automations/n8n" element={<N8nWorkflowsPage />} />
         <Route path="/shopify" element={<ShopifyPage />} />
+        <Route path="/quotes" element={<QuoteListPage />} />
+        <Route path="/quotes/new" element={<QuoteEditorPage />} />
+        <Route path="/quotes/:id" element={<QuoteEditorPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
