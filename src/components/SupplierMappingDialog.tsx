@@ -43,8 +43,14 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
       const existing = supplier.column_mapping as Record<string, string>;
       setMapping(existing);
       if (existing._delimiter) setDelimiter(existing._delimiter);
+      if (existing._currency === "EUR" || existing._currency === "DKK") setCurrency(existing._currency);
+      else setCurrency("DKK");
+      if (existing._eur_rate) setEurRate(existing._eur_rate);
+      else setEurRate("7.46");
     } else {
       setMapping({});
+      setCurrency("DKK");
+      setEurRate("7.46");
     }
   }, [supplier, open]);
 
