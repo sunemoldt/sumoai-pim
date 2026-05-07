@@ -24,8 +24,10 @@ Deno.serve(async (req) => {
     if (!quote_id) return new Response(JSON.stringify({ error: "quote_id required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const apiKey = Deno.env.get("DINERO_API_KEY");
+    const clientId = Deno.env.get("DINERO_CLIENT_ID");
+    const clientSecret = Deno.env.get("DINERO_CLIENT_SECRET");
     const orgId = Deno.env.get("DINERO_ORGANIZATION_ID");
-    if (!apiKey || !orgId) {
+    if (!apiKey || !clientId || !clientSecret || !orgId) {
       return new Response(JSON.stringify({ error: "Dinero credentials not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -60,14 +62,22 @@ Deno.serve(async (req) => {
       productLines: invoiceLines,
     };
 
-    // Dinero uses OAuth2: exchange API key for access token first
+    // Dinero personal integrations use Basic client_id:client_secret,
+    // then exchange the organization API key as username/password.
+    const tokenParams = new URLSearchParams({
+      grant_type: "password",
+      scope: "read write",
+      username: apiKey,
+      password: apiKey,
+    });
+
     const tokenRes = await fetch("https://authz.dinero.dk/dineroapi/oauth/token", {
       method: "POST",
       headers: {
-        "Authorization": `Basic ${btoa(`${apiKey}:${apiKey}`)}`,
+        "Authorization": `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: "grant_type=client_credentials&scope=read%20write",
+      body: tokenParams.toString(),
     });
     const tokenBody = await tokenRes.text();
     if (!tokenRes.ok) {
