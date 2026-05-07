@@ -34,6 +34,8 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
   const [feedColumns, setFeedColumns] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [delimiter, setDelimiter] = useState(";");
+  const [currency, setCurrency] = useState<"DKK" | "EUR">("DKK");
+  const [eurRate, setEurRate] = useState<string>("7.46");
 
   // Load existing mapping
   useEffect(() => {
@@ -41,8 +43,14 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
       const existing = supplier.column_mapping as Record<string, string>;
       setMapping(existing);
       if (existing._delimiter) setDelimiter(existing._delimiter);
+      if (existing._currency === "EUR" || existing._currency === "DKK") setCurrency(existing._currency);
+      else setCurrency("DKK");
+      if (existing._eur_rate) setEurRate(existing._eur_rate);
+      else setEurRate("7.46");
     } else {
       setMapping({});
+      setCurrency("DKK");
+      setEurRate("7.46");
     }
   }, [supplier, open]);
 
@@ -91,7 +99,8 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
     }
     setSaving(true);
     try {
-      const fullMapping = { ...mapping, _delimiter: delimiter };
+      const fullMapping: Record<string, string> = { ...mapping, _delimiter: delimiter, _currency: currency };
+      if (currency === "EUR") fullMapping._eur_rate = eurRate;
       const { error } = await supabase
         .from("suppliers")
         .update({ column_mapping: fullMapping })
@@ -125,6 +134,31 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
               {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
               Hent kolonner fra feed
             </Button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Valuta i feed</Label>
+              <Select value={currency} onValueChange={(v) => setCurrency(v as "DKK" | "EUR")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DKK">DKK (ingen omregning)</SelectItem>
+                  <SelectItem value="EUR">EUR (omregnes til DKK)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {currency === "EUR" && (
+              <div className="space-y-2">
+                <Label>EUR → DKK kurs</Label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  value={eurRate}
+                  onChange={(e) => setEurRate(e.target.value)}
+                  placeholder="7.46"
+                />
+              </div>
+            )}
           </div>
 
           {feedColumns.length > 0 && (

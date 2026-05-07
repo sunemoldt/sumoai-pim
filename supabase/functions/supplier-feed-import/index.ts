@@ -462,8 +462,12 @@ Deno.serve(async (req) => {
       if (!masterProductId) { skipped++; continue; }
 
       const priceStr = row[mapping.purchase_price]?.trim().replace(",", ".");
-      const price = parseFloat(priceStr);
+      let price = parseFloat(priceStr);
       if (isNaN(price)) { skipped++; continue; }
+      if ((mapping as any)._currency === "EUR") {
+        const rate = parseFloat(((mapping as any)._eur_rate ?? "7.46").toString().replace(",", ".")) || 7.46;
+        price = Math.round(price * rate * 100) / 100;
+      }
 
       const stockStr = mapping.stock_quantity ? row[mapping.stock_quantity]?.trim() : null;
       const stockQty = stockStr ? parseInt(stockStr, 10) : null;
