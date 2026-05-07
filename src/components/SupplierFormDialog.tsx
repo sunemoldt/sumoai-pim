@@ -62,6 +62,8 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setFtpUser(cm._ftp_user ?? "");
       setFtpPass(cm._ftp_pass ?? "");
       setFtpPath(cm._ftp_path ?? "");
+      setCurrency(cm._currency === "EUR" ? "EUR" : "DKK");
+      setEurRate(cm._eur_rate ?? "7.46");
     } else {
       setName("");
       setFeedType("csv");
