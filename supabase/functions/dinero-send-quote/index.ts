@@ -60,10 +60,25 @@ Deno.serve(async (req) => {
       productLines: invoiceLines,
     };
 
+    // Dinero uses OAuth2: exchange API key for access token first
+    const tokenRes = await fetch("https://authz.dinero.dk/dineroapi/oauth/token", {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${btoa(`${apiKey}:${apiKey}`)}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: `grant_type=password&scope=read%20write&username=${encodeURIComponent(apiKey)}&password=${encodeURIComponent(apiKey)}`,
+    });
+    const tokenBody = await tokenRes.text();
+    if (!tokenRes.ok) {
+      return new Response(JSON.stringify({ error: "Dinero auth error", status: tokenRes.status, body: tokenBody }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const accessToken = JSON.parse(tokenBody).access_token;
+
     const url = `https://api.dinero.dk/v1/${orgId}/invoices`;
     const dineroRes = await fetch(url, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
