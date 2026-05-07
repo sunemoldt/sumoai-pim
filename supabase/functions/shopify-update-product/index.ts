@@ -193,8 +193,7 @@ Deno.serve(async (req) => {
           input: {
             name: "available",
             reason: "correction",
-            ignoreCompareQuantity: true,
-            quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity) }],
+            quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity), compareQuantity: Number(currentQty) }],
           },
         });
         const errors = setData.inventorySetQuantities.userErrors;
