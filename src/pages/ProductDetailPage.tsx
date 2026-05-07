@@ -39,6 +39,8 @@ export default function ProductDetailPage() {
   const [saving, setSaving] = useState(false);
   const [markupInput, setMarkupInput] = useState<string | null>(null);
   const [pushing, setPushing] = useState(false);
+  type PushResult = { platform: "Shopify" | "WooCommerce"; success: boolean; message: string; updatedFields?: string[] };
+  const [pushResults, setPushResults] = useState<PushResult[] | null>(null);
   const [pushPrice, setPushPrice] = useState<string>("");
   const [pushSalePrice, setPushSalePrice] = useState<string>("");
   const [pushStockQty, setPushStockQty] = useState<string>("");
