@@ -50,6 +50,9 @@ function AuthenticatedApp() {
         <Route path="/monitoring" element={<MonitoringPage />} />
         <Route path="/automations/n8n" element={<N8nWorkflowsPage />} />
         <Route path="/shopify" element={<ShopifyPage />} />
+        <Route path="/quotes" element={<QuoteListPage />} />
+        <Route path="/quotes/new" element={<QuoteEditorPage />} />
+        <Route path="/quotes/:id" element={<QuoteEditorPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
