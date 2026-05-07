@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
 
       if (inventoryItemId && locationId) {
         const setMutation = `#graphql
-          mutation SetInventory($input: InventorySetQuantitiesInput!) @inContext(language: EN) {
+          mutation SetInventory($input: InventorySetQuantitiesInput!) {
             inventorySetQuantities(input: $input) @idempotent(key: "${crypto.randomUUID()}") {
               userErrors { field message }
             }
