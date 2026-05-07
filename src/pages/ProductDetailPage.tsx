@@ -1200,6 +1200,41 @@ export default function ProductDetailPage() {
                 {pushing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 Opdater shop
               </Button>
+
+              {pushResults && pushResults.length > 0 && (
+                <div className="grid gap-2 sm:grid-cols-2 mt-2">
+                  {pushResults.map((r) => (
+                    <div
+                      key={r.platform}
+                      className={`rounded-lg border p-3 flex items-start gap-3 ${
+                        r.success
+                          ? "border-success/30 bg-success/5"
+                          : "border-destructive/30 bg-destructive/5"
+                      }`}
+                    >
+                      {r.success ? (
+                        <CheckCircle className="h-5 w-5 text-success shrink-0 mt-0.5" />
+                      ) : (
+                        <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{r.platform}</span>
+                          <Badge variant={r.success ? "secondary" : "destructive"} className="text-[10px]">
+                            {r.success ? "OK" : "Fejl"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 break-words">{r.message}</p>
+                        {r.success && r.updatedFields && r.updatedFields.length > 0 && (
+                          <p className="text-[11px] text-muted-foreground mt-1 font-mono">
+                            {r.updatedFields.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
