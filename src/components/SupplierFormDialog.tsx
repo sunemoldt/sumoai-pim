@@ -41,6 +41,10 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
   const [ftpPass, setFtpPass] = useState("");
   const [ftpPath, setFtpPath] = useState("");
 
+  // Currency
+  const [currency, setCurrency] = useState<"DKK" | "EUR">("DKK");
+  const [eurRate, setEurRate] = useState("7.46");
+
   useEffect(() => {
     if (supplier) {
       setName(supplier.name);
@@ -58,6 +62,8 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setFtpUser(cm._ftp_user ?? "");
       setFtpPass(cm._ftp_pass ?? "");
       setFtpPath(cm._ftp_path ?? "");
+      setCurrency(cm._currency === "EUR" ? "EUR" : "DKK");
+      setEurRate(cm._eur_rate ?? "7.46");
     } else {
       setName("");
       setFeedType("csv");
@@ -73,6 +79,8 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setFtpUser("");
       setFtpPass("");
       setFtpPath("");
+      setCurrency("DKK");
+      setEurRate("7.46");
     }
   }, [supplier, open]);
 
@@ -122,6 +130,14 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
             _ftp_path: ftpPath.trim(),
           }
         : existingMapping;
+
+      // Always persist currency settings regardless of feed type
+      (columnMapping as Record<string, string>)._currency = currency;
+      if (currency === "EUR") {
+        (columnMapping as Record<string, string>)._eur_rate = eurRate.replace(",", ".");
+      } else {
+        delete (columnMapping as Record<string, string>)._eur_rate;
+      }
 
       const ftpFeedUrl = ftpHost.trim()
         ? `ftp://${ftpHost.trim()}${ftpPath.trim().startsWith("/") ? "" : "/"}${ftpPath.trim()}`
@@ -289,6 +305,31 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
               </Select>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label>Valuta i feed</Label>
+            <Select value={currency} onValueChange={(v) => setCurrency(v as "DKK" | "EUR")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="DKK">DKK (ingen omregning)</SelectItem>
+                <SelectItem value="EUR">EUR (omregnes til DKK)</SelectItem>
+              </SelectContent>
+            </Select>
+            {currency === "EUR" && (
+              <div className="pt-2 space-y-1">
+                <Label htmlFor="eurRate" className="text-xs">EUR → DKK kurs</Label>
+                <Input
+                  id="eurRate"
+                  type="number"
+                  step="0.0001"
+                  value={eurRate}
+                  onChange={(e) => setEurRate(e.target.value)}
+                  placeholder="7.46"
+                />
+                <p className="text-xs text-muted-foreground">Indkøbspriser i feedet ganges med denne kurs ved import.</p>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center justify-between">
             <Label htmlFor="active">Aktiv</Label>
