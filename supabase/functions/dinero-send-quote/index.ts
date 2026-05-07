@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
         "Authorization": `Basic ${btoa(`${apiKey}:${apiKey}`)}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: `grant_type=password&scope=read%20write&username=${encodeURIComponent(apiKey)}&password=${encodeURIComponent(apiKey)}`,
+      body: "grant_type=client_credentials&scope=read%20write",
     });
     const tokenBody = await tokenRes.text();
     if (!tokenRes.ok) {
