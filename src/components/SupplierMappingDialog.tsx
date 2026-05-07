@@ -34,6 +34,8 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
   const [feedColumns, setFeedColumns] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [delimiter, setDelimiter] = useState(";");
+  const [currency, setCurrency] = useState<"DKK" | "EUR">("DKK");
+  const [eurRate, setEurRate] = useState<string>("7.46");
 
   // Load existing mapping
   useEffect(() => {
