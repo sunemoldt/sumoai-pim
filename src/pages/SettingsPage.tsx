@@ -304,6 +304,30 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Dinero */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-medium flex items-center gap-2">
+            <KeyRound className="h-4 w-4" /> Dinero integration
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Dinero API Key og Organization ID er gemt som backend-secrets og bruges af Tilbud-modulet til at oprette kladdefakturaer i Dinero. Bed Lovable opdatere dem hvis de skal ændres.
+          </p>
+          <div className="grid grid-cols-2 gap-3 max-w-md">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">DINERO_API_KEY</Label>
+              <div className="rounded-md border border-border bg-secondary/40 px-3 py-2 text-xs font-mono">••••••••• (gemt)</div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">DINERO_ORGANIZATION_ID</Label>
+              <div className="rounded-md border border-border bg-secondary/40 px-3 py-2 text-xs font-mono">••••••••• (gemt)</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Webhooks */}
       <Card className="shadow-sm">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
