@@ -79,6 +79,8 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       setFtpUser("");
       setFtpPass("");
       setFtpPath("");
+      setCurrency("DKK");
+      setEurRate("7.46");
     }
   }, [supplier, open]);
 
