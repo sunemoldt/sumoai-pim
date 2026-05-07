@@ -99,7 +99,8 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
     }
     setSaving(true);
     try {
-      const fullMapping = { ...mapping, _delimiter: delimiter };
+      const fullMapping: Record<string, string> = { ...mapping, _delimiter: delimiter, _currency: currency };
+      if (currency === "EUR") fullMapping._eur_rate = eurRate;
       const { error } = await supabase
         .from("suppliers")
         .update({ column_mapping: fullMapping })
