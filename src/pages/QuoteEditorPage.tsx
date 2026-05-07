@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Plus, Save, Send, Trash2, Loader2, Search } from "lucide-react";
@@ -334,68 +334,86 @@ function ProductPicker({
   onTextChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(value || "");
+  const [debounced, setDebounced] = useState(search);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
-  const { data: results = [] } = useQuery({
-    queryKey: ["quote-product-search", search],
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebounced(search), 200);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  React.useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  const { data: results = [], isFetching } = useQuery({
+    queryKey: ["quote-product-search", debounced],
     queryFn: async () => {
-      if (search.trim().length < 2) return [];
+      const q = debounced.trim();
+      if (q.length < 2) return [];
       const { data } = await supabase
         .from("master_products")
-        .select("id, title, ean, webshop_price, supplier_products(purchase_price, in_stock)")
-        .or(`title.ilike.%${search}%,ean.ilike.%${search}%,sku.ilike.%${search}%`)
+        .select("id, title, ean, sku, webshop_price, supplier_products(purchase_price, in_stock)")
+        .or(`title.ilike.%${q}%,ean.ilike.%${q}%,sku.ilike.%${q}%`)
         .limit(15);
       return (data ?? []) as any[];
     },
-    enabled: open && search.trim().length >= 2,
+    enabled: debounced.trim().length >= 2,
   });
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <div className="flex items-center gap-2">
-          <Input
-            value={value}
-            onChange={(e) => onTextChange(e.target.value)}
-            onFocus={() => setOpen(true)}
-            placeholder="Søg produkt…"
-            className="h-8"
-          />
-          <Search className="h-4 w-4 text-muted-foreground" />
+    <div ref={containerRef} className="relative">
+      <div className="flex items-center gap-2">
+        <Input
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); onTextChange(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Søg titel, EAN, SKU…"
+          className="h-8"
+        />
+        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+      </div>
+      {open && (
+        <div className="absolute z-50 mt-1 w-[420px] rounded-md border border-border bg-popover shadow-md p-2">
+          <div className="max-h-72 overflow-y-auto">
+            {debounced.trim().length < 2 ? (
+              <p className="text-xs text-muted-foreground p-2">Skriv mindst 2 tegn</p>
+            ) : isFetching && results.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-2">Søger…</p>
+            ) : results.length === 0 ? (
+              <p className="text-xs text-muted-foreground p-2">Ingen resultater</p>
+            ) : results.map((p: any) => {
+              const cheapest = (p.supplier_products ?? []).reduce((min: any, sp: any) => !min || sp.purchase_price < min.purchase_price ? sp : min, null);
+              const purchase = cheapest?.purchase_price ?? 0;
+              const list = Number(p.webshop_price) || 0;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="w-full text-left p-2 rounded hover:bg-accent text-sm"
+                  onClick={() => {
+                    onSelect({ id: p.id, title: p.title, purchase_price: Number(purchase), list_price: list });
+                    setSearch(p.title);
+                    setOpen(false);
+                  }}
+                >
+                  <div className="font-medium truncate">{p.title}</div>
+                  <div className="text-xs text-muted-foreground flex gap-3">
+                    <span>EAN: {p.ean}</span>
+                    <span>Indkøb: {Number(purchase).toFixed(2)}</span>
+                    <span>Liste: {list.toFixed(2)}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </PopoverTrigger>
-      <PopoverContent className="w-[420px] p-2" align="start">
-        <Input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Søg på titel, EAN, SKU…" className="h-8 mb-2" />
-        <div className="max-h-72 overflow-y-auto">
-          {search.length < 2 ? (
-            <p className="text-xs text-muted-foreground p-2">Skriv mindst 2 tegn</p>
-          ) : results.length === 0 ? (
-            <p className="text-xs text-muted-foreground p-2">Ingen resultater</p>
-          ) : results.map((p: any) => {
-            const cheapest = (p.supplier_products ?? []).reduce((min: any, sp: any) => !min || sp.purchase_price < min.purchase_price ? sp : min, null);
-            const purchase = cheapest?.purchase_price ?? 0;
-            const list = Number(p.webshop_price) || 0;
-            return (
-              <button
-                key={p.id}
-                className="w-full text-left p-2 rounded hover:bg-accent text-sm"
-                onClick={() => {
-                  onSelect({ id: p.id, title: p.title, purchase_price: Number(purchase), list_price: list });
-                  setOpen(false);
-                  setSearch("");
-                }}
-              >
-                <div className="font-medium truncate">{p.title}</div>
-                <div className="text-xs text-muted-foreground flex gap-3">
-                  <span>EAN: {p.ean}</span>
-                  <span>Indkøb: {Number(purchase).toFixed(2)}</span>
-                  <span>Liste: {list.toFixed(2)}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
+      )}
+    </div>
   );
 }
