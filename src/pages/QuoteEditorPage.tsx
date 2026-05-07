@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Plus, Save, Send, Trash2, Loader2, Search } from "lucide-react";
@@ -9,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -336,7 +336,20 @@ function ProductPicker({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState(value || "");
   const [debounced, setDebounced] = useState(search);
+  const [dropdownStyle, setDropdownStyle] = useState({ top: 0, left: 0, width: 420 });
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  const updateDropdownPosition = React.useCallback(() => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.min(420, window.innerWidth - 24);
+    setDropdownStyle({
+      top: rect.bottom + 4,
+      left: Math.min(rect.left, window.innerWidth - width - 12),
+      width,
+    });
+  }, []);
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 200);
@@ -345,11 +358,23 @@ function ProductPicker({
 
   React.useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!containerRef.current?.contains(target) && !dropdownRef.current?.contains(target)) setOpen(false);
     };
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    updateDropdownPosition();
+    window.addEventListener("resize", updateDropdownPosition);
+    window.addEventListener("scroll", updateDropdownPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateDropdownPosition);
+      window.removeEventListener("scroll", updateDropdownPosition, true);
+    };
+  }, [open, updateDropdownPosition]);
 
   const { data: results = [], isFetching } = useQuery({
     queryKey: ["quote-product-search", debounced],
@@ -378,8 +403,8 @@ function ProductPicker({
         />
         <Search className="h-4 w-4 text-muted-foreground shrink-0" />
       </div>
-      {open && (
-        <div className="absolute z-50 mt-1 w-[420px] rounded-md border border-border bg-popover shadow-md p-2">
+      {open && typeof document !== "undefined" && createPortal(
+        <div ref={dropdownRef} className="fixed z-[100] rounded-md border border-border bg-popover shadow-lg p-2" style={dropdownStyle}>
           <div className="max-h-72 overflow-y-auto">
             {debounced.trim().length < 2 ? (
               <p className="text-xs text-muted-foreground p-2">Skriv mindst 2 tegn</p>
@@ -412,7 +437,8 @@ function ProductPicker({
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
