@@ -41,6 +41,10 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
   const [ftpPass, setFtpPass] = useState("");
   const [ftpPath, setFtpPath] = useState("");
 
+  // Currency
+  const [currency, setCurrency] = useState<"DKK" | "EUR">("DKK");
+  const [eurRate, setEurRate] = useState("7.46");
+
   useEffect(() => {
     if (supplier) {
       setName(supplier.name);
