@@ -185,7 +185,7 @@ Deno.serve(async (req) => {
       if (inventoryItemId && locationId) {
         const setMutation = `#graphql
           mutation SetInventory($input: InventorySetQuantitiesInput!) {
-            inventorySetQuantities(input: $input) {
+            inventorySetQuantities(input: $input) @idempotent(key: "${crypto.randomUUID()}") {
               userErrors { field message }
             }
           }`;
@@ -193,8 +193,7 @@ Deno.serve(async (req) => {
           input: {
             name: "available",
             reason: "correction",
-            ignoreCompareQuantity: true,
-            quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity) }],
+            quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity), changeFromQuantity: Number(currentQty) }],
           },
         });
         const errors = setData.inventorySetQuantities.userErrors;
