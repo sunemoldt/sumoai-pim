@@ -162,12 +162,25 @@ Deno.serve(async (req) => {
       // Also use includeInactive on locations so we don't accidentally write to deactivated ones
       const inventoryQuery = `#graphql
         query VariantInventory($id: ID!) {
-          productVariant(id: $id) { inventoryItem { id } }
+          productVariant(id: $id) {
+            inventoryItem {
+              id
+              inventoryLevels(first: 10) {
+                nodes {
+                  location { id }
+                  quantities(names: ["available"]) { name quantity }
+                }
+              }
+            }
+          }
           locations(first: 5, includeInactive: false) { nodes { id } }
         }`;
       const inventoryData = await shopifyGraphql(conn.shop_domain, conn.access_token, inventoryQuery, { id: variantGid });
       const inventoryItemId = inventoryData.productVariant?.inventoryItem?.id;
-      const locationId = inventoryData.locations?.nodes?.[0]?.id;
+      const levels = inventoryData.productVariant?.inventoryItem?.inventoryLevels?.nodes ?? [];
+      const firstLevel = levels[0];
+      const locationId = firstLevel?.location?.id ?? inventoryData.locations?.nodes?.[0]?.id;
+      const currentQty = firstLevel?.quantities?.find((q: { name: string }) => q.name === "available")?.quantity ?? 0;
 
       if (inventoryItemId && locationId) {
         const setMutation = `#graphql
@@ -180,8 +193,7 @@ Deno.serve(async (req) => {
           input: {
             name: "available",
             reason: "correction",
-            ignoreCompareQuantity: true,
-            quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity) }],
+            quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity), compareQuantity: Number(currentQty) }],
           },
         });
         const errors = setData.inventorySetQuantities.userErrors;
