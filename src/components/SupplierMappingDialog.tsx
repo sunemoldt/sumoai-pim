@@ -159,6 +159,7 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
                 />
               </div>
             )}
+          </div>
 
           {feedColumns.length > 0 && (
             <div className="flex flex-wrap gap-1">
