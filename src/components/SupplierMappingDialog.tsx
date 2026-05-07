@@ -136,6 +136,30 @@ export default function SupplierMappingDialog({ open, onOpenChange, supplier }: 
             </Button>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Valuta i feed</Label>
+              <Select value={currency} onValueChange={(v) => setCurrency(v as "DKK" | "EUR")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DKK">DKK (ingen omregning)</SelectItem>
+                  <SelectItem value="EUR">EUR (omregnes til DKK)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {currency === "EUR" && (
+              <div className="space-y-2">
+                <Label>EUR → DKK kurs</Label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  value={eurRate}
+                  onChange={(e) => setEurRate(e.target.value)}
+                  placeholder="7.46"
+                />
+              </div>
+            )}
+
           {feedColumns.length > 0 && (
             <div className="flex flex-wrap gap-1">
               <span className="text-xs text-muted-foreground mr-1">Kolonner:</span>
