@@ -221,15 +221,27 @@ export default function ProductDetailPage() {
       if (pushStockStatus) payload.stock_status = pushStockStatus;
       if (pushBackorders) payload.backorders = pushBackorders;
 
-      const updateFunction = product.shopify_variant_id ? "shopify-update-product" : "wc-update-product";
-      const { data, error } = await supabase.functions.invoke(updateFunction, {
-        body: payload,
+      const targets: string[] = [];
+      if (product.shopify_variant_id) targets.push("shopify-update-product");
+      if (product.webshop_product_id && product.webshop_platform === "woocommerce") targets.push("wc-update-product");
+      if (targets.length === 0) throw new Error("Produktet er ikke koblet til hverken Shopify eller WooCommerce");
+
+      const results = await Promise.all(
+        targets.map((fn) => supabase.functions.invoke(fn, { body: payload }))
+      );
+
+      const errors: string[] = [];
+      let totalFields = 0;
+      results.forEach((res, i) => {
+        if (res.error) errors.push(`${targets[i]}: ${res.error.message}`);
+        else if (res.data?.error) errors.push(`${targets[i]}: ${res.data.error}`);
+        else totalFields += res.data?.updated_fields?.length ?? 0;
       });
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (errors.length === results.length) throw new Error(errors.join(" | "));
+      if (errors.length > 0) toast.warning(`Delvis opdatering: ${errors.join(" | ")}`);
+      else toast.success(`Produktet er opdateret i ${targets.length === 2 ? "Shopify + WooCommerce" : targets[0].includes("shopify") ? "Shopify" : "WooCommerce"} (${totalFields} felter)`);
 
-      toast.success(`Produktet er opdateret i webshoppen (${data.updated_fields?.length ?? 0} felter)`);
       queryClient.invalidateQueries({ queryKey: ["master_product", id] });
     } catch (err: any) {
       toast.error(err?.message || "Fejl ved opdatering af webshop");
