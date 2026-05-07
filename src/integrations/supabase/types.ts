@@ -462,6 +462,104 @@ export type Database = {
           },
         ]
       }
+      quote_lines: {
+        Row: {
+          created_at: string
+          id: string
+          list_price: number
+          pim_product_id: string | null
+          product_name: string
+          purchase_price: number
+          quantity: number
+          quote_id: string
+          quote_price: number
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          list_price?: number
+          pim_product_id?: string | null
+          product_name?: string
+          purchase_price?: number
+          quantity?: number
+          quote_id: string
+          quote_price?: number
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          list_price?: number
+          pim_product_id?: string | null
+          product_name?: string
+          purchase_price?: number
+          quantity?: number
+          quote_id?: string
+          quote_price?: number
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_lines_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quotes: {
+        Row: {
+          created_at: string
+          customer_name: string
+          dinero_contact_guid: string | null
+          dinero_voucher_guid: string | null
+          id: string
+          note_customer: string | null
+          note_internal: string | null
+          quote_date: string
+          quote_number: number
+          status: string
+          total_excl_vat: number
+          total_purchase_price: number
+          updated_at: string
+          valid_days: number
+        }
+        Insert: {
+          created_at?: string
+          customer_name?: string
+          dinero_contact_guid?: string | null
+          dinero_voucher_guid?: string | null
+          id?: string
+          note_customer?: string | null
+          note_internal?: string | null
+          quote_date?: string
+          quote_number?: number
+          status?: string
+          total_excl_vat?: number
+          total_purchase_price?: number
+          updated_at?: string
+          valid_days?: number
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string
+          dinero_contact_guid?: string | null
+          dinero_voucher_guid?: string | null
+          id?: string
+          note_customer?: string | null
+          note_internal?: string | null
+          quote_date?: string
+          quote_number?: number
+          status?: string
+          total_excl_vat?: number
+          total_purchase_price?: number
+          updated_at?: string
+          valid_days?: number
+        }
+        Relationships: []
+      }
       shopify_connection: {
         Row: {
           access_token: string
