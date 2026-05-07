@@ -24,6 +24,15 @@ type Line = {
   sort_order: number;
 };
 
+type ProductSearchResult = {
+  id: string;
+  title: string;
+  ean: string | null;
+  sku: string | null;
+  webshop_price: number | string | null;
+  supplier_products?: { purchase_price: number | string | null; in_stock: boolean | null }[];
+};
+
 const VAT = 0.25;
 
 export default function QuoteEditorPage() {
@@ -386,7 +395,7 @@ function ProductPicker({
         .select("id, title, ean, sku, webshop_price, supplier_products(purchase_price, in_stock)")
         .or(`title.ilike.%${q}%,ean.ilike.%${q}%,sku.ilike.%${q}%`)
         .limit(15);
-      return (data ?? []) as any[];
+      return (data ?? []) as ProductSearchResult[];
     },
     enabled: debounced.trim().length >= 2,
   });
@@ -412,8 +421,11 @@ function ProductPicker({
               <p className="text-xs text-muted-foreground p-2">Søger…</p>
             ) : results.length === 0 ? (
               <p className="text-xs text-muted-foreground p-2">Ingen resultater</p>
-            ) : results.map((p: any) => {
-              const cheapest = (p.supplier_products ?? []).reduce((min: any, sp: any) => !min || sp.purchase_price < min.purchase_price ? sp : min, null);
+            ) : results.map((p) => {
+              const cheapest = (p.supplier_products ?? []).reduce<ProductSearchResult["supplier_products"][number] | null>((min, sp) => {
+                if (!min) return sp;
+                return Number(sp.purchase_price ?? Infinity) < Number(min.purchase_price ?? Infinity) ? sp : min;
+              }, null);
               const purchase = cheapest?.purchase_price ?? 0;
               const list = Number(p.webshop_price) || 0;
               return (
