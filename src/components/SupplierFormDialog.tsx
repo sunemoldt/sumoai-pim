@@ -131,6 +131,14 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
           }
         : existingMapping;
 
+      // Always persist currency settings regardless of feed type
+      (columnMapping as Record<string, string>)._currency = currency;
+      if (currency === "EUR") {
+        (columnMapping as Record<string, string>)._eur_rate = eurRate.replace(",", ".");
+      } else {
+        delete (columnMapping as Record<string, string>)._eur_rate;
+      }
+
       const ftpFeedUrl = ftpHost.trim()
         ? `ftp://${ftpHost.trim()}${ftpPath.trim().startsWith("/") ? "" : "/"}${ftpPath.trim()}`
         : null;
