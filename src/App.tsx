@@ -15,6 +15,8 @@ import ImportPage from "@/pages/ImportPage";
 import MonitoringPage from "@/pages/MonitoringPage";
 import N8nWorkflowsPage from "@/pages/N8nWorkflowsPage";
 import ShopifyPage from "@/pages/ShopifyPage";
+import QuoteListPage from "@/pages/QuoteListPage";
+import QuoteEditorPage from "@/pages/QuoteEditorPage";
 import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "@/pages/NotFound";
