@@ -213,6 +213,7 @@ export default function ProductDetailPage() {
   const pushToShop = async () => {
     if (!product) return;
     setPushing(true);
+    setPushResults(null);
     try {
       const payload: Record<string, any> = {
         master_product_id: product.id,
@@ -223,26 +224,28 @@ export default function ProductDetailPage() {
       if (pushStockStatus) payload.stock_status = pushStockStatus;
       if (pushBackorders) payload.backorders = pushBackorders;
 
-      const targets: string[] = [];
-      if (product.shopify_variant_id) targets.push("shopify-update-product");
-      if (product.webshop_product_id && product.webshop_platform === "woocommerce") targets.push("wc-update-product");
+      const targets: { fn: string; platform: "Shopify" | "WooCommerce" }[] = [];
+      if (product.shopify_variant_id) targets.push({ fn: "shopify-update-product", platform: "Shopify" });
+      if (product.webshop_product_id && product.webshop_platform === "woocommerce") targets.push({ fn: "wc-update-product", platform: "WooCommerce" });
       if (targets.length === 0) throw new Error("Produktet er ikke koblet til hverken Shopify eller WooCommerce");
 
-      const results = await Promise.all(
-        targets.map((fn) => supabase.functions.invoke(fn, { body: payload }))
+      const responses = await Promise.all(
+        targets.map((t) => supabase.functions.invoke(t.fn, { body: payload }))
       );
 
-      const errors: string[] = [];
-      let totalFields = 0;
-      results.forEach((res, i) => {
-        if (res.error) errors.push(`${targets[i]}: ${res.error.message}`);
-        else if (res.data?.error) errors.push(`${targets[i]}: ${res.data.error}`);
-        else totalFields += res.data?.updated_fields?.length ?? 0;
+      const results: PushResult[] = responses.map((res, i) => {
+        const platform = targets[i].platform;
+        if (res.error) return { platform, success: false, message: res.error.message };
+        if (res.data?.error) return { platform, success: false, message: String(res.data.error) };
+        const fields = res.data?.updated_fields ?? [];
+        return { platform, success: true, message: `${fields.length} felter opdateret`, updatedFields: fields };
       });
+      setPushResults(results);
 
-      if (errors.length === results.length) throw new Error(errors.join(" | "));
-      if (errors.length > 0) toast.warning(`Delvis opdatering: ${errors.join(" | ")}`);
-      else toast.success(`Produktet er opdateret i ${targets.length === 2 ? "Shopify + WooCommerce" : targets[0].includes("shopify") ? "Shopify" : "WooCommerce"} (${totalFields} felter)`);
+      const failed = results.filter((r) => !r.success);
+      if (failed.length === results.length) toast.error("Opdatering fejlede på alle platforme");
+      else if (failed.length > 0) toast.warning(`Delvis opdatering — ${failed.map((f) => f.platform).join(", ")} fejlede`);
+      else toast.success(`Produktet er opdateret i ${results.map((r) => r.platform).join(" + ")}`);
 
       queryClient.invalidateQueries({ queryKey: ["master_product", id] });
     } catch (err: any) {
