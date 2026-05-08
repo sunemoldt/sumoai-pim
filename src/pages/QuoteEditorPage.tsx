@@ -76,6 +76,7 @@ export default function QuoteEditorPage() {
         setValidDays(qq.valid_days);
         setNoteCustomer(qq.note_customer || "");
         setNoteInternal(qq.note_internal || "");
+        setPackagePrice(qq.package_price !== null && qq.package_price !== undefined ? Number(qq.package_price) : null);
       }
       const { data: ls } = await supabase.from("quote_lines" as any).select("*").eq("quote_id", id!).order("sort_order");
       if (ls) setLines((ls as any[]).map((l) => ({ ...l, quantity: Number(l.quantity), purchase_price: Number(l.purchase_price), list_price: Number(l.list_price), quote_price: Number(l.quote_price) })));
