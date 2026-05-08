@@ -56,7 +56,7 @@ export default function QuoteListPage() {
                 <TableHead>Kunde</TableHead>
                 <TableHead>Dato</TableHead>
                 <TableHead className="text-right">Linjer</TableHead>
-                <TableHead className="text-right">Subtotal ekskl. moms</TableHead>
+                <TableHead className="text-right">Total inkl. moms</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -71,7 +71,7 @@ export default function QuoteListPage() {
                   <TableCell>{q.customer_name || <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell>{q.quote_date ? format(new Date(q.quote_date), "dd-MM-yyyy") : "—"}</TableCell>
                   <TableCell className="text-right font-mono">{q.line_count}</TableCell>
-                  <TableCell className="text-right font-mono">{Number(q.total_excl_vat || 0).toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.</TableCell>
+                  <TableCell className="text-right font-mono">{(Number(q.total_excl_vat || 0) * 1.25).toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.</TableCell>
                   <TableCell>
                     {q.status === "approved" ? (
                       <Badge variant="outline" className="text-green-700 border-green-400 bg-green-50">Godkendt</Badge>
