@@ -241,10 +241,11 @@ export default function QuoteEditorPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-secondary/50">
-                <TableHead className="w-[28%]">Produkt</TableHead>
-                <TableHead className="text-right w-[80px]">Antal</TableHead>
+                <TableHead className="w-[24%]">Produkt</TableHead>
+                <TableHead className="text-right w-[100px]">Antal</TableHead>
                 <TableHead className="text-right">Indkøb</TableHead>
-                <TableHead className="text-right">Listepris</TableHead>
+                <TableHead className="text-right">Webshop pris</TableHead>
+                <TableHead className="text-right w-[110px]">Rabat %</TableHead>
                 <TableHead className="text-right">Tilbudspris</TableHead>
                 <TableHead className="text-right">Avance kr.</TableHead>
                 <TableHead className="text-right">Avance %</TableHead>
