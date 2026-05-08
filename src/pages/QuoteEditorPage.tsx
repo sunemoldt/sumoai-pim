@@ -347,18 +347,33 @@ export default function QuoteEditorPage() {
               })}
             </TableBody>
           </Table>
-          <div className="border-t border-border bg-secondary/30 px-4 py-3 flex items-center justify-end gap-3">
-            <Label htmlFor="package-price" className="text-sm font-medium">Pakkepris (ekskl. moms)</Label>
+          <div className="border-t border-border bg-secondary/30 px-4 py-3 flex flex-wrap items-center justify-end gap-3">
+            <Label htmlFor="package-price" className="text-sm font-medium">Pakkepris ekskl. moms</Label>
             <Input
               id="package-price"
               type="number"
               step="0.01"
               placeholder="Tom = brug linjesum"
-              className="h-8 w-48 text-right font-mono"
+              className="h-8 w-40 text-right font-mono"
               value={packagePrice ?? ""}
               onChange={(e) => {
                 const v = e.target.value;
                 setPackagePrice(v === "" ? null : parseFloat(v));
+              }}
+            />
+            <Label htmlFor="package-price-incl" className="text-sm font-medium">inkl. moms</Label>
+            <Input
+              id="package-price-incl"
+              type="number"
+              step="0.01"
+              placeholder="Tom = brug linjesum"
+              className="h-8 w-40 text-right font-mono"
+              value={packagePrice !== null ? Number((packagePrice * (1 + VAT)).toFixed(2)) : ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "") { setPackagePrice(null); return; }
+                const incl = parseFloat(v);
+                setPackagePrice(Number.isFinite(incl) ? incl / (1 + VAT) : null);
               }}
             />
             {packagePrice !== null && (
