@@ -260,6 +260,7 @@ export default function QuoteEditorPage() {
                 const sub = l.quantity * l.quote_price;
                 const margin = (l.quote_price - l.purchase_price) * l.quantity;
                 const marginPct = l.quote_price > 0 ? ((l.quote_price - l.purchase_price) / l.quote_price) * 100 : 0;
+                const discountPct = l.list_price > 0 ? ((l.list_price - l.quote_price) / l.list_price) * 100 : 0;
                 return (
                   <TableRow key={idx}>
                     <TableCell>
@@ -276,10 +277,23 @@ export default function QuoteEditorPage() {
                       />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Input type="number" className="h-8 text-right font-mono" value={l.quantity} onChange={(e) => updateLine(idx, { quantity: parseFloat(e.target.value) || 0 })} />
+                      <Input type="number" min={1} step={1} className="h-8 text-right font-mono" value={l.quantity} onChange={(e) => updateLine(idx, { quantity: parseFloat(e.target.value) || 0 })} />
                     </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">{l.purchase_price.toFixed(2)}</TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">{l.list_price.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">
+                      <Input
+                        type="number"
+                        step="0.1"
+                        className="h-8 text-right font-mono"
+                        value={Number.isFinite(discountPct) ? Number(discountPct.toFixed(2)) : 0}
+                        onChange={(e) => {
+                          const pct = parseFloat(e.target.value) || 0;
+                          const newPrice = l.list_price * (1 - pct / 100);
+                          updateLine(idx, { quote_price: Math.max(0, newPrice) });
+                        }}
+                      />
+                    </TableCell>
                     <TableCell className="text-right">
                       <Input type="number" step="0.01" className="h-8 text-right font-mono" value={l.quote_price} onChange={(e) => updateLine(idx, { quote_price: parseFloat(e.target.value) || 0 })} />
                     </TableCell>
