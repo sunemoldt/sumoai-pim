@@ -57,6 +57,7 @@ export default function QuoteEditorPage() {
   const [noteCustomer, setNoteCustomer] = useState("");
   const [noteInternal, setNoteInternal] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
+  const [packagePrice, setPackagePrice] = useState<number | null>(null);
 
   // Load existing quote
   useEffect(() => {
