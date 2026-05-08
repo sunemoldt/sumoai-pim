@@ -73,7 +73,11 @@ export default function QuoteListPage() {
                   <TableCell className="text-right font-mono">{q.line_count}</TableCell>
                   <TableCell className="text-right font-mono">{Number(q.total_excl_vat || 0).toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.</TableCell>
                   <TableCell>
-                    {q.status === "sent" ? (
+                    {q.status === "approved" ? (
+                      <Badge variant="outline" className="text-green-700 border-green-400 bg-green-50">Godkendt</Badge>
+                    ) : q.status === "rejected" ? (
+                      <Badge variant="outline" className="text-destructive border-destructive/40">Afvist</Badge>
+                    ) : q.status === "sent" ? (
                       <Badge variant="outline" className="text-green-600 border-green-300">Sendt til Dinero</Badge>
                     ) : (
                       <Badge variant="secondary">Kladde</Badge>
