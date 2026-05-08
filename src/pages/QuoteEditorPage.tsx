@@ -347,6 +347,27 @@ export default function QuoteEditorPage() {
               })}
             </TableBody>
           </Table>
+          <div className="border-t border-border bg-secondary/30 px-4 py-3 flex items-center justify-end gap-3">
+            <Label htmlFor="package-price" className="text-sm font-medium">Pakkepris (ekskl. moms)</Label>
+            <Input
+              id="package-price"
+              type="number"
+              step="0.01"
+              placeholder="Tom = brug linjesum"
+              className="h-8 w-48 text-right font-mono"
+              value={packagePrice ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPackagePrice(v === "" ? null : parseFloat(v));
+              }}
+            />
+            {packagePrice !== null && (
+              <Button variant="ghost" size="sm" onClick={() => setPackagePrice(null)}>Ryd</Button>
+            )}
+            <span className="text-xs text-muted-foreground ml-2">
+              Linjesum: {totals.lineSubtotal.toFixed(2)} kr.
+            </span>
+          </div>
         </CardContent>
       </Card>
 
