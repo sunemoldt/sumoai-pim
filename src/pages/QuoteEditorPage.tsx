@@ -86,13 +86,14 @@ export default function QuoteEditorPage() {
 
   // Totals
   const totals = useMemo(() => {
-    const subtotal = lines.reduce((s, l) => s + l.quantity * l.quote_price, 0);
+    const lineSubtotal = lines.reduce((s, l) => s + l.quantity * l.quote_price, 0);
+    const subtotal = packagePrice !== null && packagePrice >= 0 ? packagePrice : lineSubtotal;
     const purchase = lines.reduce((s, l) => s + l.quantity * l.purchase_price, 0);
     const marginKr = subtotal - purchase;
     const marginPct = subtotal > 0 ? (marginKr / subtotal) * 100 : 0;
     const vat = subtotal * VAT;
-    return { subtotal, purchase, marginKr, marginPct, vat, total: subtotal + vat };
-  }, [lines]);
+    return { subtotal, lineSubtotal, purchase, marginKr, marginPct, vat, total: subtotal + vat };
+  }, [lines, packagePrice]);
 
   const marginColor = (pct: number) =>
     pct < 20 ? "text-destructive" : pct < 35 ? "text-yellow-600" : "text-green-600";
