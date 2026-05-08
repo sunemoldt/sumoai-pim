@@ -188,6 +188,19 @@ export default function QuoteEditorPage() {
     }
   };
 
+  const setOutcome = async (newStatus: "approved" | "rejected") => {
+    const theId = quoteId ?? (await saveQuote());
+    if (!theId) return;
+    const { error } = await supabase.from("quotes" as any).update({ status: newStatus } as any).eq("id", theId);
+    if (error) {
+      toast({ title: "Fejl", description: error.message, variant: "destructive" });
+      return;
+    }
+    setStatus(newStatus);
+    toast({ title: newStatus === "approved" ? "Tilbud godkendt" : "Tilbud afvist" });
+    qc.invalidateQueries({ queryKey: ["quotes-list"] });
+  };
+
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" /></div>;
 
   return (
