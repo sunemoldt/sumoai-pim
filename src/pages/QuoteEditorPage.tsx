@@ -231,7 +231,7 @@ export default function QuoteEditorPage() {
           variant="outline"
           className="text-green-700 border-green-300 hover:bg-green-50 hover:text-green-800"
           onClick={() => setOutcome("approved")}
-          disabled={saving || lines.length === 0 || status === "approved"}
+          disabled={saving || status === "approved"}
         >
           <CheckCircle2 className="h-4 w-4 mr-1" /> Godkendt
         </Button>
@@ -239,7 +239,7 @@ export default function QuoteEditorPage() {
           variant="outline"
           className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
           onClick={() => setOutcome("rejected")}
-          disabled={saving || lines.length === 0 || status === "rejected"}
+          disabled={saving || status === "rejected"}
         >
           <XCircle className="h-4 w-4 mr-1" /> Afvist
         </Button>
