@@ -410,8 +410,8 @@ export default function QuoteEditorPage() {
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
           <Stat label="Subtotal ekskl. moms" value={`${totals.subtotal.toFixed(2)} kr.`} />
           <Stat label="Moms (25%)" value={`${totals.vat.toFixed(2)} kr.`} />
-          <Stat label="Total inkl. moms" value={`${totals.total.toFixed(2)} kr.`} bold />
-          <Stat label="Indkøb total" value={`${totals.purchase.toFixed(2)} kr.`} />
+          <Stat label="Tilbuds pris inkl. moms" value={`${totals.total.toFixed(2)} kr.`} bold />
+          <Stat label="Indkøb total inkl. moms" value={`${(totals.purchase * (1 + VAT)).toFixed(2)} kr.`} />
           <Stat label="Avance kr." value={`${totals.marginKr.toFixed(2)} kr.`} />
           <Stat label="Avance %" value={`${totals.marginPct.toFixed(1)}%`} className={marginColor(totals.marginPct)} bold />
         </div>
