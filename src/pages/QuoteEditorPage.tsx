@@ -124,6 +124,7 @@ export default function QuoteEditorPage() {
         note_internal: noteInternal || null,
         total_excl_vat: totals.subtotal,
         total_purchase_price: totals.purchase,
+        package_price: packagePrice,
       };
 
       if (!theId) {
