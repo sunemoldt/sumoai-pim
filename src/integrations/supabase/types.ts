@@ -518,6 +518,7 @@ export type Database = {
           id: string
           note_customer: string | null
           note_internal: string | null
+          package_price: number | null
           quote_date: string
           quote_number: number
           status: string
@@ -534,6 +535,7 @@ export type Database = {
           id?: string
           note_customer?: string | null
           note_internal?: string | null
+          package_price?: number | null
           quote_date?: string
           quote_number?: number
           status?: string
@@ -550,6 +552,7 @@ export type Database = {
           id?: string
           note_customer?: string | null
           note_internal?: string | null
+          package_price?: number | null
           quote_date?: string
           quote_number?: number
           status?: string
