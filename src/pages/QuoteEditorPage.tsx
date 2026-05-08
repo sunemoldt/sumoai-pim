@@ -84,15 +84,18 @@ export default function QuoteEditorPage() {
     })();
   }, [id, isNew]);
 
-  // Totals
+  // Totals — quote_price/list_price are INCL. VAT (webshop), purchase_price is EX. VAT.
+  // packagePrice is stored EX. VAT.
   const totals = useMemo(() => {
-    const lineSubtotal = lines.reduce((s, l) => s + l.quantity * l.quote_price, 0);
-    const subtotal = packagePrice !== null && packagePrice >= 0 ? packagePrice : lineSubtotal;
+    const lineSubtotalIncl = lines.reduce((s, l) => s + l.quantity * l.quote_price, 0);
+    const lineSubtotalEx = lineSubtotalIncl / (1 + VAT);
+    const subtotalEx = packagePrice !== null && packagePrice >= 0 ? packagePrice : lineSubtotalEx;
+    const totalIncl = subtotalEx * (1 + VAT);
+    const vat = totalIncl - subtotalEx;
     const purchase = lines.reduce((s, l) => s + l.quantity * l.purchase_price, 0);
-    const marginKr = subtotal - purchase;
-    const marginPct = subtotal > 0 ? (marginKr / subtotal) * 100 : 0;
-    const vat = subtotal * VAT;
-    return { subtotal, lineSubtotal, purchase, marginKr, marginPct, vat, total: subtotal + vat };
+    const marginKr = subtotalEx - purchase;
+    const marginPct = subtotalEx > 0 ? (marginKr / subtotalEx) * 100 : 0;
+    return { subtotal: subtotalEx, lineSubtotal: lineSubtotalEx, purchase, marginKr, marginPct, vat, total: totalIncl };
   }, [lines, packagePrice]);
 
   const marginColor = (pct: number) =>
@@ -296,9 +299,10 @@ export default function QuoteEditorPage() {
               {lines.length === 0 ? (
                 <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Ingen linjer endnu</TableCell></TableRow>
               ) : lines.map((l, idx) => {
-                const sub = l.quantity * l.quote_price;
-                const margin = (l.quote_price - l.purchase_price) * l.quantity;
-                const marginPct = l.quote_price > 0 ? ((l.quote_price - l.purchase_price) / l.quote_price) * 100 : 0;
+                const sub = l.quantity * l.quote_price; // incl. VAT
+                const quoteEx = l.quote_price / (1 + VAT);
+                const margin = (quoteEx - l.purchase_price) * l.quantity;
+                const marginPct = quoteEx > 0 ? ((quoteEx - l.purchase_price) / quoteEx) * 100 : 0;
                 const discountPct = l.list_price > 0 ? ((l.list_price - l.quote_price) / l.list_price) * 100 : 0;
                 return (
                   <TableRow key={idx}>
