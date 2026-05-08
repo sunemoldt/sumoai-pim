@@ -299,9 +299,10 @@ export default function QuoteEditorPage() {
               {lines.length === 0 ? (
                 <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Ingen linjer endnu</TableCell></TableRow>
               ) : lines.map((l, idx) => {
-                const sub = l.quantity * l.quote_price;
-                const margin = (l.quote_price - l.purchase_price) * l.quantity;
-                const marginPct = l.quote_price > 0 ? ((l.quote_price - l.purchase_price) / l.quote_price) * 100 : 0;
+                const sub = l.quantity * l.quote_price; // incl. VAT
+                const quoteEx = l.quote_price / (1 + VAT);
+                const margin = (quoteEx - l.purchase_price) * l.quantity;
+                const marginPct = quoteEx > 0 ? ((quoteEx - l.purchase_price) / quoteEx) * 100 : 0;
                 const discountPct = l.list_price > 0 ? ((l.list_price - l.quote_price) / l.list_price) * 100 : 0;
                 return (
                   <TableRow key={idx}>
