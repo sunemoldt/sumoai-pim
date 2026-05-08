@@ -57,6 +57,7 @@ export default function QuoteEditorPage() {
   const [noteCustomer, setNoteCustomer] = useState("");
   const [noteInternal, setNoteInternal] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
+  const [packagePrice, setPackagePrice] = useState<number | null>(null);
 
   // Load existing quote
   useEffect(() => {
@@ -75,6 +76,7 @@ export default function QuoteEditorPage() {
         setValidDays(qq.valid_days);
         setNoteCustomer(qq.note_customer || "");
         setNoteInternal(qq.note_internal || "");
+        setPackagePrice(qq.package_price !== null && qq.package_price !== undefined ? Number(qq.package_price) : null);
       }
       const { data: ls } = await supabase.from("quote_lines" as any).select("*").eq("quote_id", id!).order("sort_order");
       if (ls) setLines((ls as any[]).map((l) => ({ ...l, quantity: Number(l.quantity), purchase_price: Number(l.purchase_price), list_price: Number(l.list_price), quote_price: Number(l.quote_price) })));
@@ -84,13 +86,14 @@ export default function QuoteEditorPage() {
 
   // Totals
   const totals = useMemo(() => {
-    const subtotal = lines.reduce((s, l) => s + l.quantity * l.quote_price, 0);
+    const lineSubtotal = lines.reduce((s, l) => s + l.quantity * l.quote_price, 0);
+    const subtotal = packagePrice !== null && packagePrice >= 0 ? packagePrice : lineSubtotal;
     const purchase = lines.reduce((s, l) => s + l.quantity * l.purchase_price, 0);
     const marginKr = subtotal - purchase;
     const marginPct = subtotal > 0 ? (marginKr / subtotal) * 100 : 0;
     const vat = subtotal * VAT;
-    return { subtotal, purchase, marginKr, marginPct, vat, total: subtotal + vat };
-  }, [lines]);
+    return { subtotal, lineSubtotal, purchase, marginKr, marginPct, vat, total: subtotal + vat };
+  }, [lines, packagePrice]);
 
   const marginColor = (pct: number) =>
     pct < 20 ? "text-destructive" : pct < 35 ? "text-yellow-600" : "text-green-600";
@@ -121,6 +124,7 @@ export default function QuoteEditorPage() {
         note_internal: noteInternal || null,
         total_excl_vat: totals.subtotal,
         total_purchase_price: totals.purchase,
+        package_price: packagePrice,
       };
 
       if (!theId) {
@@ -343,6 +347,27 @@ export default function QuoteEditorPage() {
               })}
             </TableBody>
           </Table>
+          <div className="border-t border-border bg-secondary/30 px-4 py-3 flex items-center justify-end gap-3">
+            <Label htmlFor="package-price" className="text-sm font-medium">Pakkepris (ekskl. moms)</Label>
+            <Input
+              id="package-price"
+              type="number"
+              step="0.01"
+              placeholder="Tom = brug linjesum"
+              className="h-8 w-48 text-right font-mono"
+              value={packagePrice ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPackagePrice(v === "" ? null : parseFloat(v));
+              }}
+            />
+            {packagePrice !== null && (
+              <Button variant="ghost" size="sm" onClick={() => setPackagePrice(null)}>Ryd</Button>
+            )}
+            <span className="text-xs text-muted-foreground ml-2">
+              Linjesum: {totals.lineSubtotal.toFixed(2)} kr.
+            </span>
+          </div>
         </CardContent>
       </Card>
 
