@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
 
     while (true) {
       const url = `${baseUrl}/wp-json/wc/v3/products?per_page=${perPage}&page=${page}${modifiedAfterParam}${fieldsParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { headers: { "User-Agent": "ComtekPIM/1.0 (+https://pim.sumoai.dk)", Accept: "application/json" } });
       if (!res.ok) {
         const body = await res.text();
         throw new Error(`WooCommerce API error [${res.status}]: ${body}`);
@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
       let vPage = 1;
       while (true) {
         const url = `${baseUrl}/wp-json/wc/v3/products/${vp.id}/variations?per_page=${perPage}&page=${vPage}${modifiedAfterParam}${varFieldsParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
-        const res = await fetch(url);
+        const res = await fetch(url, { headers: { "User-Agent": "ComtekPIM/1.0 (+https://pim.sumoai.dk)", Accept: "application/json" } });
         if (!res.ok) break;
         const vars = await res.json();
         if (!Array.isArray(vars) || vars.length === 0) break;

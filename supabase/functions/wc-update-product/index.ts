@@ -124,6 +124,8 @@ Deno.serve(async (req) => {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Basic ${auth}`,
+          "User-Agent": "ComtekPIM/1.0 (+https://pim.sumoai.dk)",
+          Accept: "application/json",
         },
         body: JSON.stringify(wcPayload),
         signal: controller.signal,
