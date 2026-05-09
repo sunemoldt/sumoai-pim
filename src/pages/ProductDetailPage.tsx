@@ -284,10 +284,12 @@ export default function ProductDetailPage() {
 
   const cheapest = getCheapestSupplier(product.supplier_products);
   const cheapestAny = getCheapestSupplierAny(product.supplier_products);
-  // Use cheapest from ANY supplier for pricing recommendations
+  // Display "Indkøb" still reflects the absolute cheapest supplier (incl. out-of-stock),
+  // but the recommended sales price uses cheapest IN-STOCK only.
   const cheapestPrice = cheapestAny?.purchase_price ?? null;
-  const recommendedPriceExVat = cheapestPrice ? getRecommendedPrice(cheapestPrice, effectiveMarkup) : null;
-  const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, effectiveMarkup) : null;
+  const cheapestInStockPrice = cheapest?.purchase_price ?? null;
+  const recommendedPriceExVat = cheapestInStockPrice ? getRecommendedPrice(cheapestInStockPrice, effectiveMarkup) : null;
+  const recommendedPriceInclVat = cheapestInStockPrice ? getRecommendedPriceInclVat(cheapestInStockPrice, effectiveMarkup) : null;
   const currentPrice = product.sale_price ?? product.webshop_price;
   const currentPriceExVat = currentPrice ? exVat(currentPrice) : null;
   const margin = currentPriceExVat && cheapestPrice ? getMarginPercent(currentPriceExVat, cheapestPrice) : null;
