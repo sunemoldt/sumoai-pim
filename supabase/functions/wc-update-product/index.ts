@@ -202,6 +202,12 @@ Deno.serve(async (req) => {
       logChange("backorders_allowed", product.backorders_allowed, newVal, "stock_update");
       dbUpdate.backorders_allowed = newVal;
     }
+    if (description !== undefined && !isVariation) {
+      logChange("long_description", product.long_description, description, "shop_update");
+    }
+    if (short_description !== undefined && !isVariation) {
+      logChange("short_description", product.short_description, short_description, "shop_update");
+    }
 
     if (Object.keys(dbUpdate).length > 0) {
       await supabase.from("master_products").update(dbUpdate).eq("id", master_product_id);
