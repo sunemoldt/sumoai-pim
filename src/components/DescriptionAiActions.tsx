@@ -3,10 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Sparkles, Eraser, Loader2, Check } from "lucide-react";
+import { Sparkles, Eraser, Loader2, Check, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Props {
   productId: string;
@@ -23,6 +27,30 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
   const [shortDraft, setShortDraft] = useState("");
   const [longDraft, setLongDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const hasPimContent = !!(currentShort?.trim() || currentLong?.trim());
+
+  const syncToShop = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("wc-update-product", {
+        body: {
+          master_product_id: productId,
+          short_description: currentShort ?? "",
+          description: currentLong ?? "",
+        },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success("Beskrivelse synket til WooCommerce");
+      qc.invalidateQueries({ queryKey: ["product_change_log", productId] });
+    } catch (e: any) {
+      toast.error(e?.message || "Kunne ikke synke til shop");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const run = async (m: Mode) => {
     setMode(m);
@@ -80,6 +108,34 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> AI arbejder…
           </span>
         )}
+        <div className="ml-auto">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!hasPimContent || syncing}
+                title={!hasPimContent ? "Gem en beskrivelse i PIM først" : "Skub PIM-beskrivelsen til WooCommerce"}
+              >
+                {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                Synk beskrivelse til shop
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Skub beskrivelse til WooCommerce?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i shoppen lige nu.
+                  Handlingen kan ikke fortrydes automatisk.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annullér</AlertDialogCancel>
+                <AlertDialogAction onClick={syncToShop}>Ja, synk nu</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
 
       <Dialog open={mode !== null && !loading} onOpenChange={(o) => !o && setMode(null)}>

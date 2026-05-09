@@ -53,6 +53,8 @@ Deno.serve(async (req) => {
       stock_quantity,
       stock_status,     // "instock" | "outofstock" | "onbackorder"
       backorders,       // "yes" | "no" | "notify"
+      description,        // lang beskrivelse (HTML)
+      short_description,  // kort beskrivelse (HTML)
     } = body;
 
     if (!master_product_id) {
@@ -65,7 +67,7 @@ Deno.serve(async (req) => {
     // Get the product from DB to find WooCommerce product ID and current values
     const { data: product, error: dbError } = await supabase
       .from("master_products")
-      .select("webshop_product_id, webshop_parent_id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed")
+      .select("webshop_product_id, webshop_parent_id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, short_description, long_description")
       .eq("id", master_product_id)
       .single();
 
@@ -103,6 +105,12 @@ Deno.serve(async (req) => {
     }
     if (backorders) {
       wcPayload.backorders = backorders;
+    }
+    if (description !== undefined && !isVariation) {
+      wcPayload.description = description ?? "";
+    }
+    if (short_description !== undefined && !isVariation) {
+      wcPayload.short_description = short_description ?? "";
     }
 
     // Use variation endpoint if this is a variation
@@ -193,6 +201,12 @@ Deno.serve(async (req) => {
       const newVal = backorders === "yes" || backorders === "notify";
       logChange("backorders_allowed", product.backorders_allowed, newVal, "stock_update");
       dbUpdate.backorders_allowed = newVal;
+    }
+    if (description !== undefined && !isVariation) {
+      logChange("long_description", product.long_description, description, "shop_update");
+    }
+    if (short_description !== undefined && !isVariation) {
+      logChange("short_description", product.short_description, short_description, "shop_update");
     }
 
     if (Object.keys(dbUpdate).length > 0) {
