@@ -167,10 +167,19 @@ export default function ProductDetailPage() {
     setPushSalePrice(product.sale_price?.toString() ?? "");
     // Suggest supplier stock total as stock quantity
     const supplierStockTotal = product.supplier_products.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
-    setPushStockQty(supplierStockTotal > 0 ? supplierStockTotal.toString() : (product.stock_quantity?.toString() ?? "0"));
-    // Set status based on supplier stock
     const hasSupplierStock = product.supplier_products.some(sp => sp.in_stock);
-    setPushStockStatus(hasSupplierStock ? "instock" : (product.stock_status ?? "outofstock"));
+    // If the current webshop price (ex VAT) is below the cheapest in-stock purchase price,
+    // we'd be selling at a loss — force stock to 0 / out of stock instead.
+    const activePrice = product.sale_price ?? product.webshop_price;
+    const activePriceExVat = activePrice ? activePrice / 1.25 : null;
+    const wouldBeLoss = activePriceExVat !== null && cheapestPriceForInit !== null && activePriceExVat < cheapestPriceForInit;
+    if (wouldBeLoss) {
+      setPushStockQty("0");
+      setPushStockStatus("outofstock");
+    } else {
+      setPushStockQty(supplierStockTotal > 0 ? supplierStockTotal.toString() : (product.stock_quantity?.toString() ?? "0"));
+      setPushStockStatus(hasSupplierStock ? "instock" : (product.stock_status ?? "outofstock"));
+    }
     setPushBackorders(product.backorders_allowed ? backorderMode : "no");
     setPushInitialized(true);
   };
