@@ -160,10 +160,9 @@ export default function ProductDetailPage() {
   // Initialize push fields when product loads and tab is first opened
   const initPushFields = () => {
     if (pushInitialized || !product) return;
-    const recPrice = cheapestPriceForInit
-      ? getRecommendedPriceInclVat(cheapestPriceForInit, product.custom_markup_percentage ?? globalMarkup)
-      : product.webshop_price;
-    setPushPrice(recPrice?.toString() ?? product.webshop_price?.toString() ?? "");
+    // Normalpris defaulter til nuværende webshop pris — anbefalet pris sættes kun
+    // når brugeren klikker "Brug anbefalet pris".
+    setPushPrice(product.webshop_price?.toString() ?? "");
     setPushSalePrice(product.sale_price?.toString() ?? "");
     // Suggest supplier stock total as stock quantity
     const supplierStockTotal = product.supplier_products.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
