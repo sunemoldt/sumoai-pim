@@ -53,6 +53,8 @@ Deno.serve(async (req) => {
       stock_quantity,
       stock_status,     // "instock" | "outofstock" | "onbackorder"
       backorders,       // "yes" | "no" | "notify"
+      description,        // lang beskrivelse (HTML)
+      short_description,  // kort beskrivelse (HTML)
     } = body;
 
     if (!master_product_id) {
