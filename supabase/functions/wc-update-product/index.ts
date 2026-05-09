@@ -122,36 +122,64 @@ Deno.serve(async (req) => {
     // comtek.dk's WooCommerce REST API can be slow/intermittent — give it 90s
     // and return a clear error instead of letting Supabase kill the worker (which
     // surfaces as the unhelpful "non-2xx status code" toast on the client).
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 90_000);
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    let wcRes: Response | null = null;
+    let lastErr: any = null;
+    const maxRetries = 4;
 
-    let wcRes: Response;
-    try {
-      wcRes = await fetch(wcUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Basic ${auth}`,
-          "User-Agent": "ComtekPIM/1.0 (+https://pim.sumoai.dk)",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(wcPayload),
-        signal: controller.signal,
-      });
-    } catch (e: any) {
-      clearTimeout(timeoutId);
-      const isAbort = e?.name === "AbortError";
-      console.error("WC fetch failed:", e?.message || e);
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90_000);
+      try {
+        const res = await fetch(wcUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Basic ${auth}`,
+            "User-Agent": "ComtekPIM/1.0 (+https://pim.sumoai.dk)",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(wcPayload),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if ((res.status === 429 || res.status === 503) && attempt < maxRetries) {
+          const retryAfter = res.headers.get("retry-after");
+          let delayMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 0;
+          if (!delayMs || isNaN(delayMs)) delayMs = Math.min(30_000, 1000 * Math.pow(2, attempt));
+          await res.body?.cancel().catch(() => {});
+          console.warn(`WC ${res.status} – backing off ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`);
+          await sleep(delayMs);
+          continue;
+        }
+        wcRes = res;
+        break;
+      } catch (e: any) {
+        clearTimeout(timeoutId);
+        lastErr = e;
+        const isAbort = e?.name === "AbortError";
+        if (isAbort || attempt === maxRetries) {
+          console.error("WC fetch failed:", e?.message || e);
+          return new Response(
+            JSON.stringify({
+              error: isAbort
+                ? "WooCommerce svarede ikke inden 90 sekunder. Prøv igen."
+                : `Kunne ikke kontakte WooCommerce: ${e?.message || "ukendt fejl"}`,
+            }),
+            { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        await sleep(Math.min(10_000, 1000 * Math.pow(2, attempt)));
+      }
+    }
+
+    if (!wcRes) {
       return new Response(
-        JSON.stringify({
-          error: isAbort
-            ? "WooCommerce svarede ikke inden 90 sekunder. Prøv igen."
-            : `Kunne ikke kontakte WooCommerce: ${e?.message || "ukendt fejl"}`,
-        }),
+        JSON.stringify({ error: `Kunne ikke kontakte WooCommerce: ${lastErr?.message || "ukendt fejl"}` }),
         { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    clearTimeout(timeoutId);
 
     const wcText = await wcRes.text();
     let wcData: any;

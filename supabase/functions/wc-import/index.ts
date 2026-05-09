@@ -71,6 +71,30 @@ Deno.serve(async (req) => {
     let allProducts: any[] = [];
     const perPage = 100;
     const baseUrl = WC_STORE_URL.replace(/\/$/, "");
+
+    // Rate-limit safe fetch: respects Retry-After on 429/503, exponential backoff,
+    // and a small inter-request delay to avoid hammering Cloudflare/comtek.dk.
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const REQUEST_DELAY_MS = 250;
+    let lastRequestAt = 0;
+    async function wcFetch(url: string, init?: RequestInit, maxRetries = 5): Promise<Response> {
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const wait = REQUEST_DELAY_MS - (Date.now() - lastRequestAt);
+        if (wait > 0) await sleep(wait);
+        lastRequestAt = Date.now();
+        const res = await fetch(url, init);
+        if (res.status !== 429 && res.status !== 503) return res;
+        if (attempt === maxRetries) return res;
+        const retryAfter = res.headers.get("retry-after");
+        let delayMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 0;
+        if (!delayMs || isNaN(delayMs)) delayMs = Math.min(30_000, 1000 * Math.pow(2, attempt));
+        await res.body?.cancel().catch(() => {});
+        console.warn(`WC ${res.status} – backing off ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`);
+        await sleep(delayMs);
+      }
+      throw new Error("unreachable");
+    }
+    const wcHeaders = { "User-Agent": "ComtekPIM/1.0 (+https://pim.sumoai.dk)", Accept: "application/json" };
     const modifiedAfterParam = modifiedAfter
       ? `&modified_after=${encodeURIComponent(modifiedAfter)}&dates_are_gmt=true`
       : "";
@@ -91,7 +115,7 @@ Deno.serve(async (req) => {
 
     while (true) {
       const url = `${baseUrl}/wp-json/wc/v3/products?per_page=${perPage}&page=${page}${modifiedAfterParam}${fieldsParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
-      const res = await fetch(url, { headers: { "User-Agent": "ComtekPIM/1.0 (+https://pim.sumoai.dk)", Accept: "application/json" } });
+      const res = await wcFetch(url, { headers: wcHeaders });
       if (!res.ok) {
         const body = await res.text();
         throw new Error(`WooCommerce API error [${res.status}]: ${body}`);
@@ -114,7 +138,7 @@ Deno.serve(async (req) => {
       let vPage = 1;
       while (true) {
         const url = `${baseUrl}/wp-json/wc/v3/products/${vp.id}/variations?per_page=${perPage}&page=${vPage}${modifiedAfterParam}${varFieldsParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
-        const res = await fetch(url, { headers: { "User-Agent": "ComtekPIM/1.0 (+https://pim.sumoai.dk)", Accept: "application/json" } });
+        const res = await wcFetch(url, { headers: wcHeaders });
         if (!res.ok) break;
         const vars = await res.json();
         if (!Array.isArray(vars) || vars.length === 0) break;
