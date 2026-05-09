@@ -20,6 +20,7 @@ import ManualSupplierPriceDialog from "@/components/ManualSupplierPriceDialog";
 import ProductTranslationsTab from "@/components/ProductTranslationsTab";
 import InlineEditField from "@/components/InlineEditField";
 import SyncTagsEditor from "@/components/SyncTagsEditor";
+import DescriptionAiActions from "@/components/DescriptionAiActions";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
@@ -460,6 +461,11 @@ export default function ProductDetailPage() {
                 <Label>Lang beskrivelse</Label>
                 <InlineEditField productId={product.id} field="long_description" value={(product as any).long_description} type="html" placeholder="Ingen lang beskrivelse" />
               </div>
+              <DescriptionAiActions
+                productId={product.id}
+                currentShort={(product as any).short_description}
+                currentLong={(product as any).long_description}
+              />
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
                   <Label className="text-muted-foreground text-xs">Brand</Label>
