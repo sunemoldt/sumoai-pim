@@ -18,6 +18,24 @@ type Result = {
   message?: string;
 };
 
+async function callFn(name: string, payload: unknown) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+    },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : null; } catch { /* ignore */ }
+  if (!res.ok) throw new Error(`${name} ${res.status}: ${data?.error ?? text.slice(0, 200)}`);
+  if (data?.error) throw new Error(`${name}: ${data.error}`);
+  return data;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -84,12 +102,7 @@ Deno.serve(async (req) => {
         const r: Result = { id: p.id, ean: p.ean, title: p.title, status: "ok" };
 
         try {
-          const aiRes = await supabase.functions.invoke("ai-rewrite-description", {
-            body: { productId: p.id, mode: "clean" },
-          });
-          if (aiRes.error) throw new Error(`ai: ${aiRes.error.message}`);
-          const ai = aiRes.data as { short_description?: string; long_description?: string; error?: string };
-          if (ai?.error) throw new Error(`ai: ${ai.error}`);
+          const ai = await callFn("ai-rewrite-description", { productId: p.id, mode: "clean" });
           const newShort = ai.short_description ?? p.short_description ?? "";
           const newLong = ai.long_description ?? p.long_description ?? "";
 
@@ -107,32 +120,16 @@ Deno.serve(async (req) => {
                 r.status = "skipped";
                 r.step = "no_shopify_id";
               } else {
-                const sRes = await supabase.functions.invoke("shopify-update-product", {
-                  body: { master_product_id: p.id, description: newLong, short_description: newShort },
-                });
-                if (sRes.error) throw new Error(`shopify: ${sRes.error.message}`);
-                const sd = sRes.data as { error?: string };
-                if (sd?.error) throw new Error(`shopify: ${sd.error}`);
+                await callFn("shopify-update-product", { master_product_id: p.id, description: newLong, short_description: newShort });
                 r.step = "synced_shopify";
               }
             } else if (sync_target === "woocommerce") {
-              const wRes = await supabase.functions.invoke("wc-update-product", {
-                body: { master_product_id: p.id, description: newLong, short_description: newShort },
-              });
-              if (wRes.error) throw new Error(`wc: ${wRes.error.message}`);
-              const wd = wRes.data as { error?: string };
-              if (wd?.error) throw new Error(`wc: ${wd.error}`);
+              await callFn("wc-update-product", { master_product_id: p.id, description: newLong, short_description: newShort });
               r.step = "synced_woocommerce";
             } else {
               r.step = "pim_only";
             }
           }
-        } catch (e) {
-          r.status = "error";
-          r.message = e instanceof Error ? e.message : String(e);
-          console.error(`bulk-clean ${p.ean}:`, r.message);
-        }
-
         results.push(r);
         // Persist incremental progress in import_logs so user can poll
         await supabase.from("import_logs").update({
