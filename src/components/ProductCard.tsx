@@ -37,8 +37,16 @@ export default function ProductCard({
   const navigate = useNavigate();
   const cheapestAny = getCheapestSupplierAny(product.supplier_products);
   const cheapestPrice = cheapestAny?.purchase_price ?? null;
-  const recommended = cheapestPrice
-    ? getRecommendedPriceInclVat(cheapestPrice, product.custom_markup_percentage ?? globalMarkup)
+  // Recommendation is based on the cheapest IN-STOCK supplier (avoid pricing below cost)
+  const cheapestInStock = product.supplier_products
+    .filter((sp) => sp.in_stock)
+    .reduce<typeof product.supplier_products[number] | null>(
+      (min, sp) => (!min || sp.purchase_price < min.purchase_price ? sp : min),
+      null
+    );
+  const recommendedBasePrice = cheapestInStock?.purchase_price ?? null;
+  const recommended = recommendedBasePrice
+    ? getRecommendedPriceInclVat(recommendedBasePrice, product.custom_markup_percentage ?? globalMarkup)
     : null;
   const activePrice = product.sale_price ?? product.webshop_price;
   const margin =
