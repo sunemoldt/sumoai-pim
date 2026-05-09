@@ -167,10 +167,19 @@ export default function ProductDetailPage() {
     setPushSalePrice(product.sale_price?.toString() ?? "");
     // Suggest supplier stock total as stock quantity
     const supplierStockTotal = product.supplier_products.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
-    setPushStockQty(supplierStockTotal > 0 ? supplierStockTotal.toString() : (product.stock_quantity?.toString() ?? "0"));
-    // Set status based on supplier stock
     const hasSupplierStock = product.supplier_products.some(sp => sp.in_stock);
-    setPushStockStatus(hasSupplierStock ? "instock" : (product.stock_status ?? "outofstock"));
+    // If the current webshop price (ex VAT) is below the cheapest in-stock purchase price,
+    // we'd be selling at a loss — force stock to 0 / out of stock instead.
+    const activePrice = product.sale_price ?? product.webshop_price;
+    const activePriceExVat = activePrice ? activePrice / 1.25 : null;
+    const wouldBeLoss = activePriceExVat !== null && cheapestPriceForInit !== null && activePriceExVat < cheapestPriceForInit;
+    if (wouldBeLoss) {
+      setPushStockQty("0");
+      setPushStockStatus("outofstock");
+    } else {
+      setPushStockQty(supplierStockTotal > 0 ? supplierStockTotal.toString() : (product.stock_quantity?.toString() ?? "0"));
+      setPushStockStatus(hasSupplierStock ? "instock" : (product.stock_status ?? "outofstock"));
+    }
     setPushBackorders(product.backorders_allowed ? backorderMode : "no");
     setPushInitialized(true);
   };
@@ -255,10 +264,12 @@ export default function ProductDetailPage() {
     }
   };
 
-  // Pre-compute cheapest for init — use ANY supplier (regardless of stock) for pricing
+  // Pre-compute cheapest IN-STOCK supplier for pricing recommendations.
+  // Rationale: pricing must never be derived from a supplier that can't actually deliver,
+  // otherwise we risk recommending a sales price below our real purchase cost.
   const cheapestPriceForInit = (() => {
     if (!product) return null;
-    const c = getCheapestSupplierAny(product.supplier_products);
+    const c = getCheapestSupplier(product.supplier_products);
     return c?.purchase_price ?? null;
   })();
 
@@ -282,10 +293,12 @@ export default function ProductDetailPage() {
 
   const cheapest = getCheapestSupplier(product.supplier_products);
   const cheapestAny = getCheapestSupplierAny(product.supplier_products);
-  // Use cheapest from ANY supplier for pricing recommendations
+  // Display "Indkøb" still reflects the absolute cheapest supplier (incl. out-of-stock),
+  // but the recommended sales price uses cheapest IN-STOCK only.
   const cheapestPrice = cheapestAny?.purchase_price ?? null;
-  const recommendedPriceExVat = cheapestPrice ? getRecommendedPrice(cheapestPrice, effectiveMarkup) : null;
-  const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, effectiveMarkup) : null;
+  const cheapestInStockPrice = cheapest?.purchase_price ?? null;
+  const recommendedPriceExVat = cheapestInStockPrice ? getRecommendedPrice(cheapestInStockPrice, effectiveMarkup) : null;
+  const recommendedPriceInclVat = cheapestInStockPrice ? getRecommendedPriceInclVat(cheapestInStockPrice, effectiveMarkup) : null;
   const currentPrice = product.sale_price ?? product.webshop_price;
   const currentPriceExVat = currentPrice ? exVat(currentPrice) : null;
   const margin = currentPriceExVat && cheapestPrice ? getMarginPercent(currentPriceExVat, cheapestPrice) : null;

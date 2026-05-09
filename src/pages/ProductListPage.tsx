@@ -295,8 +295,8 @@ export default function ProductListPage() {
         return dir * (pA - pB);
       }
       if (sortField === "recommended") {
-        const cA = getCheapestSupplierAny(a.supplier_products);
-        const cB = getCheapestSupplierAny(b.supplier_products);
+        const cA = getCheapestSupplier(a.supplier_products);
+        const cB = getCheapestSupplier(b.supplier_products);
         const rA = cA ? getRecommendedPriceInclVat(cA.purchase_price, a.custom_markup_percentage ?? globalMarkup) : 0;
         const rB = cB ? getRecommendedPriceInclVat(cB.purchase_price, b.custom_markup_percentage ?? globalMarkup) : 0;
         return dir * (rA - rB);
@@ -725,7 +725,10 @@ export default function ProductListPage() {
                 sorted.map((product) => {
                   const cheapestAny = getCheapestSupplierAny(product.supplier_products);
                   const cheapestPrice = cheapestAny?.purchase_price ?? null;
-                  const recommendedPriceInclVat = cheapestPrice ? getRecommendedPriceInclVat(cheapestPrice, product.custom_markup_percentage ?? globalMarkup) : null;
+                  // Recommendation must be based on cheapest IN-STOCK supplier (never below real cost)
+                  const cheapestInStock = getCheapestSupplier(product.supplier_products);
+                  const recommendedBasePrice = cheapestInStock?.purchase_price ?? null;
+                  const recommendedPriceInclVat = recommendedBasePrice ? getRecommendedPriceInclVat(recommendedBasePrice, product.custom_markup_percentage ?? globalMarkup) : null;
                   const activePrice = product.sale_price ?? product.webshop_price;
                   const activePriceExVat = activePrice ? exVat(activePrice) : null;
                   const margin = activePriceExVat && cheapestPrice ? getMarginPercent(activePriceExVat, cheapestPrice) : null;
