@@ -20,6 +20,7 @@ import ManualSupplierPriceDialog from "@/components/ManualSupplierPriceDialog";
 import ProductTranslationsTab from "@/components/ProductTranslationsTab";
 import InlineEditField from "@/components/InlineEditField";
 import SyncTagsEditor from "@/components/SyncTagsEditor";
+import DescriptionAiActions from "@/components/DescriptionAiActions";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
