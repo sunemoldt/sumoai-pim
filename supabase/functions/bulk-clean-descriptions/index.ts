@@ -73,8 +73,8 @@ Deno.serve(async (req) => {
 
     const CONCURRENCY = 2;
     const DELAY_MS = 400;
-    const results: Result[] = [];
     let cursor = 0;
+    const results: Result[] = [];
 
     const worker = async () => {
       while (true) {
@@ -84,7 +84,6 @@ Deno.serve(async (req) => {
         const r: Result = { id: p.id, ean: p.ean, title: p.title, status: "ok" };
 
         try {
-          // 1. AI rens
           const aiRes = await supabase.functions.invoke("ai-rewrite-description", {
             body: { productId: p.id, mode: "clean" },
           });
@@ -96,42 +95,37 @@ Deno.serve(async (req) => {
 
           if (dry_run) {
             r.step = "dry_run_ai_done";
-            results.push(r);
-            await sleep(DELAY_MS);
-            continue;
-          }
+          } else {
+            const { error: uErr } = await supabase
+              .from("master_products")
+              .update({ short_description: newShort, long_description: newLong })
+              .eq("id", p.id);
+            if (uErr) throw new Error(`pim: ${uErr.message}`);
 
-          // 2. Gem i PIM
-          const { error: uErr } = await supabase
-            .from("master_products")
-            .update({ short_description: newShort, long_description: newLong })
-            .eq("id", p.id);
-          if (uErr) throw new Error(`pim: ${uErr.message}`);
-
-          // 3. Synk til shop
-          if (sync_target === "shopify") {
-            if (!p.shopify_product_id) {
-              r.status = "skipped";
-              r.step = "no_shopify_id";
-            } else {
-              const sRes = await supabase.functions.invoke("shopify-update-product", {
+            if (sync_target === "shopify") {
+              if (!p.shopify_product_id) {
+                r.status = "skipped";
+                r.step = "no_shopify_id";
+              } else {
+                const sRes = await supabase.functions.invoke("shopify-update-product", {
+                  body: { master_product_id: p.id, description: newLong, short_description: newShort },
+                });
+                if (sRes.error) throw new Error(`shopify: ${sRes.error.message}`);
+                const sd = sRes.data as { error?: string };
+                if (sd?.error) throw new Error(`shopify: ${sd.error}`);
+                r.step = "synced_shopify";
+              }
+            } else if (sync_target === "woocommerce") {
+              const wRes = await supabase.functions.invoke("wc-update-product", {
                 body: { master_product_id: p.id, description: newLong, short_description: newShort },
               });
-              if (sRes.error) throw new Error(`shopify: ${sRes.error.message}`);
-              const sd = sRes.data as { error?: string };
-              if (sd?.error) throw new Error(`shopify: ${sd.error}`);
-              r.step = "synced_shopify";
+              if (wRes.error) throw new Error(`wc: ${wRes.error.message}`);
+              const wd = wRes.data as { error?: string };
+              if (wd?.error) throw new Error(`wc: ${wd.error}`);
+              r.step = "synced_woocommerce";
+            } else {
+              r.step = "pim_only";
             }
-          } else if (sync_target === "woocommerce") {
-            const wRes = await supabase.functions.invoke("wc-update-product", {
-              body: { master_product_id: p.id, description: newLong, short_description: newShort },
-            });
-            if (wRes.error) throw new Error(`wc: ${wRes.error.message}`);
-            const wd = wRes.data as { error?: string };
-            if (wd?.error) throw new Error(`wc: ${wd.error}`);
-            r.step = "synced_woocommerce";
-          } else {
-            r.step = "pim_only";
           }
         } catch (e) {
           r.status = "error";
@@ -140,20 +134,46 @@ Deno.serve(async (req) => {
         }
 
         results.push(r);
+        // Persist incremental progress in import_logs so user can poll
+        await supabase.from("import_logs").update({
+          imported: results.filter((x) => x.status === "ok").length,
+          skipped: results.filter((x) => x.status === "skipped").length,
+          errors: results.filter((x) => x.status === "error").map((x) => ({ ean: x.ean, msg: x.message })) as any,
+          status: results.length === slice.length ? "completed" : "running",
+          completed_at: results.length === slice.length ? new Date().toISOString() : null,
+        }).eq("id", logId);
+
         await sleep(DELAY_MS);
       }
     };
 
-    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    // Create import_log row up-front
+    const { data: logRow } = await supabase
+      .from("import_logs")
+      .insert({ source: "bulk-clean-descriptions", status: "running", total_fetched: slice.length })
+      .select("id")
+      .single();
+    const logId = logRow?.id;
 
+    const runAll = async () => {
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+      console.log(`bulk-clean done: ${results.length}/${slice.length}`);
+    };
+
+    // @ts-ignore - EdgeRuntime is available in Supabase edge runtime
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(runAll());
+      return json({ accepted: true, log_id: logId, total: slice.length, message: "Job kører i baggrunden – poll import_logs" }, 202);
+    }
+    await runAll();
     const summary = {
       total: slice.length,
       ok: results.filter((r) => r.status === "ok").length,
       skipped: results.filter((r) => r.status === "skipped").length,
       errors: results.filter((r) => r.status === "error").length,
     };
-
-    return json({ summary, results }, 200);
+    return json({ summary, results, log_id: logId }, 200);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("bulk-clean fatal:", msg);
