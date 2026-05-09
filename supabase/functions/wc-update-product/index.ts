@@ -106,6 +106,12 @@ Deno.serve(async (req) => {
     if (backorders) {
       wcPayload.backorders = backorders;
     }
+    if (description !== undefined && !isVariation) {
+      wcPayload.description = description ?? "";
+    }
+    if (short_description !== undefined && !isVariation) {
+      wcPayload.short_description = short_description ?? "";
+    }
 
     // Use variation endpoint if this is a variation
     const wcUrl = isVariation
