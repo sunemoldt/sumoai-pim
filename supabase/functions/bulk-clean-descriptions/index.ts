@@ -130,6 +130,12 @@ Deno.serve(async (req) => {
               r.step = "pim_only";
             }
           }
+        } catch (e) {
+          r.status = "error";
+          r.message = e instanceof Error ? e.message : String(e);
+          console.error(`bulk-clean ${p.ean}:`, r.message);
+        }
+
         results.push(r);
         // Persist incremental progress in import_logs so user can poll
         await supabase.from("import_logs").update({
