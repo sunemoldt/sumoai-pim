@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
 
     while (true) {
       const url = `${baseUrl}/wp-json/wc/v3/products?per_page=${perPage}&page=${page}${modifiedAfterParam}${fieldsParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
-      const res = await fetch(url, { headers: { "User-Agent": "ComtekPIM/1.0 (+https://pim.sumoai.dk)", Accept: "application/json" } });
+      const res = await wcFetch(url, { headers: wcHeaders });
       if (!res.ok) {
         const body = await res.text();
         throw new Error(`WooCommerce API error [${res.status}]: ${body}`);
