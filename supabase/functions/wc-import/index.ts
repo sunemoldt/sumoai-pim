@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
       let vPage = 1;
       while (true) {
         const url = `${baseUrl}/wp-json/wc/v3/products/${vp.id}/variations?per_page=${perPage}&page=${vPage}${modifiedAfterParam}${varFieldsParam}&consumer_key=${WC_CONSUMER_KEY}&consumer_secret=${WC_CONSUMER_SECRET}`;
-        const res = await fetch(url, { headers: { "User-Agent": "ComtekPIM/1.0 (+https://pim.sumoai.dk)", Accept: "application/json" } });
+        const res = await wcFetch(url, { headers: wcHeaders });
         if (!res.ok) break;
         const vars = await res.json();
         if (!Array.isArray(vars) || vars.length === 0) break;
