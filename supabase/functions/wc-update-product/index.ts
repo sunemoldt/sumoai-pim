@@ -111,21 +111,47 @@ Deno.serve(async (req) => {
       : `${WC_STORE_URL}/wp-json/wc/v3/products/${product.webshop_product_id}`;
     const auth = btoa(`${WC_CONSUMER_KEY}:${WC_CONSUMER_SECRET}`);
 
-    const wcRes = await fetch(wcUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${auth}`,
-      },
-      body: JSON.stringify(wcPayload),
-    });
+    // comtek.dk's WooCommerce REST API can be slow/intermittent — give it 90s
+    // and return a clear error instead of letting Supabase kill the worker (which
+    // surfaces as the unhelpful "non-2xx status code" toast on the client).
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90_000);
 
-    const wcData = await wcRes.json();
-
-    if (!wcRes.ok) {
+    let wcRes: Response;
+    try {
+      wcRes = await fetch(wcUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Basic ${auth}`,
+        },
+        body: JSON.stringify(wcPayload),
+        signal: controller.signal,
+      });
+    } catch (e: any) {
+      clearTimeout(timeoutId);
+      const isAbort = e?.name === "AbortError";
+      console.error("WC fetch failed:", e?.message || e);
       return new Response(
         JSON.stringify({
-          error: "WooCommerce API error",
+          error: isAbort
+            ? "WooCommerce svarede ikke inden 90 sekunder. Prøv igen."
+            : `Kunne ikke kontakte WooCommerce: ${e?.message || "ukendt fejl"}`,
+        }),
+        { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    clearTimeout(timeoutId);
+
+    const wcText = await wcRes.text();
+    let wcData: any;
+    try { wcData = JSON.parse(wcText); } catch { wcData = wcText; }
+
+    if (!wcRes.ok) {
+      console.error(`WC API ${wcRes.status}:`, wcText.slice(0, 500));
+      return new Response(
+        JSON.stringify({
+          error: `WooCommerce afviste opdateringen (HTTP ${wcRes.status})`,
           status: wcRes.status,
           details: wcData,
         }),
