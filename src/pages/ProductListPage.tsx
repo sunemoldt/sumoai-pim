@@ -295,8 +295,8 @@ export default function ProductListPage() {
         return dir * (pA - pB);
       }
       if (sortField === "recommended") {
-        const cA = getCheapestSupplierAny(a.supplier_products);
-        const cB = getCheapestSupplierAny(b.supplier_products);
+        const cA = getCheapestSupplier(a.supplier_products);
+        const cB = getCheapestSupplier(b.supplier_products);
         const rA = cA ? getRecommendedPriceInclVat(cA.purchase_price, a.custom_markup_percentage ?? globalMarkup) : 0;
         const rB = cB ? getRecommendedPriceInclVat(cB.purchase_price, b.custom_markup_percentage ?? globalMarkup) : 0;
         return dir * (rA - rB);
