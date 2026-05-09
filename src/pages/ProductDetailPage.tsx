@@ -255,10 +255,12 @@ export default function ProductDetailPage() {
     }
   };
 
-  // Pre-compute cheapest for init — use ANY supplier (regardless of stock) for pricing
+  // Pre-compute cheapest IN-STOCK supplier for pricing recommendations.
+  // Rationale: pricing must never be derived from a supplier that can't actually deliver,
+  // otherwise we risk recommending a sales price below our real purchase cost.
   const cheapestPriceForInit = (() => {
     if (!product) return null;
-    const c = getCheapestSupplierAny(product.supplier_products);
+    const c = getCheapestSupplier(product.supplier_products);
     return c?.purchase_price ?? null;
   })();
 
