@@ -36,10 +36,17 @@ async function callFn(name: string, payload: unknown) {
   return data;
 }
 
+function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
+function json(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // Auth
   const authHeader = req.headers.get("authorization");
   if (!authHeader) return json({ error: "Unauthorized" }, 401);
   if (!authHeader.includes(SUPABASE_SERVICE_ROLE_KEY)) {
@@ -54,7 +61,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const {
       brand = "ubiquiti",
-      sync_target = "shopify", // 'shopify' | 'woocommerce' | 'none'
+      sync_target = "shopify",
       dry_run = false,
       only_dirty = true,
       limit,
@@ -68,15 +75,12 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Fetch candidate products
-    let query = supabase
+    const { data: products, error: pErr } = await supabase
       .from("master_products")
       .select("id, ean, title, brand, short_description, long_description, shopify_product_id, webshop_product_id, webshop_parent_id")
       .or(`brand.ilike.${brand}%,title.ilike.${brand}%`)
       .not("webshop_product_id", "is", null)
       .is("webshop_parent_id", null);
-
-    const { data: products, error: pErr } = await query;
     if (pErr) return json({ error: pErr.message }, 500);
 
     const dirtyRegex = /\[[a-z_]+[^\]]*\]|et_pb_|vc_row|wp-block|data-elementor|fusion_|<!--|style="|class="/i;
@@ -88,6 +92,13 @@ Deno.serve(async (req) => {
     const slice = limit ? candidates.slice(0, limit) : candidates;
 
     console.log(`bulk-clean: ${slice.length} candidates (dry=${dry_run}, target=${sync_target})`);
+
+    const { data: logRow } = await supabase
+      .from("import_logs")
+      .insert({ source: "bulk-clean-descriptions", status: "running", total_fetched: slice.length })
+      .select("id")
+      .single();
+    const logId = logRow?.id as string | undefined;
 
     const CONCURRENCY = 2;
     const DELAY_MS = 400;
@@ -120,11 +131,19 @@ Deno.serve(async (req) => {
                 r.status = "skipped";
                 r.step = "no_shopify_id";
               } else {
-                await callFn("shopify-update-product", { master_product_id: p.id, description: newLong, short_description: newShort });
+                await callFn("shopify-update-product", {
+                  master_product_id: p.id,
+                  description: newLong,
+                  short_description: newShort,
+                });
                 r.step = "synced_shopify";
               }
             } else if (sync_target === "woocommerce") {
-              await callFn("wc-update-product", { master_product_id: p.id, description: newLong, short_description: newShort });
+              await callFn("wc-update-product", {
+                master_product_id: p.id,
+                description: newLong,
+                short_description: newShort,
+              });
               r.step = "synced_woocommerce";
             } else {
               r.step = "pim_only";
@@ -137,59 +156,56 @@ Deno.serve(async (req) => {
         }
 
         results.push(r);
-        // Persist incremental progress in import_logs so user can poll
-        await supabase.from("import_logs").update({
-          imported: results.filter((x) => x.status === "ok").length,
-          skipped: results.filter((x) => x.status === "skipped").length,
-          errors: results.filter((x) => x.status === "error").map((x) => ({ ean: x.ean, msg: x.message })) as any,
-          status: results.length === slice.length ? "completed" : "running",
-          completed_at: results.length === slice.length ? new Date().toISOString() : null,
-        }).eq("id", logId);
+
+        if (logId) {
+          const errorList = results
+            .filter((x) => x.status === "error")
+            .map((x) => ({ ean: x.ean, msg: x.message }));
+          const done = results.length === slice.length;
+          await supabase.from("import_logs").update({
+            imported: results.filter((x) => x.status === "ok").length,
+            skipped: results.filter((x) => x.status === "skipped").length,
+            errors: errorList,
+            status: done ? "completed" : "running",
+            completed_at: done ? new Date().toISOString() : null,
+          }).eq("id", logId);
+        }
 
         await sleep(DELAY_MS);
       }
     };
-
-    // Create import_log row up-front
-    const { data: logRow } = await supabase
-      .from("import_logs")
-      .insert({ source: "bulk-clean-descriptions", status: "running", total_fetched: slice.length })
-      .select("id")
-      .single();
-    const logId = logRow?.id;
 
     const runAll = async () => {
       await Promise.all(Array.from({ length: CONCURRENCY }, worker));
       console.log(`bulk-clean done: ${results.length}/${slice.length}`);
     };
 
-    // @ts-ignore - EdgeRuntime is available in Supabase edge runtime
+    // @ts-ignore EdgeRuntime is available at runtime
     if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
       // @ts-ignore
       EdgeRuntime.waitUntil(runAll());
-      return json({ accepted: true, log_id: logId, total: slice.length, message: "Job kører i baggrunden – poll import_logs" }, 202);
+      return json({
+        accepted: true,
+        log_id: logId,
+        total: slice.length,
+        message: "Job kører i baggrunden – poll import_logs",
+      }, 202);
     }
+
     await runAll();
-    const summary = {
-      total: slice.length,
-      ok: results.filter((r) => r.status === "ok").length,
-      skipped: results.filter((r) => r.status === "skipped").length,
-      errors: results.filter((r) => r.status === "error").length,
-    };
-    return json({ summary, results, log_id: logId }, 200);
+    return json({
+      summary: {
+        total: slice.length,
+        ok: results.filter((r) => r.status === "ok").length,
+        skipped: results.filter((r) => r.status === "skipped").length,
+        errors: results.filter((r) => r.status === "error").length,
+      },
+      results,
+      log_id: logId,
+    }, 200);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("bulk-clean fatal:", msg);
     return json({ error: msg }, 500);
   }
 });
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-function json(body: unknown, status: number) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
