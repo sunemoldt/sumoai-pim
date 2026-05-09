@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders } = body;
+    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, description, short_description } = body;
     if (!master_product_id) {
       return new Response(JSON.stringify({ error: "master_product_id is required" }), {
         status: 400,
@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: product, error: productError } = await supabase
       .from("master_products")
-      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, shopify_product_id, shopify_variant_id")
+      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, shopify_product_id, shopify_variant_id, short_description, long_description")
       .eq("id", master_product_id)
       .single();
 
@@ -139,6 +139,39 @@ Deno.serve(async (req) => {
       dbUpdate.backorders_allowed = allowed;
       logChange("backorders_allowed", product.backorders_allowed, allowed, "stock_update");
       updatedFields.push("inventoryPolicy");
+    }
+
+    // Product-level update (description / excerpt)
+    const productInput: Record<string, unknown> = { id: productGid };
+    if (description !== undefined && description !== null) {
+      productInput.descriptionHtml = String(description);
+      dbUpdate.long_description = description;
+      logChange("long_description", product.long_description, description, "description_update");
+      updatedFields.push("descriptionHtml");
+    }
+    if (short_description !== undefined && short_description !== null) {
+      // Shopify uses metafield or seo.description for excerpt; use metafield namespace "custom" for safety
+      productInput.metafields = [{
+        namespace: "custom",
+        key: "short_description",
+        type: "multi_line_text_field",
+        value: String(short_description),
+      }];
+      dbUpdate.short_description = short_description;
+      logChange("short_description", product.short_description, short_description, "description_update");
+      updatedFields.push("short_description");
+    }
+    if (Object.keys(productInput).length > 1) {
+      const productMutation = `#graphql
+        mutation UpdateProduct($input: ProductInput!) {
+          productUpdate(input: $input) {
+            product { id }
+            userErrors { field message }
+          }
+        }`;
+      const pData = await shopifyGraphql(conn.shop_domain, conn.access_token, productMutation, { input: productInput });
+      const pErrors = pData.productUpdate.userErrors;
+      if (pErrors?.length) throw new Error(pErrors.map((e: { message: string }) => e.message).join(", "));
     }
 
     if (Object.keys(variantInput).length > 1) {
