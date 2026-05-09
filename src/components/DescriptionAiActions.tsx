@@ -108,6 +108,34 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> AI arbejder…
           </span>
         )}
+        <div className="ml-auto">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!hasPimContent || syncing}
+                title={!hasPimContent ? "Gem en beskrivelse i PIM først" : "Skub PIM-beskrivelsen til WooCommerce"}
+              >
+                {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                Synk beskrivelse til shop
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Skub beskrivelse til WooCommerce?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i shoppen lige nu.
+                  Handlingen kan ikke fortrydes automatisk.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Annullér</AlertDialogCancel>
+                <AlertDialogAction onClick={syncToShop}>Ja, synk nu</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
 
       <Dialog open={mode !== null && !loading} onOpenChange={(o) => !o && setMode(null)}>
