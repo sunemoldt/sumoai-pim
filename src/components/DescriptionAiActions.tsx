@@ -27,6 +27,30 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
   const [shortDraft, setShortDraft] = useState("");
   const [longDraft, setLongDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const hasPimContent = !!(currentShort?.trim() || currentLong?.trim());
+
+  const syncToShop = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("wc-update-product", {
+        body: {
+          master_product_id: productId,
+          short_description: currentShort ?? "",
+          description: currentLong ?? "",
+        },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success("Beskrivelse synket til WooCommerce");
+      qc.invalidateQueries({ queryKey: ["product_change_log", productId] });
+    } catch (e: any) {
+      toast.error(e?.message || "Kunne ikke synke til shop");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const run = async (m: Mode) => {
     setMode(m);
