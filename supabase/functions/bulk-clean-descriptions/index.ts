@@ -208,8 +208,8 @@ Deno.serve(async (req) => {
       .single();
     const logId = logRow?.id as string | undefined;
 
-    const CONCURRENCY = mode === "regex" ? 4 : 2;
-    const DELAY_MS = mode === "regex" ? 100 : 400;
+    const CONCURRENCY = force_push ? 1 : (mode === "regex" ? 4 : 2);
+    const DELAY_MS = force_push ? 600 : (mode === "regex" ? 100 : 400);
     let cursor = 0;
     const results: Result[] = [];
 
