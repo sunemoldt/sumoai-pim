@@ -18,6 +18,7 @@ import FieldSyncPolicyCard from "@/components/FieldSyncPolicyCard";
 import AttributeDefinitionsCard from "@/components/AttributeDefinitionsCard";
 import ShopifyBulkPullCard from "@/components/ShopifyBulkPullCard";
 import CleanupAuditCard from "@/components/CleanupAuditCard";
+import ShopifyQueueCard from "@/components/ShopifyQueueCard";
 
 export default function SettingsPage() {
   const { data: priceSettings = [] } = usePriceSettings();
@@ -436,6 +437,8 @@ export default function SettingsPage() {
       <FieldSyncPolicyCard />
 
       <ShopifyBulkPullCard />
+
+      <ShopifyQueueCard />
 
       <CleanupAuditCard />
 

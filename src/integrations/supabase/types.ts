@@ -745,6 +745,51 @@ export type Database = {
         }
         Relationships: []
       }
+      shopify_update_queue: {
+        Row: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          master_product_id: string
+          max_attempts: number
+          next_attempt_at: string
+          payload: Json
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          master_product_id: string
+          max_attempts?: number
+          next_attempt_at?: string
+          payload?: Json
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          master_product_id?: string
+          max_attempts?: number
+          next_attempt_at?: string
+          payload?: Json
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       supplier_products: {
         Row: {
           created_at: string
