@@ -9,6 +9,7 @@ import AppLayout from "@/components/AppLayout";
 import DashboardPage from "@/pages/DashboardPage";
 import ProductListPage from "@/pages/ProductListPage";
 import ProductDetailPage from "@/pages/ProductDetailPage";
+import NewProductPage from "@/pages/NewProductPage";
 import SupplierListPage from "@/pages/SupplierListPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ImportPage from "@/pages/ImportPage";
