@@ -38,6 +38,45 @@ export type Database = {
         }
         Relationships: []
       }
+      attribute_definitions: {
+        Row: {
+          created_at: string
+          id: string
+          is_variant_axis: boolean
+          key: string
+          label: string
+          options: Json
+          sort_order: number
+          type: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_variant_axis?: boolean
+          key: string
+          label: string
+          options?: Json
+          sort_order?: number
+          type?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_variant_axis?: boolean
+          key?: string
+          label?: string
+          options?: Json
+          sort_order?: number
+          type?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       field_sync_policy: {
         Row: {
           description: string | null
@@ -482,6 +521,68 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "product_translations_master_product_id_fkey"
+            columns: ["master_product_id"]
+            isOneToOne: false
+            referencedRelation: "master_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_variants: {
+        Row: {
+          attributes: Json
+          created_at: string
+          ean: string | null
+          id: string
+          master_product_id: string
+          position: number
+          purchase_price: number | null
+          sale_price: number | null
+          shopify_inventory_item_id: string | null
+          shopify_variant_id: string | null
+          sku: string | null
+          stock_quantity: number | null
+          updated_at: string
+          webshop_price: number | null
+          weight: number | null
+        }
+        Insert: {
+          attributes?: Json
+          created_at?: string
+          ean?: string | null
+          id?: string
+          master_product_id: string
+          position?: number
+          purchase_price?: number | null
+          sale_price?: number | null
+          shopify_inventory_item_id?: string | null
+          shopify_variant_id?: string | null
+          sku?: string | null
+          stock_quantity?: number | null
+          updated_at?: string
+          webshop_price?: number | null
+          weight?: number | null
+        }
+        Update: {
+          attributes?: Json
+          created_at?: string
+          ean?: string | null
+          id?: string
+          master_product_id?: string
+          position?: number
+          purchase_price?: number | null
+          sale_price?: number | null
+          shopify_inventory_item_id?: string | null
+          shopify_variant_id?: string | null
+          sku?: string | null
+          stock_quantity?: number | null
+          updated_at?: string
+          webshop_price?: number | null
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_master_product_id_fkey"
             columns: ["master_product_id"]
             isOneToOne: false
             referencedRelation: "master_products"
