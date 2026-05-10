@@ -45,8 +45,10 @@ Deno.serve(async (req) => {
         .gte("created_at", thirtyDaysAgo)
         .order("created_at", { ascending: false })
         .limit(500),
+      // Shopify er master: kun produkter der er synket til Shopify medtages i analysen
       supabase.from("master_products")
-        .select("id, ean, title, brand, category, webshop_price, sale_price, stock_quantity, stock_status"),
+        .select("id, ean, title, brand, category, webshop_price, sale_price, stock_quantity, stock_status, shopify_product_id, shopify_variant_id, shopify_sync_enabled")
+        .not("shopify_product_id", "is", null),
       supabase.from("product_analytics")
         .select("master_product_id, page_views, purchases, conversion_rate, clicks, impressions"),
       supabase.from("supplier_products")
