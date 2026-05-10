@@ -38,6 +38,30 @@ export type Database = {
         }
         Relationships: []
       }
+      field_sync_policy: {
+        Row: {
+          description: string | null
+          direction: string
+          field_name: string
+          master: string
+          updated_at: string
+        }
+        Insert: {
+          description?: string | null
+          direction?: string
+          field_name: string
+          master: string
+          updated_at?: string
+        }
+        Update: {
+          description?: string | null
+          direction?: string
+          field_name?: string
+          master?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       import_logs: {
         Row: {
           completed_at: string | null
@@ -99,6 +123,7 @@ export type Database = {
           ean: string
           id: string
           image_url: string | null
+          lifecycle_status: string
           long_description: string | null
           meta_description: string | null
           meta_title: string | null
@@ -134,6 +159,7 @@ export type Database = {
           ean: string
           id?: string
           image_url?: string | null
+          lifecycle_status?: string
           long_description?: string | null
           meta_description?: string | null
           meta_title?: string | null
@@ -169,6 +195,7 @@ export type Database = {
           ean?: string
           id?: string
           image_url?: string | null
+          lifecycle_status?: string
           long_description?: string | null
           meta_description?: string | null
           meta_title?: string | null
