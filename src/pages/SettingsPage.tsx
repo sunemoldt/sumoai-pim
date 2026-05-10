@@ -437,6 +437,8 @@ export default function SettingsPage() {
 
       <ShopifyBulkPullCard />
 
+      <CleanupAuditCard />
+
       <AttributeDefinitionsCard />
 
       <WebhookFormDialog
