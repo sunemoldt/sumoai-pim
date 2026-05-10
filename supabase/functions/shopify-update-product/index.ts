@@ -136,45 +136,54 @@ Deno.serve(async (req) => {
 
     const variantInput: Record<string, unknown> = { id: variantGid };
     if (regular_price !== undefined && regular_price !== null) {
-      variantInput.price = String(regular_price);
-      dbUpdate.webshop_price = regular_price;
-      logChange("webshop_price", product.webshop_price, regular_price, "price_update");
-      updatedFields.push("price");
+      if (canPush("webshop_price")) {
+        variantInput.price = String(regular_price);
+        dbUpdate.webshop_price = regular_price;
+        logChange("webshop_price", product.webshop_price, regular_price, "price_update");
+        updatedFields.push("price");
+      } else { skippedFields.push("webshop_price"); }
     }
     if (sale_price !== undefined) {
-      variantInput.compareAtPrice = sale_price !== null ? String(sale_price) : null;
-      dbUpdate.sale_price = sale_price;
-      logChange("sale_price", product.sale_price, sale_price, "price_update");
-      updatedFields.push("compareAtPrice");
+      if (canPush("sale_price")) {
+        variantInput.compareAtPrice = sale_price !== null ? String(sale_price) : null;
+        dbUpdate.sale_price = sale_price;
+        logChange("sale_price", product.sale_price, sale_price, "price_update");
+        updatedFields.push("compareAtPrice");
+      } else { skippedFields.push("sale_price"); }
     }
     const inventoryPolicy = toInventoryPolicy(backorders);
     if (inventoryPolicy) {
-      variantInput.inventoryPolicy = inventoryPolicy;
-      const allowed = inventoryPolicy === "CONTINUE";
-      dbUpdate.backorders_allowed = allowed;
-      logChange("backorders_allowed", product.backorders_allowed, allowed, "stock_update");
-      updatedFields.push("inventoryPolicy");
+      if (canPush("backorders_allowed")) {
+        variantInput.inventoryPolicy = inventoryPolicy;
+        const allowed = inventoryPolicy === "CONTINUE";
+        dbUpdate.backorders_allowed = allowed;
+        logChange("backorders_allowed", product.backorders_allowed, allowed, "stock_update");
+        updatedFields.push("inventoryPolicy");
+      } else { skippedFields.push("backorders_allowed"); }
     }
 
     // Product-level update (description / excerpt)
     const productInput: Record<string, unknown> = { id: productGid };
     if (description !== undefined && description !== null) {
-      productInput.descriptionHtml = String(description);
-      dbUpdate.long_description = description;
-      logChange("long_description", product.long_description, description, "description_update");
-      updatedFields.push("descriptionHtml");
+      if (canPush("long_description")) {
+        productInput.descriptionHtml = String(description);
+        dbUpdate.long_description = description;
+        logChange("long_description", product.long_description, description, "description_update");
+        updatedFields.push("descriptionHtml");
+      } else { skippedFields.push("long_description"); }
     }
     if (short_description !== undefined && short_description !== null) {
-      // Shopify uses metafield or seo.description for excerpt; use metafield namespace "custom" for safety
-      productInput.metafields = [{
-        namespace: "custom",
-        key: "short_description",
-        type: "multi_line_text_field",
-        value: String(short_description),
-      }];
-      dbUpdate.short_description = short_description;
-      logChange("short_description", product.short_description, short_description, "description_update");
-      updatedFields.push("short_description");
+      if (canPush("short_description")) {
+        productInput.metafields = [{
+          namespace: "custom",
+          key: "short_description",
+          type: "multi_line_text_field",
+          value: String(short_description),
+        }];
+        dbUpdate.short_description = short_description;
+        logChange("short_description", product.short_description, short_description, "description_update");
+        updatedFields.push("short_description");
+      } else { skippedFields.push("short_description"); }
     }
     if (Object.keys(productInput).length > 1) {
       const productMutation = `#graphql
