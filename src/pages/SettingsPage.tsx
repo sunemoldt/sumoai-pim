@@ -434,6 +434,10 @@ export default function SettingsPage() {
 
       <FieldSyncPolicyCard />
 
+      <ShopifyBulkPullCard />
+
+      <AttributeDefinitionsCard />
+
       <WebhookFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
