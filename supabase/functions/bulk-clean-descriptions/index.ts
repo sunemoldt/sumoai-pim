@@ -45,26 +45,54 @@ function json(body: unknown, status: number) {
 }
 
 // Deterministic HTML cleanup for Elementor / WP / pagebuilder cruft.
-// Removes balanced <div class="elementor-…">…</div> blocks (and similar),
-// strips builder-specific data-* attributes, shortcodes and empty wrappers.
+// Stack-based: when we hit an opening tag matching builder patterns,
+// skip the entire balanced subtree (handles nesting correctly).
 function stripBuilderBlocks(html: string): string {
-  let out = html;
-  // Repeatedly remove the innermost <div class="...elementor..."> ... </div>
-  // (handles nesting because we replace from the inside out)
-  const builderClassRe = /<div\b[^>]*class="[^"]*\b(elementor|et_pb_|vc_row|wpb_|fusion-|wp-block-)[^"]*"[^>]*>(?:(?!<div\b)[\s\S])*?<\/div>/gi;
-  for (let i = 0; i < 20; i++) {
-    const next = out.replace(builderClassRe, "");
-    if (next === out) break;
-    out = next;
+  const builderAttrRe = /\bdata-elementor[\w-]*=|class="[^"]*\b(elementor[\w-]*|et_pb_[\w-]*|vc_[\w-]*|wpb_[\w-]*|fusion-[\w-]*|wp-block-[\w-]*|e-con|e-flex|e-parent|e-child)/i;
+  const out: string[] = [];
+  let i = 0;
+  const n = html.length;
+  while (i < n) {
+    const ch = html[i];
+    if (ch !== "<") {
+      const next = html.indexOf("<", i);
+      if (next === -1) { out.push(html.slice(i)); break; }
+      out.push(html.slice(i, next));
+      i = next;
+      continue;
+    }
+    const end = html.indexOf(">", i);
+    if (end === -1) { out.push(html.slice(i)); break; }
+    const tag = html.slice(i, end + 1);
+    const open = tag.match(/^<([a-zA-Z][\w-]*)\b([^>]*)>$/);
+    if (open && !tag.startsWith("</") && !tag.endsWith("/>") && builderAttrRe.test(open[2])) {
+      const name = open[1].toLowerCase();
+      // Walk forward, counting same-name opens/closes, skip everything inside
+      let depth = 1;
+      let j = end + 1;
+      const openTagRe = new RegExp(`<${name}\\b[^>]*>`, "gi");
+      const closeTagRe = new RegExp(`</${name}\\s*>`, "gi");
+      while (j < n && depth > 0) {
+        openTagRe.lastIndex = j;
+        closeTagRe.lastIndex = j;
+        const o = openTagRe.exec(html);
+        const c = closeTagRe.exec(html);
+        if (!c) { j = n; break; }
+        if (o && o.index < c.index) {
+          depth++;
+          j = o.index + o[0].length;
+        } else {
+          depth--;
+          j = c.index + c[0].length;
+        }
+      }
+      i = j;
+      continue;
+    }
+    out.push(tag);
+    i = end + 1;
   }
-  // Same for <section>/<aside> wrappers
-  const builderSectionRe = /<(section|aside)\b[^>]*class="[^"]*\b(elementor|et_pb_|vc_|wpb_|fusion-|wp-block-)[^"]*"[^>]*>[\s\S]*?<\/\1>/gi;
-  for (let i = 0; i < 10; i++) {
-    const next = out.replace(builderSectionRe, "");
-    if (next === out) break;
-    out = next;
-  }
-  return out;
+  return out.join("");
 }
 
 function cleanHtml(input: string | null | undefined): string {
