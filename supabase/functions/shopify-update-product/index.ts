@@ -215,56 +215,60 @@ Deno.serve(async (req) => {
     }
 
     if (stock_quantity !== undefined && stock_quantity !== null) {
-      // 2026-04: use inventorySetQuantities (absolute set, no read-current required)
-      // Also use includeInactive on locations so we don't accidentally write to deactivated ones
-      const inventoryQuery = `#graphql
-        query VariantInventory($id: ID!) {
-          productVariant(id: $id) {
-            inventoryItem {
-              id
-              inventoryLevels(first: 10) {
-                nodes {
-                  location { id }
-                  quantities(names: ["available"]) { name quantity }
+      if (!canPush("stock_quantity")) {
+        skippedFields.push("stock_quantity");
+      } else {
+        const inventoryQuery = `#graphql
+          query VariantInventory($id: ID!) {
+            productVariant(id: $id) {
+              inventoryItem {
+                id
+                inventoryLevels(first: 10) {
+                  nodes {
+                    location { id }
+                    quantities(names: ["available"]) { name quantity }
+                  }
                 }
               }
             }
-          }
-          locations(first: 5, includeInactive: false) { nodes { id } }
-        }`;
-      const inventoryData = await shopifyGraphql(conn.shop_domain, conn.access_token, inventoryQuery, { id: variantGid });
-      const inventoryItemId = inventoryData.productVariant?.inventoryItem?.id;
-      const levels = inventoryData.productVariant?.inventoryItem?.inventoryLevels?.nodes ?? [];
-      const firstLevel = levels[0];
-      const locationId = firstLevel?.location?.id ?? inventoryData.locations?.nodes?.[0]?.id;
-      const currentQty = firstLevel?.quantities?.find((q: { name: string }) => q.name === "available")?.quantity ?? 0;
-
-      if (inventoryItemId && locationId) {
-        const setMutation = `#graphql
-          mutation SetInventory($input: InventorySetQuantitiesInput!) {
-            inventorySetQuantities(input: $input) @idempotent(key: "${crypto.randomUUID()}") {
-              userErrors { field message }
-            }
+            locations(first: 5, includeInactive: false) { nodes { id } }
           }`;
-        const setData = await shopifyGraphql(conn.shop_domain, conn.access_token, setMutation, {
-          input: {
-            name: "available",
-            reason: "correction",
-            quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity), changeFromQuantity: Number(currentQty) }],
-          },
-        });
-        const errors = setData.inventorySetQuantities.userErrors;
-        if (errors?.length) throw new Error(errors.map((e: { message: string }) => e.message).join(", "));
+        const inventoryData = await shopifyGraphql(conn.shop_domain, conn.access_token, inventoryQuery, { id: variantGid });
+        const inventoryItemId = inventoryData.productVariant?.inventoryItem?.id;
+        const levels = inventoryData.productVariant?.inventoryItem?.inventoryLevels?.nodes ?? [];
+        const firstLevel = levels[0];
+        const locationId = firstLevel?.location?.id ?? inventoryData.locations?.nodes?.[0]?.id;
+        const currentQty = firstLevel?.quantities?.find((q: { name: string }) => q.name === "available")?.quantity ?? 0;
+
+        if (inventoryItemId && locationId) {
+          const setMutation = `#graphql
+            mutation SetInventory($input: InventorySetQuantitiesInput!) {
+              inventorySetQuantities(input: $input) @idempotent(key: "${crypto.randomUUID()}") {
+                userErrors { field message }
+              }
+            }`;
+          const setData = await shopifyGraphql(conn.shop_domain, conn.access_token, setMutation, {
+            input: {
+              name: "available",
+              reason: "correction",
+              quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity), changeFromQuantity: Number(currentQty) }],
+            },
+          });
+          const errors = setData.inventorySetQuantities.userErrors;
+          if (errors?.length) throw new Error(errors.map((e: { message: string }) => e.message).join(", "));
+        }
+        dbUpdate.stock_quantity = stock_quantity;
+        logChange("stock_quantity", product.stock_quantity, stock_quantity, "stock_update");
+        updatedFields.push("stock_quantity");
       }
-      dbUpdate.stock_quantity = stock_quantity;
-      logChange("stock_quantity", product.stock_quantity, stock_quantity, "stock_update");
-      updatedFields.push("stock_quantity");
     }
 
     if (stock_status) {
-      dbUpdate.stock_status = stock_status;
-      logChange("stock_status", product.stock_status, stock_status, "stock_update");
-      updatedFields.push("stock_status");
+      if (canPush("stock_status")) {
+        dbUpdate.stock_status = stock_status;
+        logChange("stock_status", product.stock_status, stock_status, "stock_update");
+        updatedFields.push("stock_status");
+      } else { skippedFields.push("stock_status"); }
     }
 
     if (Object.keys(dbUpdate).length > 0) {
