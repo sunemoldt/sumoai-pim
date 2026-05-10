@@ -272,6 +272,7 @@ Deno.serve(async (req) => {
                   master_product_id: p.id,
                   description: newLong,
                   short_description: newShort,
+                  force: force_push === true,
                 });
                 r.step = "synced_shopify";
               }
