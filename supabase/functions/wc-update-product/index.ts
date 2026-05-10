@@ -187,13 +187,23 @@ Deno.serve(async (req) => {
 
     if (!wcRes.ok) {
       console.error(`WC API ${wcRes.status}:`, wcText.slice(0, 500));
+      const isCloudflareChallenge =
+        wcRes.status === 403 &&
+        typeof wcData === "string" &&
+        wcData.includes("challenges.cloudflare.com");
+      const friendly = isCloudflareChallenge
+        ? "WooCommerce blokerede requestet via Cloudflare (legacy-sync er pauset)."
+        : `WooCommerce afviste opdateringen (HTTP ${wcRes.status})`;
+      // Return 200 + fallback so callers don't crash on 5xx — WC sync is paused/legacy.
       return new Response(
         JSON.stringify({
-          error: `WooCommerce afviste opdateringen (HTTP ${wcRes.status})`,
+          success: false,
+          fallback: true,
+          skipped: true,
+          error: friendly,
           status: wcRes.status,
-          details: wcData,
         }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
