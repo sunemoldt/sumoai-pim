@@ -17,7 +17,7 @@ type Result = {
   step?: string;
   message?: string;
   pim?: "updated" | "unchanged" | "error";
-  shopify?: "synced" | "skipped" | "error" | "not_applicable";
+  shopify?: "synced" | "queued" | "skipped" | "error" | "not_applicable";
   shopify_reason?: string;
   ts?: string;
 };
