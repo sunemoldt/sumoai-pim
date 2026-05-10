@@ -219,7 +219,7 @@ export default function CleanupAuditCard() {
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
                   {filteredResults.length === 0 && (
