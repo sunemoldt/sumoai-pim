@@ -1410,6 +1410,10 @@ export default function ProductDetailPage() {
           <ProductTranslationsTab product={product} />
         </TabsContent>
 
+        <TabsContent value="variants" className="space-y-4 mt-4">
+          <ProductVariantsTab masterProductId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
+        </TabsContent>
+
         <TabsContent value="changelog" className="space-y-4 mt-4">
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
