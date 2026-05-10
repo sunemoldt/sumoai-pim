@@ -74,13 +74,20 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: product, error: productError } = await supabase
       .from("master_products")
-      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, shopify_product_id, shopify_variant_id, short_description, long_description")
+      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, shopify_product_id, shopify_variant_id, short_description, long_description, lifecycle_status")
       .eq("id", master_product_id)
       .single();
 
     if (productError || !product) {
       return new Response(JSON.stringify({ error: "Product not found", details: productError?.message }), {
         status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (product.lifecycle_status === "draft") {
+      return new Response(JSON.stringify({ skipped: true, reason: "lifecycle=draft", message: "Produktet er en kladde og er ikke sendt til Shopify endnu." }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
