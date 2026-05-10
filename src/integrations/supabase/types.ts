@@ -111,6 +111,7 @@ export type Database = {
           errors: Json | null
           id: string
           imported: number | null
+          results: Json
           skipped: number | null
           source: string
           started_at: string
@@ -126,6 +127,7 @@ export type Database = {
           errors?: Json | null
           id?: string
           imported?: number | null
+          results?: Json
           skipped?: number | null
           source: string
           started_at?: string
@@ -141,6 +143,7 @@ export type Database = {
           errors?: Json | null
           id?: string
           imported?: number | null
+          results?: Json
           skipped?: number | null
           source?: string
           started_at?: string

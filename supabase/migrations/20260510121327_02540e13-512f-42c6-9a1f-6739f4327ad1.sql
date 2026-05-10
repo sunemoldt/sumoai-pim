@@ -1,0 +1,1 @@
+ALTER TABLE public.import_logs ADD COLUMN IF NOT EXISTS results jsonb NOT NULL DEFAULT '[]'::jsonb;
