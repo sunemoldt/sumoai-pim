@@ -293,6 +293,62 @@ Deno.serve(async (req) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Ukendt fejl";
     console.error("Shopify update error:", message);
+
+    // Detect transient/throttle errors and enqueue for retry
+    const isThrottle = /rate.?limit|throttl|429|too many requests|exceeded for trace/i.test(message);
+    const shouldEnqueue = isThrottle && enqueue_on_throttle !== false && queued !== true;
+
+    if (shouldEnqueue) {
+      try {
+        const supabaseSvc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        // Avoid duplicate pending entries for the same product
+        const { data: existing } = await supabaseSvc
+          .from("shopify_update_queue")
+          .select("id, attempts")
+          .eq("master_product_id", master_product_id)
+          .in("status", ["pending", "processing"])
+          .maybeSingle();
+
+        const retryDelaySec = 60; // initial backoff window
+        const payload = await req.clone().json().catch(() => ({}));
+        // Strip control fields so worker re-runs cleanly
+        delete payload.queued;
+        delete payload.enqueue_on_throttle;
+
+        if (existing) {
+          await supabaseSvc.from("shopify_update_queue")
+            .update({
+              payload,
+              status: "pending",
+              last_error: message,
+              next_attempt_at: new Date(Date.now() + retryDelaySec * 1000).toISOString(),
+            })
+            .eq("id", existing.id);
+        } else {
+          await supabaseSvc.from("shopify_update_queue").insert({
+            master_product_id,
+            payload,
+            status: "pending",
+            attempts: 0,
+            last_error: message,
+            next_attempt_at: new Date(Date.now() + retryDelaySec * 1000).toISOString(),
+            source: source ?? "shopify-update-product",
+          });
+        }
+
+        return new Response(JSON.stringify({
+          queued: true,
+          retry_after_seconds: retryDelaySec,
+          message: "Shopify rate limit ramt — opgaven er sat i kø og prøves automatisk igen.",
+        }), {
+          status: 202,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (qErr) {
+        console.error("Failed to enqueue:", qErr);
+      }
+    }
+
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
