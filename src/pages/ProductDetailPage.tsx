@@ -22,6 +22,7 @@ import InlineEditField from "@/components/InlineEditField";
 import SyncTagsEditor from "@/components/SyncTagsEditor";
 import DescriptionAiActions from "@/components/DescriptionAiActions";
 import { LifecycleBadge, SendToShopifyButton } from "@/components/LifecycleControls";
+import ProductVariantsTab from "@/components/ProductVariantsTab";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
