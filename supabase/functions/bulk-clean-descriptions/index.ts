@@ -116,7 +116,11 @@ function cleanHtml(input: string | null | undefined): string {
   // 5. Collapse non-breaking spaces and stray entities
   s = s.replace(/&nbsp;/g, " ");
 
-  // 6. Remove empty wrappers iteratively
+  // 6. Remove orphan invalid sequences like </p></div> and stray closing tags
+  s = s.replace(/<\/p>\s*<\/div>/gi, "</div>");
+  s = s.replace(/<p>\s*<\/p>/gi, "");
+
+  // 7. Remove empty wrappers iteratively
   const emptyRe = /<(p|div|span|section)\b[^>]*>\s*(?:<br\s*\/?>\s*)*<\/\1>/gi;
   for (let i = 0; i < 10; i++) {
     const next = s.replace(emptyRe, "");
@@ -124,7 +128,10 @@ function cleanHtml(input: string | null | undefined): string {
     s = next;
   }
 
-  // 7. Collapse 3+ blank lines
+  // 8. Remove orphan closing tags at end of doc (</div></div></p> trains)
+  s = s.replace(/(?:\s*<\/(?:div|p|span|section)>)+\s*$/gi, "");
+
+  // 9. Collapse 3+ blank lines
   s = s.replace(/\n{3,}/g, "\n\n").trim();
 
   return s;
