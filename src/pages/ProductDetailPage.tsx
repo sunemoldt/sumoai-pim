@@ -325,7 +325,10 @@ export default function ProductDetailPage() {
             {product.brand && <> · <span className="font-medium text-foreground">{product.brand}</span></>}
           </p>
         </div>
-        <SendToShopifyButton product={product} />
+        <div className="flex items-center gap-2">
+          <PullFromShopifyButton productId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
+          <SendToShopifyButton product={product} />
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-7">
