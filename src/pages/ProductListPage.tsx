@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2, LayoutGrid, List, Download } from "lucide-react";
+import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2, LayoutGrid, List, Download, Plus } from "lucide-react";
 import { downloadDineroCsv } from "@/lib/dinero-export";
 import ProductCard from "@/components/ProductCard";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
