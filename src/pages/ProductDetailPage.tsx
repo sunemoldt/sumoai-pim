@@ -428,6 +428,7 @@ export default function ProductDetailPage() {
         <TabsList>
           <TabsTrigger value="details">Produktdetaljer</TabsTrigger>
           <TabsTrigger value="attributes">Attributter</TabsTrigger>
+          <TabsTrigger value="variants">Varianter</TabsTrigger>
           <TabsTrigger value="pricing">Avance</TabsTrigger>
           <TabsTrigger value="suppliers">Leverandører</TabsTrigger>
           <TabsTrigger value="comparison">Sammenligning</TabsTrigger>
