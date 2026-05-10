@@ -285,7 +285,7 @@ Deno.serve(async (req) => {
       await supabase.from("product_change_log").insert(changeLogs);
     }
 
-    return new Response(JSON.stringify({ success: true, shopify_product_id: product.shopify_product_id, shopify_variant_id: product.shopify_variant_id, updated_fields: updatedFields }), {
+    return new Response(JSON.stringify({ success: true, shopify_product_id: product.shopify_product_id, shopify_variant_id: product.shopify_variant_id, updated_fields: updatedFields, skipped_fields: skippedFields }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
