@@ -44,6 +44,64 @@ function json(body: unknown, status: number) {
   });
 }
 
+// Deterministic HTML cleanup for Elementor / WP / pagebuilder cruft.
+// Removes balanced <div class="elementor-…">…</div> blocks (and similar),
+// strips builder-specific data-* attributes, shortcodes and empty wrappers.
+function stripBuilderBlocks(html: string): string {
+  let out = html;
+  // Repeatedly remove the innermost <div class="...elementor..."> ... </div>
+  // (handles nesting because we replace from the inside out)
+  const builderClassRe = /<div\b[^>]*class="[^"]*\b(elementor|et_pb_|vc_row|wpb_|fusion-|wp-block-)[^"]*"[^>]*>(?:(?!<div\b)[\s\S])*?<\/div>/gi;
+  for (let i = 0; i < 20; i++) {
+    const next = out.replace(builderClassRe, "");
+    if (next === out) break;
+    out = next;
+  }
+  // Same for <section>/<aside> wrappers
+  const builderSectionRe = /<(section|aside)\b[^>]*class="[^"]*\b(elementor|et_pb_|vc_|wpb_|fusion-|wp-block-)[^"]*"[^>]*>[\s\S]*?<\/\1>/gi;
+  for (let i = 0; i < 10; i++) {
+    const next = out.replace(builderSectionRe, "");
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
+function cleanHtml(input: string | null | undefined): string {
+  if (!input) return "";
+  let s = String(input);
+
+  // 1. Strip script/style/iframe noise (keep youtube? -> drop, they re-add via Shopify)
+  s = s.replace(/<script[\s\S]*?<\/script>/gi, "");
+  s = s.replace(/<style[\s\S]*?<\/style>/gi, "");
+  s = s.replace(/<!--[\s\S]*?-->/g, "");
+
+  // 2. Remove pagebuilder block wrappers (Elementor, Divi, VC, WPBakery, Fusion, Gutenberg)
+  s = stripBuilderBlocks(s);
+
+  // 3. Strip builder-specific attributes from any remaining tags
+  s = s.replace(/\s+(data-(elementor|id|element_type|e-type|widget_type|settings|model-cid|preserve-html|content-id)|wpc-filter-[a-z0-9_-]+)="[^"]*"/gi, "");
+
+  // 4. WP / Elementor shortcodes  [foo bar="baz"] ... [/foo]
+  s = s.replace(/\[\/?[a-z][a-z0-9_-]*[^\]]*\]/gi, "");
+
+  // 5. Collapse non-breaking spaces and stray entities
+  s = s.replace(/&nbsp;/g, " ");
+
+  // 6. Remove empty wrappers iteratively
+  const emptyRe = /<(p|div|span|section)\b[^>]*>\s*(?:<br\s*\/?>\s*)*<\/\1>/gi;
+  for (let i = 0; i < 10; i++) {
+    const next = s.replace(emptyRe, "");
+    if (next === s) break;
+    s = next;
+  }
+
+  // 7. Collapse 3+ blank lines
+  s = s.replace(/\n{3,}/g, "\n\n").trim();
+
+  return s;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
