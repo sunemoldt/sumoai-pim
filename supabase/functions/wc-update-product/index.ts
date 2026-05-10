@@ -44,6 +44,21 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+  // Global kill-switch: skip all WC calls if disabled in settings
+  {
+    const { data: flag } = await supabase
+      .from("analytics_settings")
+      .select("setting_value")
+      .eq("setting_key", "woocommerce_enabled")
+      .maybeSingle();
+    if (flag?.setting_value !== "true") {
+      return new Response(
+        JSON.stringify({ success: false, skipped: true, fallback: true, error: "WooCommerce-sync er deaktiveret i indstillinger." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+  }
+
   try {
     const body = await req.json();
     const {
