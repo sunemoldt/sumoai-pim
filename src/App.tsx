@@ -45,6 +45,7 @@ function AuthenticatedApp() {
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/products" element={<ProductListPage />} />
+        <Route path="/products/new" element={<NewProductPage />} />
         <Route path="/products/:id" element={<ProductDetailPage />} />
         <Route path="/suppliers" element={<SupplierListPage />} />
         <Route path="/import" element={<ImportPage />} />
