@@ -430,6 +430,8 @@ export default function SettingsPage() {
 
       <LanguageSettingsCard />
 
+      <FieldSyncPolicyCard />
+
       <WebhookFormDialog
         open={formOpen}
         onOpenChange={setFormOpen}
