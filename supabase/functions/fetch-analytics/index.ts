@@ -6,185 +6,200 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function wcFetch(storeUrl: string, endpoint: string, key: string, secret: string, params: Record<string, string> = {}) {
-  const url = new URL(`${storeUrl}/wp-json/${endpoint}`);
-  for (const [k, v] of Object.entries(params)) {
-    url.searchParams.set(k, v);
-  }
-  const auth = btoa(`${key}:${secret}`);
-  console.log(`WC fetch: ${url.toString()}`);
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Basic ${auth}` },
+const API_VERSION = "2026-04";
+
+async function shopifyGraphql(shopDomain: string, token: string, query: string, variables: Record<string, unknown> = {}) {
+  const res = await fetch(`https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
+    body: JSON.stringify({ query, variables }),
   });
-  const body = await res.text();
-  if (!res.ok) {
-    console.error(`WC error ${res.status}: ${body}`);
-    throw new Error(`WC API error (${endpoint}): ${res.status}`);
+  const data = await res.json();
+  if (!res.ok || data.errors) {
+    throw new Error(`Shopify GraphQL [${res.status}]: ${JSON.stringify(data.errors || data).slice(0, 400)}`);
   }
-  return JSON.parse(body);
+  return data.data;
 }
 
-async function fetchIAWPAnalytics(
-  storeUrl: string,
-  apiKey: string,
-  periodDays: number
-): Promise<Map<string, { views: number; visitors: number; sessions: number }>> {
-  const result = new Map<string, { views: number; visitors: number; sessions: number }>();
-  try {
-    const url = new URL(`${storeUrl}/wp-json/custom/v1/product-analytics`);
-    url.searchParams.set("days", String(periodDays));
-    url.searchParams.set("api_key", apiKey);
-    console.log(`IAWP fetch: ${url.toString().replace(apiKey, "***")}`);
-    const res = await fetch(url.toString());
-    const body = await res.text();
-    if (!res.ok) {
-      console.error(`IAWP error ${res.status}: ${body}`);
-      throw new Error(`IAWP API error: ${res.status}`);
+// Aggregate sales per product from orders in [startISO, endISO]
+async function fetchShopifySales(shopDomain: string, token: string, startISO: string, endISO: string) {
+  const stats = new Map<string, { items_sold: number; net_revenue: number; order_ids: Set<string> }>();
+  let cursor: string | null = null;
+  const queryFilter = `processed_at:>=${startISO} processed_at:<=${endISO}`;
+
+  for (let page = 0; page < 50; page++) {
+    const query = `#graphql
+      query Orders($cursor: String, $q: String!) {
+        orders(first: 100, after: $cursor, query: $q, sortKey: PROCESSED_AT) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            id
+            lineItems(first: 100) {
+              nodes {
+                quantity
+                originalTotalSet { shopMoney { amount } }
+                product { id }
+              }
+            }
+          }
+        }
+      }`;
+    const data = await shopifyGraphql(shopDomain, token, query, { cursor, q: queryFilter });
+    const nodes = data.orders.nodes ?? [];
+    for (const order of nodes) {
+      for (const li of order.lineItems.nodes ?? []) {
+        const gid = li.product?.id as string | undefined;
+        if (!gid) continue;
+        const pid = gid.split("/").pop()!;
+        const cur = stats.get(pid) ?? { items_sold: 0, net_revenue: 0, order_ids: new Set<string>() };
+        cur.items_sold += li.quantity ?? 0;
+        cur.net_revenue += parseFloat(li.originalTotalSet?.shopMoney?.amount ?? "0");
+        cur.order_ids.add(order.id);
+        stats.set(pid, cur);
+      }
     }
-    const data = JSON.parse(body);
-    console.log(`IAWP returned ${data.length} products with view data`);
-    for (const item of data) {
-      result.set(String(item.product_id), {
-        views: item.views || 0,
-        visitors: item.visitors || 0,
-        sessions: item.sessions || 0,
-      });
+    if (!data.orders.pageInfo.hasNextPage) break;
+    cursor = data.orders.pageInfo.endCursor;
+  }
+  return stats;
+}
+
+// ShopifyQL: product views & sessions per product over period
+async function fetchShopifyViews(shopDomain: string, token: string, startISO: string, endISO: string) {
+  const result = new Map<string, { views: number; sessions: number }>();
+  // ShopifyQL via `shopifyqlQuery` returns tabular data
+  const since = startISO.split("T")[0];
+  const until = endISO.split("T")[0];
+  const ql = `FROM products_analytics
+    SHOW product_views, sessions
+    GROUP BY product_id
+    SINCE ${since} UNTIL ${until}
+    LIMIT 1000`;
+  try {
+    const data = await shopifyGraphql(shopDomain, token, `#graphql
+      query($q: String!) {
+        shopifyqlQuery(query: $q) {
+          __typename
+          ... on TableResponse {
+            tableData {
+              columns { name dataType }
+              rowData
+            }
+          }
+          ... on ParseError { code message }
+        }
+      }`, { q: ql });
+    const r = data.shopifyqlQuery;
+    if (r?.__typename === "TableResponse") {
+      const cols: { name: string }[] = r.tableData.columns;
+      const idxProduct = cols.findIndex((c) => c.name === "product_id");
+      const idxViews = cols.findIndex((c) => c.name === "product_views");
+      const idxSessions = cols.findIndex((c) => c.name === "sessions");
+      for (const row of r.tableData.rowData as string[][]) {
+        const pid = String(row[idxProduct] ?? "").split("/").pop();
+        if (!pid) continue;
+        result.set(pid, {
+          views: parseInt(row[idxViews] ?? "0") || 0,
+          sessions: parseInt(row[idxSessions] ?? "0") || 0,
+        });
+      }
+    } else if (r?.__typename === "ParseError") {
+      console.warn(`ShopifyQL parse error: ${r.message}`);
     }
   } catch (e) {
-    console.error(`Could not fetch IAWP analytics: ${e.message}`);
+    console.warn(`ShopifyQL views unavailable: ${(e as Error).message}`);
   }
   return result;
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // Auth check
   const authHeader = req.headers.get("authorization");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
   if (!authHeader.includes(supabaseServiceKey)) {
-    const anonClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+    const anon = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user }, error: authError } = await anonClient.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const { data: { user }, error } = await anon.auth.getUser();
+    if (error || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
   }
 
   try {
-    const wcStoreUrl = Deno.env.get("WC_STORE_URL");
-    const wcKey = Deno.env.get("WC_CONSUMER_KEY");
-    const wcSecret = Deno.env.get("WC_CONSUMER_SECRET");
-    const iawpApiKey = Deno.env.get("IAWP_API_KEY");
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, supabaseServiceKey);
 
-    if (!wcStoreUrl) throw new Error("WC_STORE_URL not configured");
-    if (!wcKey) throw new Error("WC_CONSUMER_KEY not configured");
-    if (!wcSecret) throw new Error("WC_CONSUMER_SECRET not configured");
+    // Active Shopify connection
+    const { data: conn } = await supabase
+      .from("shopify_connection")
+      .select("shop_domain, access_token")
+      .order("is_active", { ascending: false })
+      .order("installed_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!conn) throw new Error("Ingen aktiv Shopify-forbindelse");
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Get settings
-    const { data: settings } = await supabase
-      .from("analytics_settings")
-      .select("setting_key, setting_value");
+    // Settings
+    const { data: settings } = await supabase.from("analytics_settings").select("setting_key, setting_value");
     const settingsMap: Record<string, string> = {};
-    (settings || []).forEach((s: any) => { settingsMap[s.setting_key] = s.setting_value; });
-
+    (settings ?? []).forEach((s: { setting_key: string; setting_value: string }) => { settingsMap[s.setting_key] = s.setting_value; });
     const periodDays = parseInt(settingsMap["analysis_period_days"] || "30");
     const lowStockThreshold = parseInt(settingsMap["low_stock_threshold"] || "5");
 
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - periodDays);
-    const startStr = startDate.toISOString().split("T")[0];
-    const endStr = endDate.toISOString().split("T")[0];
+    const startISO = startDate.toISOString();
+    const endISO = endDate.toISOString();
+    const startStr = startISO.split("T")[0];
+    const endStr = endISO.split("T")[0];
 
-    console.log(`Period: ${startStr} to ${endStr} (${periodDays} days)`);
+    console.log(`Shopify analytics period: ${startStr} → ${endStr} (${periodDays}d) on ${conn.shop_domain}`);
 
-    // Get products from our DB
+    // Products with Shopify mapping
     const { data: products } = await supabase
       .from("master_products")
-      .select("id, title, sku, ean, stock_quantity, webshop_price, sale_price, webshop_product_id, webshop_parent_id");
-
-    if (!products || products.length === 0) {
-      return new Response(JSON.stringify({ message: "No products found" }), {
+      .select("id, title, sku, ean, stock_quantity, webshop_price, sale_price, shopify_product_id")
+      .not("shopify_product_id", "is", null);
+    if (!products?.length) {
+      return new Response(JSON.stringify({ message: "Ingen Shopify-produkter fundet" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Build WC product ID → master product map
-    const wcIdToProduct = new Map<string, any>();
+    const shopifyIdToProduct = new Map<string, typeof products[number]>();
     for (const p of products) {
-      if (p.webshop_product_id) wcIdToProduct.set(p.webshop_product_id, p);
-      if (p.webshop_parent_id) wcIdToProduct.set(p.webshop_parent_id, p);
+      if (p.shopify_product_id) shopifyIdToProduct.set(String(p.shopify_product_id), p);
     }
+    console.log(`Products in DB: ${products.length}, with Shopify IDs: ${shopifyIdToProduct.size}`);
 
-    console.log(`Products in DB: ${products.length}, with WC IDs: ${wcIdToProduct.size}`);
-
-    // Fetch WC sales stats and IAWP page views in parallel
-    const [salesResult, iawpViews] = await Promise.all([
-      fetchWCSalesStats(wcStoreUrl, wcKey, wcSecret, startStr, endStr),
-      iawpApiKey ? fetchIAWPAnalytics(wcStoreUrl, iawpApiKey, periodDays) : Promise.resolve(new Map()),
+    const [salesStats, viewStats] = await Promise.all([
+      fetchShopifySales(conn.shop_domain, conn.access_token, startISO, endISO),
+      fetchShopifyViews(conn.shop_domain, conn.access_token, startISO, endISO),
     ]);
 
-    const { productStats, usedEndpoint } = salesResult;
+    console.log(`Shopify sales: ${salesStats.size} products | views: ${viewStats.size} products`);
 
-    // Map WC stats to our products
-    const statsByProductId = new Map<string, { items_sold: number; net_revenue: number; orders_count: number }>();
-    for (const stat of productStats) {
-      const wcId = String(stat.product_id);
-      const product = wcIdToProduct.get(wcId);
-      if (product) {
-        const existing = statsByProductId.get(product.id) || { items_sold: 0, net_revenue: 0, orders_count: 0 };
-        existing.items_sold += stat.items_sold || 0;
-        existing.net_revenue += parseFloat(stat.net_revenue || "0");
-        existing.orders_count += stat.orders_count || 0;
-        statsByProductId.set(product.id, existing);
-      }
-    }
-
-    // Map IAWP views to our products
-    const viewsByProductId = new Map<string, { views: number; visitors: number; sessions: number }>();
-    for (const [wcId, viewData] of iawpViews) {
-      const product = wcIdToProduct.get(wcId);
-      if (product) {
-        const existing = viewsByProductId.get(product.id) || { views: 0, visitors: 0, sessions: 0 };
-        existing.views += viewData.views;
-        existing.visitors += viewData.visitors;
-        existing.sessions += viewData.sessions;
-        viewsByProductId.set(product.id, existing);
-      }
-    }
-
-    console.log(`Matched ${statsByProductId.size} products with sales data, ${viewsByProductId.size} with view data`);
-
-    // Batch upsert analytics
-    const analyticsRows = [];
-    const recommendations: any[] = [];
+    const analyticsRows: Record<string, unknown>[] = [];
+    const recommendations: Record<string, unknown>[] = [];
+    let matchedSales = 0, matchedViews = 0;
 
     for (const product of products) {
-      if (!product.webshop_product_id) continue;
-
-      const stats = statsByProductId.get(product.id);
-      const views = viewsByProductId.get(product.id);
-      const purchases = stats?.items_sold || 0;
-      const ordersCount = stats?.orders_count || 0;
-      const pageViews = views?.views || 0;
-
-      // Calculate conversion rate: purchases / page_views
-      const conversionRate = pageViews > 0 ? Math.round((purchases / pageViews) * 10000) / 100 : 0;
+      const sId = String(product.shopify_product_id);
+      const sale = salesStats.get(sId);
+      const view = viewStats.get(sId);
+      if (sale) matchedSales++;
+      if (view) matchedViews++;
+      const purchases = sale?.items_sold ?? 0;
+      const ordersCount = sale?.order_ids.size ?? 0;
+      const netRevenue = sale?.net_revenue ?? 0;
+      const pageViews = view?.views ?? 0;
+      const sessions = view?.sessions ?? 0;
+      const conversionRate = sessions > 0 ? Math.round((ordersCount / sessions) * 10000) / 100 : 0;
 
       analyticsRows.push({
         master_product_id: product.id,
@@ -194,7 +209,7 @@ serve(async (req) => {
         add_to_carts: 0,
         purchases,
         conversion_rate: conversionRate,
-        impressions: views?.sessions || 0,
+        impressions: sessions,
         clicks: ordersCount,
         avg_position: 0,
         ctr: 0,
@@ -202,129 +217,65 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       });
 
-      // Recommendations
       if (purchases > 0 && (product.stock_quantity ?? 0) <= lowStockThreshold) {
         recommendations.push({
           master_product_id: product.id,
           recommendation_type: "high_traffic_low_stock",
           severity: "warning",
           title: "Populært produkt med lavt lager",
-          description: `Produktet har solgt ${purchases} stk. de sidste ${periodDays} dage, men lagerbeholdningen er kun ${product.stock_quantity ?? 0} stk.`,
+          description: `Solgt ${purchases} stk. de sidste ${periodDays} dage på Shopify, lager er ${product.stock_quantity ?? 0} stk.`,
           action_suggestion: "Bestil varen hjem hos den billigste leverandør hurtigst muligt.",
-          data: { purchases, stock: product.stock_quantity, page_views: pageViews, conversion_rate: conversionRate },
+          data: { purchases, stock: product.stock_quantity, page_views: pageViews, sessions, net_revenue: netRevenue, conversion_rate: conversionRate },
         });
       }
     }
 
-    // Upsert in batches of 50
     let upsertedCount = 0;
     for (let i = 0; i < analyticsRows.length; i += 50) {
       const batch = analyticsRows.slice(i, i + 50);
       const { error } = await supabase
         .from("product_analytics")
         .upsert(batch, { onConflict: "master_product_id,period_start,period_end" });
-      if (error) {
-        console.error(`Upsert batch error: ${error.message}`);
-      } else {
-        upsertedCount += batch.length;
-      }
+      if (error) console.error(`Upsert batch error: ${error.message}`);
+      else upsertedCount += batch.length;
     }
-
     console.log(`Upserted ${upsertedCount} analytics rows`);
 
-    // Clear old recommendations and insert new
     if (recommendations.length > 0) {
-      await supabase
-        .from("product_recommendations")
-        .delete()
-        .is("resolved_at", null)
-        .eq("is_dismissed", false);
-      await supabase
-        .from("product_recommendations")
-        .insert(recommendations);
-    }
+      await supabase.from("product_recommendations").delete().is("resolved_at", null).eq("is_dismissed", false).eq("recommendation_type", "high_traffic_low_stock");
+      await supabase.from("product_recommendations").insert(recommendations);
 
-    // Fire webhooks
-    if (recommendations.length > 0) {
-      const { data: webhooks } = await supabase
-        .from("webhook_configs")
-        .select("*")
-        .eq("is_active", true);
-      for (const webhook of webhooks || []) {
-        const eventTypes = webhook.event_types || [];
-        const matchingRecs = recommendations.filter((r: any) => eventTypes.includes(r.recommendation_type));
-        if (matchingRecs.length > 0) {
+      const { data: webhooks } = await supabase.from("webhook_configs").select("*").eq("is_active", true);
+      for (const webhook of webhooks ?? []) {
+        const eventTypes = webhook.event_types ?? [];
+        const matching = recommendations.filter((r) => eventTypes.includes((r as { recommendation_type: string }).recommendation_type));
+        if (matching.length > 0) {
           try {
             await fetch(webhook.url, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ event: "product_recommendations", recommendations: matchingRecs, timestamp: new Date().toISOString() }),
+              body: JSON.stringify({ event: "product_recommendations", recommendations: matching, timestamp: new Date().toISOString() }),
             });
-          } catch (e) {
-            console.error(`Webhook failed: ${e}`);
-          }
+          } catch (e) { console.error(`Webhook failed: ${e}`); }
         }
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        endpoint_used: usedEndpoint,
-        analytics_updated: upsertedCount,
-        products_with_sales: statsByProductId.size,
-        products_with_views: viewsByProductId.size,
-        recommendations_created: recommendations.length,
-        period: { start: startStr, end: endStr, days: periodDays },
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error: any) {
-    console.error("Error in fetch-analytics:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({
+      success: true,
+      source: "shopify",
+      shop_domain: conn.shop_domain,
+      analytics_updated: upsertedCount,
+      products_with_sales: matchedSales,
+      products_with_views: matchedViews,
+      recommendations_created: recommendations.length,
+      period: { start: startStr, end: endStr, days: periodDays },
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Ukendt fejl";
+    console.error("fetch-analytics error:", message);
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
-
-// Extracted: fetch WC sales statistics
-async function fetchWCSalesStats(
-  wcStoreUrl: string,
-  wcKey: string,
-  wcSecret: string,
-  startStr: string,
-  endStr: string
-): Promise<{ productStats: any[]; usedEndpoint: string }> {
-  try {
-    const stats = await wcFetch(wcStoreUrl, "wc-analytics/reports/products", wcKey, wcSecret, {
-      after: `${startStr}T00:00:00`,
-      before: `${endStr}T23:59:59`,
-      per_page: "100",
-      orderby: "items_sold",
-      order: "desc",
-    });
-    console.log(`WC Analytics returned ${stats.length} products`);
-    return { productStats: stats, usedEndpoint: "wc-analytics/reports/products" };
-  } catch (e) {
-    console.log(`WC Analytics endpoint failed, trying classic: ${e.message}`);
-    try {
-      const topSellers = await wcFetch(wcStoreUrl, "wc/v3/reports/top_sellers", wcKey, wcSecret, {
-        date_min: startStr,
-        date_max: endStr,
-        per_page: "100",
-      });
-      const productStats = topSellers.map((t: any) => ({
-        product_id: t.product_id,
-        items_sold: t.quantity,
-        net_revenue: 0,
-        orders_count: 0,
-      }));
-      console.log(`Classic top_sellers returned ${topSellers.length} items`);
-      return { productStats, usedEndpoint: "wc/v3/reports/top_sellers" };
-    } catch (e2) {
-      console.error(`Both WC endpoints failed: ${e2.message}`);
-      throw new Error(`Could not fetch WC stats: ${e2.message}`);
-    }
-  }
-}
