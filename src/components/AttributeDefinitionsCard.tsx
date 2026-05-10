@@ -93,7 +93,7 @@ export default function AttributeDefinitionsCard() {
     const sources = selectedRows.filter((r) => r.id !== targetId);
     if (sources.length === 0) return;
     setMerging(true);
-    let totalProducts = 0, totalVariants = 0;
+    let totalProducts = 0, totalVariants = 0, totalQueued = 0;
     try {
       for (const src of sources) {
         const { data, error } = await supabase.rpc("merge_attribute_definitions" as any, {
@@ -104,10 +104,11 @@ export default function AttributeDefinitionsCard() {
         const d = data as any;
         totalProducts += d?.products_updated ?? 0;
         totalVariants += d?.variants_updated ?? 0;
+        totalQueued += d?.queued_for_shopify ?? 0;
       }
       toast({
         title: "Flettet",
-        description: `${sources.length} attribut(ter) flettet. ${totalProducts} produkter og ${totalVariants} varianter opdateret.`,
+        description: `${sources.length} attribut(ter) flettet. ${totalProducts} produkter og ${totalVariants} varianter opdateret. ${totalQueued} lagt i Shopify-kø.`,
       });
       setMergeOpen(false);
       load();
