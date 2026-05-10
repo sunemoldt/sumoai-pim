@@ -21,7 +21,8 @@ import ProductTranslationsTab from "@/components/ProductTranslationsTab";
 import InlineEditField from "@/components/InlineEditField";
 import SyncTagsEditor from "@/components/SyncTagsEditor";
 import DescriptionAiActions from "@/components/DescriptionAiActions";
-import { LifecycleBadge, SendToShopifyButton } from "@/components/LifecycleControls";
+import { LifecycleBadge, SendToShopifyButton, PullFromShopifyButton } from "@/components/LifecycleControls";
+import ProductVariantsTab from "@/components/ProductVariantsTab";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
@@ -324,7 +325,10 @@ export default function ProductDetailPage() {
             {product.brand && <> · <span className="font-medium text-foreground">{product.brand}</span></>}
           </p>
         </div>
-        <SendToShopifyButton product={product} />
+        <div className="flex items-center gap-2">
+          <PullFromShopifyButton productId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
+          <SendToShopifyButton product={product} />
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-7">
@@ -427,6 +431,7 @@ export default function ProductDetailPage() {
         <TabsList>
           <TabsTrigger value="details">Produktdetaljer</TabsTrigger>
           <TabsTrigger value="attributes">Attributter</TabsTrigger>
+          <TabsTrigger value="variants">Varianter</TabsTrigger>
           <TabsTrigger value="pricing">Avance</TabsTrigger>
           <TabsTrigger value="suppliers">Leverandører</TabsTrigger>
           <TabsTrigger value="comparison">Sammenligning</TabsTrigger>
@@ -1406,6 +1411,10 @@ export default function ProductDetailPage() {
 
         <TabsContent value="translations" className="space-y-4 mt-4">
           <ProductTranslationsTab product={product} />
+        </TabsContent>
+
+        <TabsContent value="variants" className="space-y-4 mt-4">
+          <ProductVariantsTab masterProductId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
         </TabsContent>
 
         <TabsContent value="changelog" className="space-y-4 mt-4">
