@@ -21,7 +21,7 @@ import ProductTranslationsTab from "@/components/ProductTranslationsTab";
 import InlineEditField from "@/components/InlineEditField";
 import SyncTagsEditor from "@/components/SyncTagsEditor";
 import DescriptionAiActions from "@/components/DescriptionAiActions";
-import { LifecycleBadge, SendToShopifyButton } from "@/components/LifecycleControls";
+import { LifecycleBadge, SendToShopifyButton, PullFromShopifyButton } from "@/components/LifecycleControls";
 import ProductVariantsTab from "@/components/ProductVariantsTab";
 
 export default function ProductDetailPage() {
