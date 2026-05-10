@@ -313,13 +313,17 @@ export default function ProductDetailPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-foreground">{product.title}</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-semibold text-foreground">{product.title}</h1>
+            <LifecycleBadge status={(product as any).lifecycle_status ?? "active"} />
+          </div>
           <p className="text-sm text-muted-foreground">
             EAN: {product.ean}
             {(product as any).sku && <> · SKU: <span className="font-mono">{(product as any).sku}</span></>}
             {product.brand && <> · <span className="font-medium text-foreground">{product.brand}</span></>}
           </p>
         </div>
+        <SendToShopifyButton product={product} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-7">
