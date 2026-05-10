@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import WebhookFormDialog from "@/components/WebhookFormDialog";
 import LanguageSettingsCard from "@/components/LanguageSettingsCard";
+import FieldSyncPolicyCard from "@/components/FieldSyncPolicyCard";
 
 export default function SettingsPage() {
   const { data: priceSettings = [] } = usePriceSettings();
@@ -428,6 +429,8 @@ export default function SettingsPage() {
       </Card>
 
       <LanguageSettingsCard />
+
+      <FieldSyncPolicyCard />
 
       <WebhookFormDialog
         open={formOpen}

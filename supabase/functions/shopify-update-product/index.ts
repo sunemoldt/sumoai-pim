@@ -74,13 +74,20 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: product, error: productError } = await supabase
       .from("master_products")
-      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, shopify_product_id, shopify_variant_id, short_description, long_description")
+      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, shopify_product_id, shopify_variant_id, short_description, long_description, lifecycle_status")
       .eq("id", master_product_id)
       .single();
 
     if (productError || !product) {
       return new Response(JSON.stringify({ error: "Product not found", details: productError?.message }), {
         status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (product.lifecycle_status === "draft") {
+      return new Response(JSON.stringify({ skipped: true, reason: "lifecycle=draft", message: "Produktet er en kladde og er ikke sendt til Shopify endnu." }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -107,7 +114,22 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Load field sync policy and skip fields where PIM is not master/push
+    const { data: policyRows } = await supabase
+      .from("field_sync_policy")
+      .select("field_name, master, direction");
+    const policy = new Map<string, { master: string; direction: string }>(
+      (policyRows ?? []).map((r) => [r.field_name, { master: r.master, direction: r.direction }])
+    );
+    const canPush = (field: string) => {
+      const p = policy.get(field);
+      if (!p) return true; // unknown field => allow
+      if (p.master !== "pim") return false;
+      return p.direction === "push" || p.direction === "two_way";
+    };
+
     const updatedFields: string[] = [];
+    const skippedFields: string[] = [];
     const dbUpdate: Record<string, unknown> = {};
     const changeLogs: { master_product_id: string; change_type: string; field_name: string; old_value: string | null; new_value: string | null; source: string }[] = [];
     const logChange = (field: string, oldVal: unknown, newVal: unknown, type: string) => {
@@ -121,45 +143,54 @@ Deno.serve(async (req) => {
 
     const variantInput: Record<string, unknown> = { id: variantGid };
     if (regular_price !== undefined && regular_price !== null) {
-      variantInput.price = String(regular_price);
-      dbUpdate.webshop_price = regular_price;
-      logChange("webshop_price", product.webshop_price, regular_price, "price_update");
-      updatedFields.push("price");
+      if (canPush("webshop_price")) {
+        variantInput.price = String(regular_price);
+        dbUpdate.webshop_price = regular_price;
+        logChange("webshop_price", product.webshop_price, regular_price, "price_update");
+        updatedFields.push("price");
+      } else { skippedFields.push("webshop_price"); }
     }
     if (sale_price !== undefined) {
-      variantInput.compareAtPrice = sale_price !== null ? String(sale_price) : null;
-      dbUpdate.sale_price = sale_price;
-      logChange("sale_price", product.sale_price, sale_price, "price_update");
-      updatedFields.push("compareAtPrice");
+      if (canPush("sale_price")) {
+        variantInput.compareAtPrice = sale_price !== null ? String(sale_price) : null;
+        dbUpdate.sale_price = sale_price;
+        logChange("sale_price", product.sale_price, sale_price, "price_update");
+        updatedFields.push("compareAtPrice");
+      } else { skippedFields.push("sale_price"); }
     }
     const inventoryPolicy = toInventoryPolicy(backorders);
     if (inventoryPolicy) {
-      variantInput.inventoryPolicy = inventoryPolicy;
-      const allowed = inventoryPolicy === "CONTINUE";
-      dbUpdate.backorders_allowed = allowed;
-      logChange("backorders_allowed", product.backorders_allowed, allowed, "stock_update");
-      updatedFields.push("inventoryPolicy");
+      if (canPush("backorders_allowed")) {
+        variantInput.inventoryPolicy = inventoryPolicy;
+        const allowed = inventoryPolicy === "CONTINUE";
+        dbUpdate.backorders_allowed = allowed;
+        logChange("backorders_allowed", product.backorders_allowed, allowed, "stock_update");
+        updatedFields.push("inventoryPolicy");
+      } else { skippedFields.push("backorders_allowed"); }
     }
 
     // Product-level update (description / excerpt)
     const productInput: Record<string, unknown> = { id: productGid };
     if (description !== undefined && description !== null) {
-      productInput.descriptionHtml = String(description);
-      dbUpdate.long_description = description;
-      logChange("long_description", product.long_description, description, "description_update");
-      updatedFields.push("descriptionHtml");
+      if (canPush("long_description")) {
+        productInput.descriptionHtml = String(description);
+        dbUpdate.long_description = description;
+        logChange("long_description", product.long_description, description, "description_update");
+        updatedFields.push("descriptionHtml");
+      } else { skippedFields.push("long_description"); }
     }
     if (short_description !== undefined && short_description !== null) {
-      // Shopify uses metafield or seo.description for excerpt; use metafield namespace "custom" for safety
-      productInput.metafields = [{
-        namespace: "custom",
-        key: "short_description",
-        type: "multi_line_text_field",
-        value: String(short_description),
-      }];
-      dbUpdate.short_description = short_description;
-      logChange("short_description", product.short_description, short_description, "description_update");
-      updatedFields.push("short_description");
+      if (canPush("short_description")) {
+        productInput.metafields = [{
+          namespace: "custom",
+          key: "short_description",
+          type: "multi_line_text_field",
+          value: String(short_description),
+        }];
+        dbUpdate.short_description = short_description;
+        logChange("short_description", product.short_description, short_description, "description_update");
+        updatedFields.push("short_description");
+      } else { skippedFields.push("short_description"); }
     }
     if (Object.keys(productInput).length > 1) {
       const productMutation = `#graphql
@@ -191,56 +222,60 @@ Deno.serve(async (req) => {
     }
 
     if (stock_quantity !== undefined && stock_quantity !== null) {
-      // 2026-04: use inventorySetQuantities (absolute set, no read-current required)
-      // Also use includeInactive on locations so we don't accidentally write to deactivated ones
-      const inventoryQuery = `#graphql
-        query VariantInventory($id: ID!) {
-          productVariant(id: $id) {
-            inventoryItem {
-              id
-              inventoryLevels(first: 10) {
-                nodes {
-                  location { id }
-                  quantities(names: ["available"]) { name quantity }
+      if (!canPush("stock_quantity")) {
+        skippedFields.push("stock_quantity");
+      } else {
+        const inventoryQuery = `#graphql
+          query VariantInventory($id: ID!) {
+            productVariant(id: $id) {
+              inventoryItem {
+                id
+                inventoryLevels(first: 10) {
+                  nodes {
+                    location { id }
+                    quantities(names: ["available"]) { name quantity }
+                  }
                 }
               }
             }
-          }
-          locations(first: 5, includeInactive: false) { nodes { id } }
-        }`;
-      const inventoryData = await shopifyGraphql(conn.shop_domain, conn.access_token, inventoryQuery, { id: variantGid });
-      const inventoryItemId = inventoryData.productVariant?.inventoryItem?.id;
-      const levels = inventoryData.productVariant?.inventoryItem?.inventoryLevels?.nodes ?? [];
-      const firstLevel = levels[0];
-      const locationId = firstLevel?.location?.id ?? inventoryData.locations?.nodes?.[0]?.id;
-      const currentQty = firstLevel?.quantities?.find((q: { name: string }) => q.name === "available")?.quantity ?? 0;
-
-      if (inventoryItemId && locationId) {
-        const setMutation = `#graphql
-          mutation SetInventory($input: InventorySetQuantitiesInput!) {
-            inventorySetQuantities(input: $input) @idempotent(key: "${crypto.randomUUID()}") {
-              userErrors { field message }
-            }
+            locations(first: 5, includeInactive: false) { nodes { id } }
           }`;
-        const setData = await shopifyGraphql(conn.shop_domain, conn.access_token, setMutation, {
-          input: {
-            name: "available",
-            reason: "correction",
-            quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity), changeFromQuantity: Number(currentQty) }],
-          },
-        });
-        const errors = setData.inventorySetQuantities.userErrors;
-        if (errors?.length) throw new Error(errors.map((e: { message: string }) => e.message).join(", "));
+        const inventoryData = await shopifyGraphql(conn.shop_domain, conn.access_token, inventoryQuery, { id: variantGid });
+        const inventoryItemId = inventoryData.productVariant?.inventoryItem?.id;
+        const levels = inventoryData.productVariant?.inventoryItem?.inventoryLevels?.nodes ?? [];
+        const firstLevel = levels[0];
+        const locationId = firstLevel?.location?.id ?? inventoryData.locations?.nodes?.[0]?.id;
+        const currentQty = firstLevel?.quantities?.find((q: { name: string }) => q.name === "available")?.quantity ?? 0;
+
+        if (inventoryItemId && locationId) {
+          const setMutation = `#graphql
+            mutation SetInventory($input: InventorySetQuantitiesInput!) {
+              inventorySetQuantities(input: $input) @idempotent(key: "${crypto.randomUUID()}") {
+                userErrors { field message }
+              }
+            }`;
+          const setData = await shopifyGraphql(conn.shop_domain, conn.access_token, setMutation, {
+            input: {
+              name: "available",
+              reason: "correction",
+              quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity), changeFromQuantity: Number(currentQty) }],
+            },
+          });
+          const errors = setData.inventorySetQuantities.userErrors;
+          if (errors?.length) throw new Error(errors.map((e: { message: string }) => e.message).join(", "));
+        }
+        dbUpdate.stock_quantity = stock_quantity;
+        logChange("stock_quantity", product.stock_quantity, stock_quantity, "stock_update");
+        updatedFields.push("stock_quantity");
       }
-      dbUpdate.stock_quantity = stock_quantity;
-      logChange("stock_quantity", product.stock_quantity, stock_quantity, "stock_update");
-      updatedFields.push("stock_quantity");
     }
 
     if (stock_status) {
-      dbUpdate.stock_status = stock_status;
-      logChange("stock_status", product.stock_status, stock_status, "stock_update");
-      updatedFields.push("stock_status");
+      if (canPush("stock_status")) {
+        dbUpdate.stock_status = stock_status;
+        logChange("stock_status", product.stock_status, stock_status, "stock_update");
+        updatedFields.push("stock_status");
+      } else { skippedFields.push("stock_status"); }
     }
 
     if (Object.keys(dbUpdate).length > 0) {
@@ -250,7 +285,7 @@ Deno.serve(async (req) => {
       await supabase.from("product_change_log").insert(changeLogs);
     }
 
-    return new Response(JSON.stringify({ success: true, shopify_product_id: product.shopify_product_id, shopify_variant_id: product.shopify_variant_id, updated_fields: updatedFields }), {
+    return new Response(JSON.stringify({ success: true, shopify_product_id: product.shopify_product_id, shopify_variant_id: product.shopify_variant_id, updated_fields: updatedFields, skipped_fields: skippedFields }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
