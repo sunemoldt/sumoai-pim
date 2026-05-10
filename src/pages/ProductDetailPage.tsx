@@ -1414,7 +1414,7 @@ export default function ProductDetailPage() {
         </TabsContent>
 
         <TabsContent value="variants" className="space-y-4 mt-4">
-          <ProductVariantsTab masterProductId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
+          <ProductVariantsTab masterProductId={product.id} hasShopify={Boolean(product.shopify_product_id)} shopifyProductId={product.shopify_product_id ?? null} />
         </TabsContent>
 
         <TabsContent value="changelog" className="space-y-4 mt-4">

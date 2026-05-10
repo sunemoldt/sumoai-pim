@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2, LayoutGrid, List, Download } from "lucide-react";
+import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2, LayoutGrid, List, Download, Plus } from "lucide-react";
 import { downloadDineroCsv } from "@/lib/dinero-export";
 import ProductCard from "@/components/ProductCard";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -377,6 +377,9 @@ export default function ProductListPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => navigate("/products/new")}>
+            <Plus className="h-3.5 w-3.5" /> Opret produkt
+          </Button>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
