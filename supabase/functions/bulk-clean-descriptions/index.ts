@@ -160,6 +160,7 @@ Deno.serve(async (req) => {
       limit,
       mode = "ai",
       eans,
+      force_push = false,
     } = body as {
       brand?: string;
       sync_target?: "shopify" | "woocommerce" | "none";
@@ -168,6 +169,7 @@ Deno.serve(async (req) => {
       limit?: number;
       mode?: "ai" | "regex";
       eans?: string[];
+      force_push?: boolean;
     };
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -206,8 +208,8 @@ Deno.serve(async (req) => {
       .single();
     const logId = logRow?.id as string | undefined;
 
-    const CONCURRENCY = mode === "regex" ? 4 : 2;
-    const DELAY_MS = mode === "regex" ? 100 : 400;
+    const CONCURRENCY = force_push ? 1 : (mode === "regex" ? 4 : 2);
+    const DELAY_MS = force_push ? 600 : (mode === "regex" ? 100 : 400);
     let cursor = 0;
     const results: Result[] = [];
 
@@ -228,7 +230,7 @@ Deno.serve(async (req) => {
             const unchanged =
               newShort === (p.short_description ?? "") &&
               newLong === (p.long_description ?? "");
-            if (unchanged) {
+            if (unchanged && !force_push) {
               r.status = "skipped";
               r.step = "no_changes";
               results.push(r);
@@ -270,6 +272,7 @@ Deno.serve(async (req) => {
                   master_product_id: p.id,
                   description: newLong,
                   short_description: newShort,
+                  force: force_push === true,
                 });
                 r.step = "synced_shopify";
               }
