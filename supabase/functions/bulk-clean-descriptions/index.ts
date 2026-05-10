@@ -118,30 +118,40 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const {
-      brand = "ubiquiti",
+      brand = "",
       sync_target = "shopify",
       dry_run = false,
       only_dirty = true,
       limit,
+      mode = "ai",
+      eans,
     } = body as {
       brand?: string;
       sync_target?: "shopify" | "woocommerce" | "none";
       dry_run?: boolean;
       only_dirty?: boolean;
       limit?: number;
+      mode?: "ai" | "regex";
+      eans?: string[];
     };
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { data: products, error: pErr } = await supabase
+    let query = supabase
       .from("master_products")
       .select("id, ean, title, brand, short_description, long_description, shopify_product_id, webshop_product_id, webshop_parent_id")
-      .or(`brand.ilike.${brand}%,title.ilike.${brand}%`)
-      .not("webshop_product_id", "is", null)
+      .not("shopify_product_id", "is", null)
       .is("webshop_parent_id", null);
+    if (brand && brand.length > 0) {
+      query = query.or(`brand.ilike.${brand}%,title.ilike.${brand}%`);
+    }
+    if (eans && eans.length > 0) {
+      query = query.in("ean", eans);
+    }
+    const { data: products, error: pErr } = await query.limit(2000);
     if (pErr) return json({ error: pErr.message }, 500);
 
-    const dirtyRegex = /\[[a-z_]+[^\]]*\]|et_pb_|vc_row|wp-block|data-elementor|fusion_|<!--|style="|class="/i;
+    const dirtyRegex = /\[[a-z_]+[^\]]*\]|et_pb_|vc_row|wp-block|data-elementor|fusion_|<!--|elementor-element|wpc-filter-/i;
     const candidates = (products ?? []).filter((p) => {
       if (!only_dirty) return true;
       const blob = `${p.short_description ?? ""}\n${p.long_description ?? ""}`;
@@ -149,7 +159,7 @@ Deno.serve(async (req) => {
     });
     const slice = limit ? candidates.slice(0, limit) : candidates;
 
-    console.log(`bulk-clean: ${slice.length} candidates (dry=${dry_run}, target=${sync_target})`);
+    console.log(`bulk-clean: ${slice.length} candidates (mode=${mode}, dry=${dry_run}, target=${sync_target})`);
 
     const { data: logRow } = await supabase
       .from("import_logs")
@@ -158,8 +168,8 @@ Deno.serve(async (req) => {
       .single();
     const logId = logRow?.id as string | undefined;
 
-    const CONCURRENCY = 2;
-    const DELAY_MS = 400;
+    const CONCURRENCY = mode === "regex" ? 4 : 2;
+    const DELAY_MS = mode === "regex" ? 100 : 400;
     let cursor = 0;
     const results: Result[] = [];
 
@@ -171,12 +181,41 @@ Deno.serve(async (req) => {
         const r: Result = { id: p.id, ean: p.ean, title: p.title, status: "ok" };
 
         try {
-          const ai = await callFn("ai-rewrite-description", { productId: p.id, mode: "clean" });
-          const newShort = ai.short_description ?? p.short_description ?? "";
-          const newLong = ai.long_description ?? p.long_description ?? "";
+          let newShort: string;
+          let newLong: string;
+
+          if (mode === "regex") {
+            newShort = cleanHtml(p.short_description);
+            newLong = cleanHtml(p.long_description);
+            const unchanged =
+              newShort === (p.short_description ?? "") &&
+              newLong === (p.long_description ?? "");
+            if (unchanged) {
+              r.status = "skipped";
+              r.step = "no_changes";
+              results.push(r);
+              if (logId) {
+                const errs = results.filter((x) => x.status === "error").map((x) => ({ ean: x.ean, msg: x.message }));
+                const done = results.length === slice.length;
+                await supabase.from("import_logs").update({
+                  imported: results.filter((x) => x.status === "ok").length,
+                  skipped: results.filter((x) => x.status === "skipped").length,
+                  errors: errs,
+                  status: done ? "completed" : "running",
+                  completed_at: done ? new Date().toISOString() : null,
+                }).eq("id", logId);
+              }
+              await sleep(DELAY_MS);
+              continue;
+            }
+          } else {
+            const ai = await callFn("ai-rewrite-description", { productId: p.id, mode: "clean" });
+            newShort = ai.short_description ?? p.short_description ?? "";
+            newLong = ai.long_description ?? p.long_description ?? "";
+          }
 
           if (dry_run) {
-            r.step = "dry_run_ai_done";
+            r.step = `dry_run_${mode}_done`;
           } else {
             const { error: uErr } = await supabase
               .from("master_products")
