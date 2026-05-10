@@ -122,6 +122,7 @@ Deno.serve(async (req) => {
       (policyRows ?? []).map((r) => [r.field_name, { master: r.master, direction: r.direction }])
     );
     const canPush = (field: string) => {
+      if (force === true) return true;
       const p = policy.get(field);
       if (!p) return true; // unknown field => allow
       if (p.master !== "pim") return false;
