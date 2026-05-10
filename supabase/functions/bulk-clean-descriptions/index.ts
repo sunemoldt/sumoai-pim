@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
             const unchanged =
               newShort === (p.short_description ?? "") &&
               newLong === (p.long_description ?? "");
-            if (unchanged) {
+            if (unchanged && !force_push) {
               r.status = "skipped";
               r.step = "no_changes";
               results.push(r);
