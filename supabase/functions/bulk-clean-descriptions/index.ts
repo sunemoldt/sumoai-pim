@@ -290,9 +290,33 @@ Deno.serve(async (req) => {
                     r.shopify = "synced";
                   }
                 } catch (sErr) {
-                  r.shopify = "error";
-                  r.shopify_reason = sErr instanceof Error ? sErr.message : String(sErr);
-                  throw sErr;
+                  const msg = sErr instanceof Error ? sErr.message : String(sErr);
+                  // Supabase function-to-function or Shopify rate limit → enqueue directly
+                  if (/rate limit|429|throttle/i.test(msg)) {
+                    const { error: qErr } = await supabase.from("shopify_update_queue").insert({
+                      master_product_id: p.id,
+                      payload: {
+                        master_product_id: p.id,
+                        description: newLong,
+                        short_description: newShort,
+                        force: force_push === true,
+                      },
+                      source: "bulk-clean-descriptions",
+                      status: "pending",
+                    });
+                    if (qErr) {
+                      r.shopify = "error";
+                      r.shopify_reason = `kø-fejl: ${qErr.message}`;
+                      throw new Error(r.shopify_reason);
+                    }
+                    r.step = "queued_shopify";
+                    r.shopify = "queued";
+                    r.shopify_reason = "Rate limit ramt — lagt i kø til senere sync.";
+                  } else {
+                    r.shopify = "error";
+                    r.shopify_reason = msg;
+                    throw sErr;
+                  }
                 }
               }
             } else if (sync_target === "woocommerce") {
