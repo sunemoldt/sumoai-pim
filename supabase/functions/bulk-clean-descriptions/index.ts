@@ -237,18 +237,12 @@ Deno.serve(async (req) => {
             if (unchanged && !force_push) {
               r.status = "skipped";
               r.step = "no_changes";
+              r.pim = "unchanged";
+              r.shopify = "skipped";
+              r.shopify_reason = "PIM-indhold uændret efter rens — intet at pushe";
+              r.ts = new Date().toISOString();
               results.push(r);
-              if (logId) {
-                const errs = results.filter((x) => x.status === "error").map((x) => ({ ean: x.ean, msg: x.message }));
-                const done = results.length === slice.length;
-                await supabase.from("import_logs").update({
-                  imported: results.filter((x) => x.status === "ok").length,
-                  skipped: results.filter((x) => x.status === "skipped").length,
-                  errors: errs,
-                  status: done ? "completed" : "running",
-                  completed_at: done ? new Date().toISOString() : null,
-                }).eq("id", logId);
-              }
+              await persistLog();
               await sleep(DELAY_MS);
               continue;
             }
@@ -260,61 +254,90 @@ Deno.serve(async (req) => {
 
           if (dry_run) {
             r.step = `dry_run_${mode}_done`;
+            r.pim = "unchanged";
+            r.shopify = "not_applicable";
+            r.shopify_reason = "dry_run";
           } else {
             const { error: uErr } = await supabase
               .from("master_products")
               .update({ short_description: newShort, long_description: newLong })
               .eq("id", p.id);
-            if (uErr) throw new Error(`pim: ${uErr.message}`);
+            if (uErr) { r.pim = "error"; throw new Error(`pim: ${uErr.message}`); }
+            r.pim = "updated";
 
             if (sync_target === "shopify") {
               if (!p.shopify_product_id) {
                 r.status = "skipped";
                 r.step = "no_shopify_id";
+                r.shopify = "not_applicable";
+                r.shopify_reason = "Produktet er ikke koblet til Shopify";
               } else {
-                await callFn("shopify-update-product", {
+                try {
+                  await callFn("shopify-update-product", {
+                    master_product_id: p.id,
+                    description: newLong,
+                    short_description: newShort,
+                    force: force_push === true,
+                  });
+                  r.step = "synced_shopify";
+                  r.shopify = "synced";
+                } catch (sErr) {
+                  r.shopify = "error";
+                  r.shopify_reason = sErr instanceof Error ? sErr.message : String(sErr);
+                  throw sErr;
+                }
+              }
+            } else if (sync_target === "woocommerce") {
+              try {
+                await callFn("wc-update-product", {
                   master_product_id: p.id,
                   description: newLong,
                   short_description: newShort,
-                  force: force_push === true,
                 });
-                r.step = "synced_shopify";
+                r.step = "synced_woocommerce";
+                r.shopify = "not_applicable";
+                r.shopify_reason = "WooCommerce-mål";
+              } catch (sErr) {
+                r.shopify = "error";
+                r.shopify_reason = sErr instanceof Error ? sErr.message : String(sErr);
+                throw sErr;
               }
-            } else if (sync_target === "woocommerce") {
-              await callFn("wc-update-product", {
-                master_product_id: p.id,
-                description: newLong,
-                short_description: newShort,
-              });
-              r.step = "synced_woocommerce";
             } else {
               r.step = "pim_only";
+              r.shopify = "not_applicable";
+              r.shopify_reason = "sync_target=none";
             }
           }
         } catch (e) {
           r.status = "error";
           r.message = e instanceof Error ? e.message : String(e);
+          if (!r.shopify) r.shopify = "error";
+          if (!r.shopify_reason) r.shopify_reason = r.message;
           console.error(`bulk-clean ${p.ean}:`, r.message);
         }
 
+        r.ts = r.ts ?? new Date().toISOString();
         results.push(r);
-
-        if (logId) {
-          const errorList = results
-            .filter((x) => x.status === "error")
-            .map((x) => ({ ean: x.ean, msg: x.message }));
-          const done = results.length === slice.length;
-          await supabase.from("import_logs").update({
-            imported: results.filter((x) => x.status === "ok").length,
-            skipped: results.filter((x) => x.status === "skipped").length,
-            errors: errorList,
-            status: done ? "completed" : "running",
-            completed_at: done ? new Date().toISOString() : null,
-          }).eq("id", logId);
-        }
+        await persistLog();
 
         await sleep(DELAY_MS);
       }
+    };
+
+    const persistLog = async () => {
+      if (!logId) return;
+      const errorList = results
+        .filter((x) => x.status === "error")
+        .map((x) => ({ ean: x.ean, msg: x.message }));
+      const done = results.length === slice.length;
+      await supabase.from("import_logs").update({
+        imported: results.filter((x) => x.status === "ok").length,
+        skipped: results.filter((x) => x.status === "skipped").length,
+        errors: errorList,
+        results: results,
+        status: done ? "completed" : "running",
+        completed_at: done ? new Date().toISOString() : null,
+      }).eq("id", logId);
     };
 
     const runAll = async () => {
