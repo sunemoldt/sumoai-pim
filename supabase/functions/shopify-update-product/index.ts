@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, description, short_description } = body;
+    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, description, short_description, force } = body;
     if (!master_product_id) {
       return new Response(JSON.stringify({ error: "master_product_id is required" }), {
         status: 400,
