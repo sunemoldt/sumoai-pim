@@ -273,14 +273,22 @@ Deno.serve(async (req) => {
                 r.shopify_reason = "Produktet er ikke koblet til Shopify";
               } else {
                 try {
-                  await callFn("shopify-update-product", {
+                  const resp = await callFn("shopify-update-product", {
                     master_product_id: p.id,
                     description: newLong,
                     short_description: newShort,
                     force: force_push === true,
+                    enqueue_on_throttle: true,
+                    source: "bulk-clean-descriptions",
                   });
-                  r.step = "synced_shopify";
-                  r.shopify = "synced";
+                  if (resp && (resp as { queued?: boolean }).queued) {
+                    r.step = "queued_shopify";
+                    r.shopify = "queued";
+                    r.shopify_reason = "Rate limit ramt — opgaven er sat i kø og prøves automatisk igen.";
+                  } else {
+                    r.step = "synced_shopify";
+                    r.shopify = "synced";
+                  }
                 } catch (sErr) {
                   r.shopify = "error";
                   r.shopify_reason = sErr instanceof Error ? sErr.message : String(sErr);
