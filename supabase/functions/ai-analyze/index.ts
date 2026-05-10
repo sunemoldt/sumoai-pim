@@ -143,14 +143,14 @@ Regler:
 - Afrundingsregel: ${roundingMode} - anvend denne ved prisforslag
 - Overvej sæsonmønstre og prisudvikling over tid`;
 
-    const userPrompt = `Analysér disse data og giv anbefalinger:
+    const userPrompt = `Analysér disse Shopify-synkede produkter og giv anbefalinger:
 
 OPSUMMERING:
-- ${products.length} produkter total
+- ${products.length} Shopify-produkter total (kun produkter med shopify_product_id)
 - ${priceChanges.length} prisændringer (30 dage)
 - ${stockChanges.length} lagerændringer (30 dage)
 
-PRODUKTDATA (top 100):
+PRODUKTDATA (top 100 Shopify-produkter):
 ${JSON.stringify(productSummaries, null, 0)}
 
 Returnér anbefalinger som JSON array med tool calling.`;
