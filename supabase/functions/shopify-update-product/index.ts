@@ -107,7 +107,22 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Load field sync policy and skip fields where PIM is not master/push
+    const { data: policyRows } = await supabase
+      .from("field_sync_policy")
+      .select("field_name, master, direction");
+    const policy = new Map<string, { master: string; direction: string }>(
+      (policyRows ?? []).map((r) => [r.field_name, { master: r.master, direction: r.direction }])
+    );
+    const canPush = (field: string) => {
+      const p = policy.get(field);
+      if (!p) return true; // unknown field => allow
+      if (p.master !== "pim") return false;
+      return p.direction === "push" || p.direction === "two_way";
+    };
+
     const updatedFields: string[] = [];
+    const skippedFields: string[] = [];
     const dbUpdate: Record<string, unknown> = {};
     const changeLogs: { master_product_id: string; change_type: string; field_name: string; old_value: string | null; new_value: string | null; source: string }[] = [];
     const logChange = (field: string, oldVal: unknown, newVal: unknown, type: string) => {
