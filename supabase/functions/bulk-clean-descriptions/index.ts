@@ -140,8 +140,11 @@ Deno.serve(async (req) => {
     let query = supabase
       .from("master_products")
       .select("id, ean, title, brand, short_description, long_description, shopify_product_id, webshop_product_id, webshop_parent_id")
-      .not("shopify_product_id", "is", null)
-      .is("webshop_parent_id", null);
+      .not("shopify_product_id", "is", null);
+    // Skip variants only when scanning broadly; allow explicit EAN list to include variants.
+    if (!eans || eans.length === 0) {
+      query = query.is("webshop_parent_id", null);
+    }
     if (brand && brand.length > 0) {
       query = query.or(`brand.ilike.${brand}%,title.ilike.${brand}%`);
     }
