@@ -196,7 +196,7 @@ export default function CleanupAuditCard() {
                     const isOpen = !!expanded[r.id];
                     const reason = r.shopify_reason ?? r.message ?? r.step ?? "";
                     return (
-                      <>
+                      <Fragment key={r.id}>
                         <TableRow key={r.id} className="cursor-pointer" onClick={() => setExpanded((e) => ({ ...e, [r.id]: !e[r.id] }))}>
                           <TableCell>{isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</TableCell>
                           <TableCell className="font-mono text-xs">{r.ean}</TableCell>
