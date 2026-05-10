@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.shopify-oauth-start]
 verify_jwt = false
+
+[functions.shopify-queue-worker]
+verify_jwt = false
