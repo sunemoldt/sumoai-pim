@@ -80,3 +80,31 @@ export function SendToShopifyButton({ product }: { product: { id: string; lifecy
     </div>
   );
 }
+
+export function PullFromShopifyButton({ productId, hasShopify }: { productId: string; hasShopify: boolean }) {
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  if (!hasShopify) return null;
+  const pull = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.functions.invoke("shopify-pull", {
+      body: { master_product_id: productId },
+    });
+    setLoading(false);
+    if (error || (data as any)?.error) {
+      toast({ title: "Pull fejlede", description: error?.message ?? (data as any)?.error, variant: "destructive" });
+      return;
+    }
+    const r = (data as any)?.results?.[0];
+    toast({ title: "Hentet fra Shopify", description: `${r?.updated?.length ?? 0} felt(er), ${r?.variants ?? 0} variant(er)` });
+    qc.invalidateQueries({ queryKey: ["master_product", productId] });
+    qc.invalidateQueries({ queryKey: ["master_products"] });
+  };
+  return (
+    <Button variant="outline" size="sm" onClick={pull} disabled={loading}>
+      {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+      Træk fra Shopify
+    </Button>
+  );
+}
