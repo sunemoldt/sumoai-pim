@@ -160,6 +160,7 @@ Deno.serve(async (req) => {
       limit,
       mode = "ai",
       eans,
+      force_push = false,
     } = body as {
       brand?: string;
       sync_target?: "shopify" | "woocommerce" | "none";
@@ -168,6 +169,7 @@ Deno.serve(async (req) => {
       limit?: number;
       mode?: "ai" | "regex";
       eans?: string[];
+      force_push?: boolean;
     };
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
