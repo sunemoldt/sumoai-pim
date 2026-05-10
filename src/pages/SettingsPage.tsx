@@ -438,6 +438,8 @@ export default function SettingsPage() {
 
       <ShopifyBulkPullCard />
 
+      <ShopifyQueueCard />
+
       <CleanupAuditCard />
 
       <AttributeDefinitionsCard />
