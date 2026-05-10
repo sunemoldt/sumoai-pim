@@ -19,6 +19,7 @@ import AttributeDefinitionsCard from "@/components/AttributeDefinitionsCard";
 import ShopifyBulkPullCard from "@/components/ShopifyBulkPullCard";
 import CleanupAuditCard from "@/components/CleanupAuditCard";
 import ShopifyQueueCard from "@/components/ShopifyQueueCard";
+import WoocommerceToggleCard from "@/components/WoocommerceToggleCard";
 
 export default function SettingsPage() {
   const { data: priceSettings = [] } = usePriceSettings();
