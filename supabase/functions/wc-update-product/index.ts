@@ -123,10 +123,10 @@ Deno.serve(async (req) => {
     if (backorders) {
       wcPayload.backorders = backorders;
     }
-    if (description !== undefined && !isVariation) {
+    if (description !== undefined && !isVariation && wcScope === "full") {
       wcPayload.description = description ?? "";
     }
-    if (short_description !== undefined && !isVariation) {
+    if (short_description !== undefined && !isVariation && wcScope === "full") {
       wcPayload.short_description = short_description ?? "";
     }
 
