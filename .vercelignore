@@ -1,0 +1,9 @@
+supabase/
+.lovable/
+docs/
+playwright.config.ts
+playwright-fixture.ts
+src/test/
+*.test.ts
+*.test.tsx
+README.md
