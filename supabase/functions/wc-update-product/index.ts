@@ -44,19 +44,21 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Global kill-switch: skip all WC calls if disabled in settings
+  // Global kill-switch + scope: skip all WC calls if disabled in settings
+  let wcScope: "full" | "prices_stock_only" = "prices_stock_only";
   {
-    const { data: flag } = await supabase
+    const { data: settings } = await supabase
       .from("analytics_settings")
-      .select("setting_value")
-      .eq("setting_key", "woocommerce_enabled")
-      .maybeSingle();
-    if (flag?.setting_value !== "true") {
+      .select("setting_key, setting_value")
+      .in("setting_key", ["woocommerce_enabled", "woocommerce_scope"]);
+    const map = new Map((settings ?? []).map((s) => [s.setting_key, s.setting_value]));
+    if (map.get("woocommerce_enabled") !== "true") {
       return new Response(
         JSON.stringify({ success: false, skipped: true, fallback: true, error: "WooCommerce-sync er deaktiveret i indstillinger." }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    if (map.get("woocommerce_scope") === "full") wcScope = "full";
   }
 
   try {
@@ -121,10 +123,10 @@ Deno.serve(async (req) => {
     if (backorders) {
       wcPayload.backorders = backorders;
     }
-    if (description !== undefined && !isVariation) {
+    if (description !== undefined && !isVariation && wcScope === "full") {
       wcPayload.description = description ?? "";
     }
-    if (short_description !== undefined && !isVariation) {
+    if (short_description !== undefined && !isVariation && wcScope === "full") {
       wcPayload.short_description = short_description ?? "";
     }
 
