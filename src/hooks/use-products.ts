@@ -210,15 +210,15 @@ export function useAllProductAnalytics() {
   return useQuery({
     queryKey: ["all_product_analytics"],
     queryFn: async () => {
-      // Keep the newest analytics sync per product instead of the row with latest period_start
+      // Trim to only the columns Dashboard/ProductList read, and dedupe to one row per product.
       const { data, error } = await supabase
         .from("product_analytics")
-        .select("*")
+        .select("master_product_id, page_views, add_to_carts, purchases, conversion_rate, impressions, clicks, ctr, avg_position, period_end, updated_at")
         .order("updated_at", { ascending: false })
         .order("period_end", { ascending: false });
       if (error) throw error;
       const byProduct = new Map<string, ProductAnalytics>();
-      for (const row of data as ProductAnalytics[]) {
+      for (const row of (data ?? []) as unknown as ProductAnalytics[]) {
         if (!byProduct.has(row.master_product_id)) {
           byProduct.set(row.master_product_id, row);
         }

@@ -23,7 +23,19 @@ import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "@/pages/NotFound";
 import { Loader2 } from "lucide-react";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Cache aggressively to reduce DB load. Most PIM data changes via explicit user actions
+      // that already call queryClient.invalidateQueries(...).
+      staleTime: 5 * 60 * 1000, // 5 min — treat data as fresh, no auto refetch
+      gcTime: 30 * 60 * 1000, // 30 min — keep in memory across navigations
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      retry: 1,
+    },
+  },
+});
 
 function AuthenticatedApp() {
   const { session, loading } = useAuth();
