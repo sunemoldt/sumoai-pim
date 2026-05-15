@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
       dry_run = false,
       only_dirty = true,
       limit,
-      mode = "ai",
+      mode = "regex",
       eans,
       force_push = false,
     } = body as {
