@@ -36,6 +36,33 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
+    // Cooldown: kør max 1 gang per time for at spare AI-credits
+    // (medmindre forced=true sendes i body)
+    let forced = false;
+    try {
+      const body = await req.clone().json().catch(() => ({}));
+      forced = !!(body as any)?.forced;
+    } catch { /* no body */ }
+
+    if (!forced) {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { data: recent } = await supabase
+        .from("product_recommendations")
+        .select("created_at")
+        .in("recommendation_type", ["pricing", "stock", "conversion", "margin"])
+        .gte("created_at", oneHourAgo)
+        .limit(1);
+      if (recent && recent.length > 0) {
+        return new Response(JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: "AI-analyse blev kørt for under 1 time siden – springer over for at spare credits. Send {forced:true} for at tvinge.",
+          recommendations_count: 0,
+          products_affected: 0,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
     // 1. Fetch recent change logs (last 30 days)
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -65,8 +92,8 @@ Deno.serve(async (req) => {
 
     const supplierMap = new Map(suppliers.map(s => [s.id, s.name]));
 
-    // Build product summaries for AI
-    const productSummaries = products.slice(0, 100).map(p => {
+    // Build product summaries for AI — kun top 40 for at spare tokens
+    const productSummaries = products.slice(0, 40).map(p => {
       const pAnalytics = analytics.filter(a => a.master_product_id === p.id);
       const pSuppliers = supplierProducts.filter(sp => sp.master_product_id === p.id);
       const pChanges = changeLogs.filter(cl => cl.master_product_id === p.id);
@@ -150,7 +177,7 @@ OPSUMMERING:
 - ${priceChanges.length} prisændringer (30 dage)
 - ${stockChanges.length} lagerændringer (30 dage)
 
-PRODUKTDATA (top 100 Shopify-produkter):
+PRODUKTDATA (top 40 Shopify-produkter):
 ${JSON.stringify(productSummaries, null, 0)}
 
 Returnér anbefalinger som JSON array med tool calling.`;
@@ -162,7 +189,7 @@ Returnér anbefalinger som JSON array med tool calling.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-flash-lite",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
