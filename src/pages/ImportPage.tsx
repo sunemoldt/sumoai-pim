@@ -48,6 +48,38 @@ function useImportLogs() {
   });
 }
 
+type EanCollision = {
+  webshop_product_id: string;
+  title: string;
+  intended_ean: string;
+  taken_by: string;
+  assigned_ean: string;
+};
+
+// Errors are stored as strings like:
+// EAN-kollision: WC #38552 "Blackview MP100" ville bruge 810354024146 (allerede taget af WC #12345) → tildelt wc-38552
+const COLLISION_REGEX = /^EAN-kollision: WC #(\S+) "(.+)" ville bruge (\S+) \(allerede taget af WC #(\S+)\) → tildelt (\S+)$/;
+
+function parseCollisions(errors: string[] | null | undefined): { collisions: EanCollision[]; otherErrors: string[] } {
+  const collisions: EanCollision[] = [];
+  const otherErrors: string[] = [];
+  for (const e of errors ?? []) {
+    const m = e.match(COLLISION_REGEX);
+    if (m) {
+      collisions.push({
+        webshop_product_id: m[1],
+        title: m[2],
+        intended_ean: m[3],
+        taken_by: m[4],
+        assigned_ean: m[5],
+      });
+    } else {
+      otherErrors.push(e);
+    }
+  }
+  return { collisions, otherErrors };
+}
+
 export default function ImportPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
