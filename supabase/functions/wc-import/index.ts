@@ -173,19 +173,44 @@ Deno.serve(async (req) => {
       return stripped || ean;
     }
 
-    // Helper to extract EAN from meta_data
-    const eanMetaKeys = ["_avecdo_ean", "_gtin", "woo_feed_ean_var", "woo_feed_gtin_var", "_wc_gla_gtin"];
-    function extractEan(metaData: any[], sku: string | null, fallbackId: string): string {
+    // Helper to extract candidate EANs from meta_data (in priority order)
+    const eanMetaKeys = ["_avecdo_ean", "_gtin", "woo_feed_ean_var", "woo_feed_gtin_var", "_wc_gla_gtin", "woo_feed_ean", "woo_feed_gtin"];
+    function extractEanCandidates(metaData: any[], sku: string | null): string[] {
+      const out: string[] = [];
       if (metaData) {
         for (const key of eanMetaKeys) {
           const val = metaData.find((m: any) => m.key === key)?.value;
-          if (val && String(val).trim()) return normalizeEan(String(val).trim());
+          if (val && String(val).trim()) {
+            const n = normalizeEan(String(val).trim());
+            if (n && !out.includes(n)) out.push(n);
+          }
         }
       }
-      // Only use SKU if it looks like a numeric barcode (8-14 digits)
-      if (sku && /^\d{8,14}$/.test(sku.trim())) return normalizeEan(sku.trim());
-      return fallbackId;
+      if (sku && /^\d{8,14}$/.test(sku.trim())) {
+        const n = normalizeEan(sku.trim());
+        if (n && !out.includes(n)) out.push(n);
+      }
+      return out;
     }
+
+    // Assign a unique EAN per WC product: walk candidates in priority order, skip
+    // any EAN already taken by a *different* WC product in this batch. Falls back
+    // to `wc-<id>` so two WC products with colliding supplier-meta EANs both survive.
+    const usedEans = new Map<string, string>(); // ean -> webshop_product_id
+    function pickEan(candidates: string[], webshopProductId: string, fallbackId: string): { ean: string; collision?: { candidate: string; takenBy: string } } {
+      for (const c of candidates) {
+        const taken = usedEans.get(c);
+        if (!taken || taken === webshopProductId) {
+          usedEans.set(c, webshopProductId);
+          return { ean: c };
+        }
+      }
+      const firstCollision = candidates[0] ? { candidate: candidates[0], takenBy: usedEans.get(candidates[0])! } : undefined;
+      usedEans.set(fallbackId, webshopProductId);
+      return { ean: fallbackId, collision: firstCollision };
+    }
+
+    const eanCollisions: { webshop_product_id: string; title: string; intended_ean: string; taken_by: string; assigned_ean: string }[] = [];
 
     // Map to master_products rows
     const rows: any[] = [];
@@ -193,7 +218,13 @@ Deno.serve(async (req) => {
     for (const p of allProducts) {
       if (p.type === "variable") continue;
 
-      const ean = extractEan(p.meta_data, p.sku, `wc-${p.id}`);
+      const wcId = String(p.id);
+      const candidates = extractEanCandidates(p.meta_data, p.sku);
+      const picked = pickEan(candidates, wcId, `wc-${p.id}`);
+      const ean = picked.ean;
+      if (picked.collision) {
+        eanCollisions.push({ webshop_product_id: wcId, title: p.name, intended_ean: picked.collision.candidate, taken_by: picked.collision.takenBy, assigned_ean: ean });
+      }
       const attrs: Record<string, string> = {};
       if (p.attributes) {
         for (const a of p.attributes) {
@@ -228,7 +259,13 @@ Deno.serve(async (req) => {
     }
 
     for (const v of variations) {
-      const ean = extractEan(v.meta_data, v.sku, `wc-${v._parent_id}-${v.id}`);
+      const vWcId = String(v.id);
+      const vCandidates = extractEanCandidates(v.meta_data, v.sku);
+      const vPicked = pickEan(vCandidates, vWcId, `wc-${v._parent_id}-${v.id}`);
+      const ean = vPicked.ean;
+      if (vPicked.collision) {
+        eanCollisions.push({ webshop_product_id: vWcId, title: `${v._parent_name} (variant ${v.id})`, intended_ean: vPicked.collision.candidate, taken_by: vPicked.collision.takenBy, assigned_ean: ean });
+      }
       const attrStr = v.attributes?.map((a: any) => a.option).join(" / ") || "";
       const varAttrs: Record<string, string> = {};
       if (v.attributes) {
@@ -392,12 +429,16 @@ Deno.serve(async (req) => {
     }
 
     // Update import log
+    const collisionErrors = eanCollisions.map(
+      (c) => `EAN-kollision: WC #${c.webshop_product_id} "${c.title}" ville bruge ${c.intended_ean} (allerede taget af WC #${c.taken_by}) → tildelt ${c.assigned_ean}`
+    );
+    const allErrors = [...errors, ...collisionErrors];
     if (logId) {
       await supabase.from("import_logs").update({
-        status: errors.length > 0 ? "completed_with_errors" : "completed",
+        status: errors.length > 0 ? "completed_with_errors" : (collisionErrors.length > 0 ? "completed_with_errors" : "completed"),
         imported,
         deduplicated: rows.length - dedupedRows.length,
-        errors: errors.length > 0 ? errors : [],
+        errors: allErrors,
         ean_snapshot: dedupedRows.map((r) => r.ean),
         duplicate_eans: duplicateEans.size > 0 ? Array.from(duplicateEans) : [],
         completed_at: new Date().toISOString(),
@@ -421,7 +462,8 @@ Deno.serve(async (req) => {
         imported,
         deduplicated: rows.length - dedupedRows.length,
         duplicate_eans: duplicateEans.size > 0 ? Array.from(duplicateEans).slice(0, 25) : undefined,
-        errors: errors.length > 0 ? errors : undefined,
+        ean_collisions: eanCollisions.length > 0 ? eanCollisions.slice(0, 50) : undefined,
+        errors: allErrors.length > 0 ? allErrors : undefined,
         log_id: logId,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
