@@ -104,6 +104,13 @@ export default function ImportPage() {
     if (!latestWithCollisions) return null;
     return { log: latestWithCollisions, ...parseCollisions(latestWithCollisions.errors) };
   })();
+
+  // Load WC schedule from price_settings (reuse table with scope='wc_schedule')
+  useEffect(() => {
+    supabase
+      .from("price_settings")
+      .select("scope_value")
+      .eq("scope", "wc_schedule")
       .maybeSingle()
       .then(({ data }) => {
         if (data?.scope_value) setWcSchedule(data.scope_value);
