@@ -215,6 +215,9 @@ Deno.serve(async (req) => {
     // Map to master_products rows
     const rows: any[] = [];
 
+    for (const p of allProducts) {
+      if (p.type === "variable") continue;
+
       const wcId = String(p.id);
       const candidates = extractEanCandidates(p.meta_data, p.sku);
       const picked = pickEan(candidates, wcId, `wc-${p.id}`);
