@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2, LayoutGrid, List, Download, Plus } from "lucide-react";
 import { downloadDineroCsv } from "@/lib/dinero-export";
 import ProductCard from "@/components/ProductCard";
+import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -796,18 +797,25 @@ export default function ProductListPage() {
                         {format(new Date(product.updated_at), "d. MMM yyyy", { locale: da })}
                       </td>
                       <td className="px-2 py-1.5 align-middle">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(`/products/${product.id}`, "_blank");
-                          }}
-                          title="Åbn i nyt vindue"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
+                        <div className="flex items-center gap-0.5">
+                          <QuickSupplierSyncButton
+                            productId={product.id}
+                            supplierIds={product.supplier_products.map((sp) => sp.supplier_id)}
+                            variant="icon"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(`/products/${product.id}`, "_blank");
+                            }}
+                            title="Åbn i nyt vindue"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );

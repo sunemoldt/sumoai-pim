@@ -1,0 +1,73 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+
+type Props = {
+  productId: string;
+  supplierIds: string[];
+  variant?: "icon" | "full";
+};
+
+export default function QuickSupplierSyncButton({ productId, supplierIds, variant = "full" }: Props) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [syncing, setSyncing] = useState(false);
+
+  const uniqueIds = Array.from(new Set(supplierIds.filter(Boolean)));
+
+  const handleClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (uniqueIds.length === 0) {
+      toast({ title: "Ingen leverandører", description: "Produktet er ikke koblet til nogen leverandører.", variant: "destructive" });
+      return;
+    }
+    setSyncing(true);
+    const results = await Promise.allSettled(
+      uniqueIds.map((supplier_id) =>
+        supabase.functions.invoke("supplier-feed-import", { body: { supplier_id } })
+      )
+    );
+    setSyncing(false);
+    const ok = results.filter((r) => r.status === "fulfilled" && !(r.value as any)?.error).length;
+    const failed = results.length - ok;
+    toast({
+      title: failed === 0 ? "Synk fuldført" : "Synk delvist gennemført",
+      description: `${ok}/${results.length} leverandør-feeds opdateret${failed > 0 ? `, ${failed} fejlede` : ""}.`,
+      variant: failed === 0 ? "default" : "destructive",
+    });
+    qc.invalidateQueries({ queryKey: ["master_products"] });
+    qc.invalidateQueries({ queryKey: ["master_product", productId] });
+  };
+
+  if (variant === "icon") {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6"
+        onClick={handleClick}
+        disabled={syncing || uniqueIds.length === 0}
+        title={`Synk ${uniqueIds.length} leverandør-feed(s) for dette produkt`}
+      >
+        {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />}
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="mt-2 h-7 w-full text-[11px]"
+      onClick={handleClick}
+      disabled={syncing || uniqueIds.length === 0}
+      title="Hent friske data fra alle leverandører der har dette produkt"
+    >
+      {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+      {syncing ? "Synker…" : `Synk leverandører (${uniqueIds.length})`}
+    </Button>
+  );
+}
