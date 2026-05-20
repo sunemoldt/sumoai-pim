@@ -89,13 +89,21 @@ export default function ImportPage() {
   const queryClient = useQueryClient();
   const { data: logs = [] } = useImportLogs();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
 
-  // Load WC schedule from price_settings (reuse table with scope='wc_schedule')
-  useEffect(() => {
-    supabase
-      .from("price_settings")
-      .select("scope_value")
-      .eq("scope", "wc_schedule")
+  const toggleExpand = (id: string) => {
+    setExpandedLogs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const latestCollisions = (() => {
+    const latestWithCollisions = logs.find((l) => parseCollisions(l.errors).collisions.length > 0);
+    if (!latestWithCollisions) return null;
+    return { log: latestWithCollisions, ...parseCollisions(latestWithCollisions.errors) };
+  })();
       .maybeSingle()
       .then(({ data }) => {
         if (data?.scope_value) setWcSchedule(data.scope_value);
