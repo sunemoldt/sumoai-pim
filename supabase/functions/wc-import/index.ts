@@ -215,10 +215,13 @@ Deno.serve(async (req) => {
     // Map to master_products rows
     const rows: any[] = [];
 
-    for (const p of allProducts) {
-      if (p.type === "variable") continue;
-
-      const ean = extractEan(p.meta_data, p.sku, `wc-${p.id}`);
+      const wcId = String(p.id);
+      const candidates = extractEanCandidates(p.meta_data, p.sku);
+      const picked = pickEan(candidates, wcId, `wc-${p.id}`);
+      const ean = picked.ean;
+      if (picked.collision) {
+        eanCollisions.push({ webshop_product_id: wcId, title: p.name, intended_ean: picked.collision.candidate, taken_by: picked.collision.takenBy, assigned_ean: ean });
+      }
       const attrs: Record<string, string> = {};
       if (p.attributes) {
         for (const a of p.attributes) {
