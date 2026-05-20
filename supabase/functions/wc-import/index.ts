@@ -173,19 +173,44 @@ Deno.serve(async (req) => {
       return stripped || ean;
     }
 
-    // Helper to extract EAN from meta_data
-    const eanMetaKeys = ["_avecdo_ean", "_gtin", "woo_feed_ean_var", "woo_feed_gtin_var", "_wc_gla_gtin"];
-    function extractEan(metaData: any[], sku: string | null, fallbackId: string): string {
+    // Helper to extract candidate EANs from meta_data (in priority order)
+    const eanMetaKeys = ["_avecdo_ean", "_gtin", "woo_feed_ean_var", "woo_feed_gtin_var", "_wc_gla_gtin", "woo_feed_ean", "woo_feed_gtin"];
+    function extractEanCandidates(metaData: any[], sku: string | null): string[] {
+      const out: string[] = [];
       if (metaData) {
         for (const key of eanMetaKeys) {
           const val = metaData.find((m: any) => m.key === key)?.value;
-          if (val && String(val).trim()) return normalizeEan(String(val).trim());
+          if (val && String(val).trim()) {
+            const n = normalizeEan(String(val).trim());
+            if (n && !out.includes(n)) out.push(n);
+          }
         }
       }
-      // Only use SKU if it looks like a numeric barcode (8-14 digits)
-      if (sku && /^\d{8,14}$/.test(sku.trim())) return normalizeEan(sku.trim());
-      return fallbackId;
+      if (sku && /^\d{8,14}$/.test(sku.trim())) {
+        const n = normalizeEan(sku.trim());
+        if (n && !out.includes(n)) out.push(n);
+      }
+      return out;
     }
+
+    // Assign a unique EAN per WC product: walk candidates in priority order, skip
+    // any EAN already taken by a *different* WC product in this batch. Falls back
+    // to `wc-<id>` so two WC products with colliding supplier-meta EANs both survive.
+    const usedEans = new Map<string, string>(); // ean -> webshop_product_id
+    function pickEan(candidates: string[], webshopProductId: string, fallbackId: string): { ean: string; collision?: { candidate: string; takenBy: string } } {
+      for (const c of candidates) {
+        const taken = usedEans.get(c);
+        if (!taken || taken === webshopProductId) {
+          usedEans.set(c, webshopProductId);
+          return { ean: c };
+        }
+      }
+      const firstCollision = candidates[0] ? { candidate: candidates[0], takenBy: usedEans.get(candidates[0])! } : undefined;
+      usedEans.set(fallbackId, webshopProductId);
+      return { ean: fallbackId, collision: firstCollision };
+    }
+
+    const eanCollisions: { webshop_product_id: string; title: string; intended_ean: string; taken_by: string; assigned_ean: string }[] = [];
 
     // Map to master_products rows
     const rows: any[] = [];
