@@ -23,7 +23,7 @@ type StockFilter = "all" | "instock" | "outofstock" | "backorder";
 type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
-type DuplicateFilter = "all" | "fallback_ean" | "shared_ean";
+type DuplicateFilter = "all" | "fallback_ean" | "shared_ean" | "same_title";
 type SortField = "title" | "ean" | "brand" | "stock_quantity" | "purchase_price" | "webshop_price" | "recommended" | "margin" | "page_views" | "conversion_rate" | "updated_at";
 type SortDir = "asc" | "desc";
 
@@ -225,6 +225,20 @@ export default function ProductListPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, "da"));
   }, [products, brandFilter]);
 
+  // Pre-compute titles that appear more than once across all products
+  const duplicateTitles = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of products) {
+      const t = p.title?.trim().toLowerCase();
+      if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+    const set = new Set<string>();
+    for (const [t, c] of counts) {
+      if (c > 1) set.add(t);
+    }
+    return set;
+  }, [products]);
+
   const filtered = useMemo(() => {
     return products.filter((product) => {
       if (stockFilter === "instock" && product.stock_status !== "instock") return false;
@@ -263,6 +277,7 @@ export default function ProductListPage() {
       // Duplicate filter
       if (duplicateFilter === "fallback_ean" && !product.ean.startsWith("wc-")) return false;
       if (duplicateFilter === "shared_ean" && (!duplicateEans || !duplicateEans.has(product.ean))) return false;
+      if (duplicateFilter === "same_title" && !duplicateTitles.has(product.title?.trim().toLowerCase() ?? "")) return false;
 
       // Sync-tag filter
       if (tagFilter !== "all") {
@@ -276,7 +291,7 @@ export default function ProductListPage() {
 
       return true;
     });
-  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans, tagFilter]);
+  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans, tagFilter, duplicateTitles]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -563,6 +578,7 @@ export default function ProductListPage() {
               <SelectItem value="all">Alle produkter</SelectItem>
               <SelectItem value="fallback_ean">Fallback-EAN (wc-)</SelectItem>
               <SelectItem value="shared_ean">Delt EAN</SelectItem>
+              <SelectItem value="same_title">Samme titel</SelectItem>
             </SelectContent>
           </Select>
 
