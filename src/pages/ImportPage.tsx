@@ -513,7 +513,6 @@ export default function ImportPage() {
                   return (
                     <Fragment key={log.id}>
                       <TableRow
-                        key={log.id}
                         className={canExpand ? "cursor-pointer hover:bg-secondary/30" : ""}
                         onClick={() => canExpand && toggleExpand(log.id)}
                       >
