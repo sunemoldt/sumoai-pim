@@ -797,7 +797,7 @@ export default function ProductListPage() {
                         {format(new Date(product.updated_at), "d. MMM yyyy", { locale: da })}
                       </td>
                       <td className="px-2 py-1.5 align-middle">
-                        <div className="flex items-center gap-0.5">
+                        <div className="flex items-center justify-center gap-1">
                           <QuickSupplierSyncButton
                             productId={product.id}
                             supplierIds={product.supplier_products.map((sp) => sp.supplier_id)}
@@ -806,7 +806,7 @@ export default function ProductListPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6"
+                            className="h-7 w-7 rounded-full"
                             onClick={(e) => {
                               e.stopPropagation();
                               window.open(`/products/${product.id}`, "_blank");
