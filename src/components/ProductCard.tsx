@@ -172,21 +172,8 @@ export default function ProductCard({
           )}
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-2 h-7 w-full text-[11px]"
-          onClick={handleQuickSync}
-          disabled={syncing || supplierIds.length === 0}
-          title="Hent friske data fra alle leverandører der har dette produkt"
-        >
-          {syncing ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3 w-3" />
-          )}
-          {syncing ? "Synker…" : `Synk leverandører (${supplierIds.length})`}
-        </Button>
+        <QuickSupplierSyncButton productId={product.id} supplierIds={supplierIds} />
+
       </div>
     </Card>
   );
