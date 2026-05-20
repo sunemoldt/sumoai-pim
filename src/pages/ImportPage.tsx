@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RefreshCw, CheckCircle2, AlertCircle, Loader2, Clock, History, Download, Upload } from "lucide-react";
+import { RefreshCw, CheckCircle2, AlertCircle, Loader2, Clock, History, Download, Upload, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -48,6 +48,38 @@ function useImportLogs() {
   });
 }
 
+type EanCollision = {
+  webshop_product_id: string;
+  title: string;
+  intended_ean: string;
+  taken_by: string;
+  assigned_ean: string;
+};
+
+// Errors are stored as strings like:
+// EAN-kollision: WC #38552 "Blackview MP100" ville bruge 810354024146 (allerede taget af WC #12345) → tildelt wc-38552
+const COLLISION_REGEX = /^EAN-kollision: WC #(\S+) "(.+)" ville bruge (\S+) \(allerede taget af WC #(\S+)\) → tildelt (\S+)$/;
+
+function parseCollisions(errors: string[] | null | undefined): { collisions: EanCollision[]; otherErrors: string[] } {
+  const collisions: EanCollision[] = [];
+  const otherErrors: string[] = [];
+  for (const e of errors ?? []) {
+    const m = e.match(COLLISION_REGEX);
+    if (m) {
+      collisions.push({
+        webshop_product_id: m[1],
+        title: m[2],
+        intended_ean: m[3],
+        taken_by: m[4],
+        assigned_ean: m[5],
+      });
+    } else {
+      otherErrors.push(e);
+    }
+  }
+  return { collisions, otherErrors };
+}
+
 export default function ImportPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -57,6 +89,21 @@ export default function ImportPage() {
   const queryClient = useQueryClient();
   const { data: logs = [] } = useImportLogs();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (id: string) => {
+    setExpandedLogs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const latestCollisions = (() => {
+    const latestWithCollisions = logs.find((l) => parseCollisions(l.errors).collisions.length > 0);
+    if (!latestWithCollisions) return null;
+    return { log: latestWithCollisions, ...parseCollisions(latestWithCollisions.errors) };
+  })();
 
   // Load WC schedule from price_settings (reuse table with scope='wc_schedule')
   useEffect(() => {
@@ -384,6 +431,50 @@ export default function ImportPage() {
         </Card>
       </div>
 
+      {/* EAN collision summary - latest import */}
+      {latestCollisions && (
+        <Card className="shadow-sm border-warning/40">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-medium flex items-center gap-2 text-warning">
+              <AlertTriangle className="h-4 w-4" />
+              EAN-kollisioner i seneste import
+              <Badge variant="outline" className="text-warning border-warning/40 ml-2">
+                {latestCollisions.collisions.length}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              Disse WooCommerce-produkter fik en fallback-EAN (typisk <code className="text-xs">wc-&lt;id&gt;</code>) fordi deres tilsigtede EAN allerede tilhørte et andet produkt. Ret <code className="text-xs">_avecdo_ean</code> eller anden EAN-meta i WooCommerce for at løse det.
+            </p>
+            <div className="rounded-md border border-border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-secondary/50">
+                    <TableHead>Produkt</TableHead>
+                    <TableHead className="font-mono text-xs">WC ID</TableHead>
+                    <TableHead className="font-mono text-xs">Tilsigtet EAN</TableHead>
+                    <TableHead className="font-mono text-xs">Optaget af WC</TableHead>
+                    <TableHead className="font-mono text-xs">Tildelt EAN</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {latestCollisions.collisions.map((c, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium text-foreground">{c.title}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{c.webshop_product_id}</TableCell>
+                      <TableCell className="font-mono text-xs text-destructive">{c.intended_ean}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">#{c.taken_by}</TableCell>
+                      <TableCell className="font-mono text-xs text-warning">{c.assigned_ean}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Import history */}
       <Card className="shadow-sm">
         <CardHeader className="pb-3">
@@ -399,13 +490,15 @@ export default function ImportPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-secondary/50">
+                  <TableHead className="w-8"></TableHead>
                   <TableHead>Tidspunkt</TableHead>
                   <TableHead>Kilde</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Hentet</TableHead>
                   <TableHead className="text-right">Importeret</TableHead>
                   <TableHead className="text-right">Deduplikeret</TableHead>
-                  <TableHead className="text-right">Fejl</TableHead>
+                  <TableHead className="text-right">EAN-koll.</TableHead>
+                  <TableHead className="text-right">Andre fejl</TableHead>
                   <TableHead>Varighed</TableHead>
                 </TableRow>
               </TableHeader>
@@ -414,28 +507,100 @@ export default function ImportPage() {
                   const started = new Date(log.started_at);
                   const completed = log.completed_at ? new Date(log.completed_at) : null;
                   const durationSec = completed ? Math.round((completed.getTime() - started.getTime()) / 1000) : null;
+                  const { collisions, otherErrors } = parseCollisions(log.errors);
+                  const isExpanded = expandedLogs.has(log.id);
+                  const canExpand = collisions.length > 0 || otherErrors.length > 0;
                   return (
-                    <TableRow key={log.id}>
-                      <TableCell className="text-muted-foreground text-xs">
-                        {started.toLocaleDateString("da-DK")} {started.toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}
-                      </TableCell>
-                      <TableCell className="font-medium text-foreground capitalize">{log.source}</TableCell>
-                      <TableCell>{statusBadge(log.status)}</TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">{log.total_fetched}</TableCell>
-                      <TableCell className="text-right font-mono text-foreground">{log.imported}</TableCell>
-                      <TableCell className="text-right font-mono text-muted-foreground">{log.deduplicated}</TableCell>
-                      <TableCell className="text-right font-mono">
-                        {log.errors && log.errors.length > 0 ? (
-                          <span className="text-destructive">{log.errors.length}</span>
-                        ) : (
-                          <span className="text-muted-foreground">0</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-xs flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {durationSec !== null ? `${durationSec}s` : "—"}
-                      </TableCell>
-                    </TableRow>
+                    <Fragment key={log.id}>
+                      <TableRow
+                        className={canExpand ? "cursor-pointer hover:bg-secondary/30" : ""}
+                        onClick={() => canExpand && toggleExpand(log.id)}
+                      >
+                        <TableCell>
+                          {canExpand ? (
+                            isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-xs">
+                          {started.toLocaleDateString("da-DK")} {started.toLocaleTimeString("da-DK", { hour: "2-digit", minute: "2-digit" })}
+                        </TableCell>
+                        <TableCell className="font-medium text-foreground capitalize">{log.source}</TableCell>
+                        <TableCell>{statusBadge(log.status)}</TableCell>
+                        <TableCell className="text-right font-mono text-muted-foreground">{log.total_fetched}</TableCell>
+                        <TableCell className="text-right font-mono text-foreground">{log.imported}</TableCell>
+                        <TableCell className="text-right font-mono text-muted-foreground">{log.deduplicated}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          {collisions.length > 0 ? (
+                            <span className="text-warning">{collisions.length}</span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {otherErrors.length > 0 ? (
+                            <span className="text-destructive">{otherErrors.length}</span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-xs">
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {durationSec !== null ? `${durationSec}s` : "—"}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow className="bg-secondary/20">
+                          <TableCell colSpan={10} className="py-3">
+                            <div className="space-y-3">
+                              {collisions.length > 0 && (
+                                <div>
+                                  <p className="text-xs font-medium text-warning mb-2 flex items-center gap-1">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    EAN-kollisioner ({collisions.length})
+                                  </p>
+                                  <div className="rounded border border-border overflow-hidden">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow className="bg-background">
+                                          <TableHead className="h-8 text-xs">Produkt</TableHead>
+                                          <TableHead className="h-8 text-xs font-mono">WC ID</TableHead>
+                                          <TableHead className="h-8 text-xs font-mono">Tilsigtet EAN</TableHead>
+                                          <TableHead className="h-8 text-xs font-mono">Optaget af</TableHead>
+                                          <TableHead className="h-8 text-xs font-mono">Tildelt</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {collisions.map((c, i) => (
+                                          <TableRow key={i}>
+                                            <TableCell className="py-1.5 text-xs font-medium">{c.title}</TableCell>
+                                            <TableCell className="py-1.5 text-xs font-mono text-muted-foreground">{c.webshop_product_id}</TableCell>
+                                            <TableCell className="py-1.5 text-xs font-mono text-destructive">{c.intended_ean}</TableCell>
+                                            <TableCell className="py-1.5 text-xs font-mono text-muted-foreground">#{c.taken_by}</TableCell>
+                                            <TableCell className="py-1.5 text-xs font-mono text-warning">{c.assigned_ean}</TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
+                                </div>
+                              )}
+                              {otherErrors.length > 0 && (
+                                <div>
+                                  <p className="text-xs font-medium text-destructive mb-2">Andre fejl ({otherErrors.length})</p>
+                                  <ul className="space-y-1 max-h-48 overflow-auto">
+                                    {otherErrors.map((e, i) => (
+                                      <li key={i} className="text-xs text-destructive font-mono">{e}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
                   );
                 })}
               </TableBody>
