@@ -511,7 +511,7 @@ export default function ImportPage() {
                   const isExpanded = expandedLogs.has(log.id);
                   const canExpand = collisions.length > 0 || otherErrors.length > 0;
                   return (
-                    <>
+                    <Fragment key={log.id}>
                       <TableRow
                         key={log.id}
                         className={canExpand ? "cursor-pointer hover:bg-secondary/30" : ""}
