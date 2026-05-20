@@ -225,6 +225,20 @@ export default function ProductListPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, "da"));
   }, [products, brandFilter]);
 
+  // Pre-compute titles that appear more than once across all products
+  const duplicateTitles = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of products) {
+      const t = p.title?.trim().toLowerCase();
+      if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+    const set = new Set<string>();
+    for (const [t, c] of counts) {
+      if (c > 1) set.add(t);
+    }
+    return set;
+  }, [products]);
+
   const filtered = useMemo(() => {
     return products.filter((product) => {
       if (stockFilter === "instock" && product.stock_status !== "instock") return false;
@@ -263,6 +277,7 @@ export default function ProductListPage() {
       // Duplicate filter
       if (duplicateFilter === "fallback_ean" && !product.ean.startsWith("wc-")) return false;
       if (duplicateFilter === "shared_ean" && (!duplicateEans || !duplicateEans.has(product.ean))) return false;
+      if (duplicateFilter === "same_title" && !duplicateTitles.has(product.title?.trim().toLowerCase() ?? "")) return false;
 
       // Sync-tag filter
       if (tagFilter !== "all") {
@@ -276,7 +291,7 @@ export default function ProductListPage() {
 
       return true;
     });
-  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans, tagFilter]);
+  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans, tagFilter, duplicateTitles]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
