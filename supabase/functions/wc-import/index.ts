@@ -429,12 +429,16 @@ Deno.serve(async (req) => {
     }
 
     // Update import log
+    const collisionErrors = eanCollisions.map(
+      (c) => `EAN-kollision: WC #${c.webshop_product_id} "${c.title}" ville bruge ${c.intended_ean} (allerede taget af WC #${c.taken_by}) → tildelt ${c.assigned_ean}`
+    );
+    const allErrors = [...errors, ...collisionErrors];
     if (logId) {
       await supabase.from("import_logs").update({
-        status: errors.length > 0 ? "completed_with_errors" : "completed",
+        status: errors.length > 0 ? "completed_with_errors" : (collisionErrors.length > 0 ? "completed_with_errors" : "completed"),
         imported,
         deduplicated: rows.length - dedupedRows.length,
-        errors: errors.length > 0 ? errors : [],
+        errors: allErrors,
         ean_snapshot: dedupedRows.map((r) => r.ean),
         duplicate_eans: duplicateEans.size > 0 ? Array.from(duplicateEans) : [],
         completed_at: new Date().toISOString(),
