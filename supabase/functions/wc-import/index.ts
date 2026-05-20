@@ -193,11 +193,36 @@ Deno.serve(async (req) => {
       return out;
     }
 
-    // Assign a unique EAN per WC product: walk candidates in priority order, skip
-    // any EAN already taken by a *different* WC product in this batch. Falls back
-    // to `wc-<id>` so two WC products with colliding supplier-meta EANs both survive.
+    // Pre-fetch existing webshop_product_id -> ean mapping so we preserve the
+    // EAN we previously assigned to a given WC product, even if its meta data
+    // changes (otherwise upserts create ghost duplicates).
+    const { data: existingWcRows } = await supabase
+      .from("master_products")
+      .select("ean, webshop_product_id")
+      .eq("webshop_platform", "woocommerce")
+      .not("webshop_product_id", "is", null);
+    const existingEanByWcId = new Map<string, string>();
+    for (const r of existingWcRows ?? []) {
+      if (r.webshop_product_id) existingEanByWcId.set(r.webshop_product_id, r.ean);
+    }
+
+    // Assign a unique EAN per WC product: prefer the EAN we already use for this
+    // WC product (preserve stable mapping). Otherwise walk candidates in priority
+    // order, skipping any EAN already taken by a *different* WC product in this
+    // batch. Falls back to `wc-<id>` so two WC products with colliding
+    // supplier-meta EANs both survive.
     const usedEans = new Map<string, string>(); // ean -> webshop_product_id
     function pickEan(candidates: string[], webshopProductId: string, fallbackId: string): { ean: string; collision?: { candidate: string; takenBy: string } } {
+      // 1) Reuse existing EAN for this WC product if available
+      const existing = existingEanByWcId.get(webshopProductId);
+      if (existing) {
+        const taken = usedEans.get(existing);
+        if (!taken || taken === webshopProductId) {
+          usedEans.set(existing, webshopProductId);
+          return { ean: existing };
+        }
+      }
+      // 2) Walk candidates
       for (const c of candidates) {
         const taken = usedEans.get(c);
         if (!taken || taken === webshopProductId) {
