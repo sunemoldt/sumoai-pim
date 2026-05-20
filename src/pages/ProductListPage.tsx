@@ -796,18 +796,25 @@ export default function ProductListPage() {
                         {format(new Date(product.updated_at), "d. MMM yyyy", { locale: da })}
                       </td>
                       <td className="px-2 py-1.5 align-middle">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.open(`/products/${product.id}`, "_blank");
-                          }}
-                          title="Åbn i nyt vindue"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
+                        <div className="flex items-center gap-0.5">
+                          <QuickSupplierSyncButton
+                            productId={product.id}
+                            supplierIds={product.supplier_products.map((sp) => sp.supplier_id)}
+                            variant="icon"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(`/products/${product.id}`, "_blank");
+                            }}
+                            title="Åbn i nyt vindue"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
