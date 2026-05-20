@@ -1,9 +1,13 @@
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Package, ExternalLink } from "lucide-react";
+import { Package, ExternalLink, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   type MasterProductWithSuppliers,
   getCheapestSupplierAny,
@@ -35,6 +39,38 @@ export default function ProductCard({
   onToggleSelect,
 }: Props) {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [syncing, setSyncing] = useState(false);
+
+  const supplierIds = Array.from(
+    new Set(product.supplier_products.map((sp) => sp.supplier_id).filter(Boolean))
+  );
+
+  const handleQuickSync = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (supplierIds.length === 0) {
+      toast({ title: "Ingen leverandører", description: "Produktet er ikke koblet til nogen leverandører.", variant: "destructive" });
+      return;
+    }
+    setSyncing(true);
+    const results = await Promise.allSettled(
+      supplierIds.map((supplier_id) =>
+        supabase.functions.invoke("supplier-feed-import", { body: { supplier_id } })
+      )
+    );
+    setSyncing(false);
+    const ok = results.filter((r) => r.status === "fulfilled" && !(r.value as any)?.error).length;
+    const failed = results.length - ok;
+    toast({
+      title: failed === 0 ? "Synk fuldført" : "Synk delvist gennemført",
+      description: `${ok}/${results.length} leverandør-feeds opdateret${failed > 0 ? `, ${failed} fejlede` : ""}.`,
+      variant: failed === 0 ? "default" : "destructive",
+    });
+    qc.invalidateQueries({ queryKey: ["master_products"] });
+    qc.invalidateQueries({ queryKey: ["master_product", product.id] });
+  };
+
   const cheapestAny = getCheapestSupplierAny(product.supplier_products);
   const cheapestPrice = cheapestAny?.purchase_price ?? null;
   // Recommendation is based on the cheapest IN-STOCK supplier (avoid pricing below cost)
@@ -166,6 +202,22 @@ export default function ProductCard({
             </Badge>
           )}
         </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2 h-7 w-full text-[11px]"
+          onClick={handleQuickSync}
+          disabled={syncing || supplierIds.length === 0}
+          title="Hent friske data fra alle leverandører der har dette produkt"
+        >
+          {syncing ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3 w-3" />
+          )}
+          {syncing ? "Synker…" : `Synk leverandører (${supplierIds.length})`}
+        </Button>
       </div>
     </Card>
   );
