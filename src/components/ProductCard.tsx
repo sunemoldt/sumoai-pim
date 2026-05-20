@@ -36,37 +36,9 @@ export default function ProductCard({
   onToggleSelect,
 }: Props) {
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [syncing, setSyncing] = useState(false);
+  const supplierIds = product.supplier_products.map((sp) => sp.supplier_id);
 
-  const supplierIds = Array.from(
-    new Set(product.supplier_products.map((sp) => sp.supplier_id).filter(Boolean))
-  );
 
-  const handleQuickSync = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (supplierIds.length === 0) {
-      toast({ title: "Ingen leverandører", description: "Produktet er ikke koblet til nogen leverandører.", variant: "destructive" });
-      return;
-    }
-    setSyncing(true);
-    const results = await Promise.allSettled(
-      supplierIds.map((supplier_id) =>
-        supabase.functions.invoke("supplier-feed-import", { body: { supplier_id } })
-      )
-    );
-    setSyncing(false);
-    const ok = results.filter((r) => r.status === "fulfilled" && !(r.value as any)?.error).length;
-    const failed = results.length - ok;
-    toast({
-      title: failed === 0 ? "Synk fuldført" : "Synk delvist gennemført",
-      description: `${ok}/${results.length} leverandør-feeds opdateret${failed > 0 ? `, ${failed} fejlede` : ""}.`,
-      variant: failed === 0 ? "default" : "destructive",
-    });
-    qc.invalidateQueries({ queryKey: ["master_products"] });
-    qc.invalidateQueries({ queryKey: ["master_product", product.id] });
-  };
 
   const cheapestAny = getCheapestSupplierAny(product.supplier_products);
   const cheapestPrice = cheapestAny?.purchase_price ?? null;
