@@ -551,7 +551,7 @@ export default function ImportPage() {
                         </TableCell>
                       </TableRow>
                       {isExpanded && (
-                        <TableRow key={`${log.id}-details`} className="bg-secondary/20">
+                        <TableRow className="bg-secondary/20">
                           <TableCell colSpan={10} className="py-3">
                             <div className="space-y-3">
                               {collisions.length > 0 && (
