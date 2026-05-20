@@ -259,7 +259,13 @@ Deno.serve(async (req) => {
     }
 
     for (const v of variations) {
-      const ean = extractEan(v.meta_data, v.sku, `wc-${v._parent_id}-${v.id}`);
+      const vWcId = String(v.id);
+      const vCandidates = extractEanCandidates(v.meta_data, v.sku);
+      const vPicked = pickEan(vCandidates, vWcId, `wc-${v._parent_id}-${v.id}`);
+      const ean = vPicked.ean;
+      if (vPicked.collision) {
+        eanCollisions.push({ webshop_product_id: vWcId, title: `${v._parent_name} (variant ${v.id})`, intended_ean: vPicked.collision.candidate, taken_by: vPicked.collision.takenBy, assigned_ean: ean });
+      }
       const attrStr = v.attributes?.map((a: any) => a.option).join(" / ") || "";
       const varAttrs: Record<string, string> = {};
       if (v.attributes) {
