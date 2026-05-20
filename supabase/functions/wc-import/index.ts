@@ -462,7 +462,8 @@ Deno.serve(async (req) => {
         imported,
         deduplicated: rows.length - dedupedRows.length,
         duplicate_eans: duplicateEans.size > 0 ? Array.from(duplicateEans).slice(0, 25) : undefined,
-        errors: errors.length > 0 ? errors : undefined,
+        ean_collisions: eanCollisions.length > 0 ? eanCollisions.slice(0, 50) : undefined,
+        errors: allErrors.length > 0 ? allErrors : undefined,
         log_id: logId,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
