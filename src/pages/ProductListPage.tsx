@@ -578,6 +578,7 @@ export default function ProductListPage() {
               <SelectItem value="all">Alle produkter</SelectItem>
               <SelectItem value="fallback_ean">Fallback-EAN (wc-)</SelectItem>
               <SelectItem value="shared_ean">Delt EAN</SelectItem>
+              <SelectItem value="same_title">Samme titel</SelectItem>
             </SelectContent>
           </Select>
 
