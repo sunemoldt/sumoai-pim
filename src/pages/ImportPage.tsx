@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RefreshCw, CheckCircle2, AlertCircle, Loader2, Clock, History, Download, Upload } from "lucide-react";
+import { RefreshCw, CheckCircle2, AlertCircle, Loader2, Clock, History, Download, Upload, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
