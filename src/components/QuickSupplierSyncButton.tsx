@@ -73,7 +73,7 @@ export default function QuickSupplierSyncButton({ productId, supplierIds, varian
           <Button
             variant="secondary"
             size="sm"
-            className="mt-2 h-8 w-full gap-1.5 text-xs font-medium"
+            className="mt-2 h-8 w-full shrink-0 gap-1.5 text-xs font-medium"
             onClick={handleClick}
             disabled={syncing || uniqueIds.length === 0}
           >
