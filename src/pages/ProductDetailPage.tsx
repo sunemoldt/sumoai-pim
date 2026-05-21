@@ -60,6 +60,27 @@ export default function ProductDetailPage() {
   const [savingSync, setSavingSync] = useState(false);
   const [syncInitialized, setSyncInitialized] = useState(false);
   const [applyingRec, setApplyingRec] = useState<string | null>(null);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [togglingLifecycle, setTogglingLifecycle] = useState(false);
+
+  const toggleArchived = async () => {
+    if (!product) return;
+    const current = (product as any).lifecycle_status ?? "active";
+    const next = current === "archived" ? "active" : "archived";
+    setTogglingLifecycle(true);
+    const { error } = await supabase
+      .from("master_products")
+      .update({ lifecycle_status: next })
+      .eq("id", product.id);
+    setTogglingLifecycle(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(next === "archived" ? "Produkt deaktiveret" : "Produkt genaktiveret");
+    queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+    queryClient.invalidateQueries({ queryKey: ["master_products"] });
+  };
 
   // Load rounding + backorder settings for recommendations
   const roundingMode = priceSettings.find(s => s.scope === "price_rounding")?.scope_value ?? "nearest_5";
