@@ -23,6 +23,9 @@ import SyncTagsEditor from "@/components/SyncTagsEditor";
 import DescriptionAiActions from "@/components/DescriptionAiActions";
 import { LifecycleBadge, SendToShopifyButton, PullFromShopifyButton } from "@/components/LifecycleControls";
 import ProductVariantsTab from "@/components/ProductVariantsTab";
+import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
+import MergeProductDialog from "@/components/MergeProductDialog";
+import { Archive, ArchiveRestore, GitMerge } from "lucide-react";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
@@ -57,6 +60,27 @@ export default function ProductDetailPage() {
   const [savingSync, setSavingSync] = useState(false);
   const [syncInitialized, setSyncInitialized] = useState(false);
   const [applyingRec, setApplyingRec] = useState<string | null>(null);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [togglingLifecycle, setTogglingLifecycle] = useState(false);
+
+  const toggleArchived = async () => {
+    if (!product) return;
+    const current = (product as any).lifecycle_status ?? "active";
+    const next = current === "archived" ? "active" : "archived";
+    setTogglingLifecycle(true);
+    const { error } = await supabase
+      .from("master_products")
+      .update({ lifecycle_status: next })
+      .eq("id", product.id);
+    setTogglingLifecycle(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(next === "archived" ? "Produkt deaktiveret" : "Produkt genaktiveret");
+    queryClient.invalidateQueries({ queryKey: ["master_product", id] });
+    queryClient.invalidateQueries({ queryKey: ["master_products"] });
+  };
 
   // Load rounding + backorder settings for recommendations
   const roundingMode = priceSettings.find(s => s.scope === "price_rounding")?.scope_value ?? "nearest_5";
@@ -325,11 +349,37 @@ export default function ProductDetailPage() {
             {product.brand && <> · <span className="font-medium text-foreground">{product.brand}</span></>}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <QuickSupplierSyncButton
+            productId={product.id}
+            supplierIds={product.supplier_products.map((sp) => sp.supplier_id)}
+            variant="icon"
+          />
           <PullFromShopifyButton productId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
           <SendToShopifyButton product={product} />
+          <Button variant="outline" size="sm" onClick={() => setMergeOpen(true)}>
+            <GitMerge className="h-4 w-4 mr-2" />
+            Flet
+          </Button>
+          <Button variant="outline" size="sm" onClick={toggleArchived} disabled={togglingLifecycle}>
+            {togglingLifecycle ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : ((product as any).lifecycle_status === "archived" ? (
+              <ArchiveRestore className="h-4 w-4 mr-2" />
+            ) : (
+              <Archive className="h-4 w-4 mr-2" />
+            ))}
+            {(product as any).lifecycle_status === "archived" ? "Genaktivér" : "Deaktivér"}
+          </Button>
         </div>
       </div>
+
+      <MergeProductDialog
+        open={mergeOpen}
+        onOpenChange={setMergeOpen}
+        source={{ id: product.id, title: product.title, ean: product.ean }}
+      />
+
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-7">
         <Card className="shadow-sm">
