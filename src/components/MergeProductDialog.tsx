@@ -53,28 +53,31 @@ export default function MergeProductDialog({ open, onOpenChange, source }: Props
   };
 
   const merge = async () => {
-    if (!target) return;
+    if (!target || !primaryId) return;
+    // Primary = beholdes, other = slettes
+    const keep = primaryId === source.id ? { id: source.id, title: source.title } : { id: target.id, title: target.title };
+    const drop = primaryId === source.id ? { id: target.id, title: target.title } : { id: source.id, title: source.title };
     setMerging(true);
     try {
-      // Move supplier_products: skip rows that already exist on target for same supplier
-      const { data: targetSps } = await supabase
+      // Move supplier_products: skip rows that already exist on keep for same supplier
+      const { data: keepSps } = await supabase
         .from("supplier_products")
         .select("supplier_id")
-        .eq("master_product_id", target.id);
-      const taken = new Set((targetSps ?? []).map((r: any) => r.supplier_id));
+        .eq("master_product_id", keep.id);
+      const taken = new Set((keepSps ?? []).map((r: any) => r.supplier_id));
 
-      const { data: sourceSps } = await supabase
+      const { data: dropSps } = await supabase
         .from("supplier_products")
         .select("id, supplier_id")
-        .eq("master_product_id", source.id);
+        .eq("master_product_id", drop.id);
 
-      const toMove = (sourceSps ?? []).filter((r: any) => !taken.has(r.supplier_id)).map((r: any) => r.id);
-      const toDelete = (sourceSps ?? []).filter((r: any) => taken.has(r.supplier_id)).map((r: any) => r.id);
+      const toMove = (dropSps ?? []).filter((r: any) => !taken.has(r.supplier_id)).map((r: any) => r.id);
+      const toDelete = (dropSps ?? []).filter((r: any) => taken.has(r.supplier_id)).map((r: any) => r.id);
 
       if (toMove.length > 0) {
         const { error } = await supabase
           .from("supplier_products")
-          .update({ master_product_id: target.id })
+          .update({ master_product_id: keep.id })
           .in("id", toMove);
         if (error) throw error;
       }
@@ -85,20 +88,21 @@ export default function MergeProductDialog({ open, onOpenChange, source }: Props
       // Move variants
       await supabase
         .from("product_variants")
-        .update({ master_product_id: target.id })
-        .eq("master_product_id", source.id);
+        .update({ master_product_id: keep.id })
+        .eq("master_product_id", drop.id);
 
-      // Delete source master product
-      const { error: delErr } = await supabase.from("master_products").delete().eq("id", source.id);
+      // Delete other master product
+      const { error: delErr } = await supabase.from("master_products").delete().eq("id", drop.id);
       if (delErr) throw delErr;
 
-      toast.success(`Flettet ind i "${target.title}"`);
+      toast.success(`Flettet ind i "${keep.title}"`);
       qc.invalidateQueries({ queryKey: ["master_products"] });
-      qc.invalidateQueries({ queryKey: ["master_product", target.id] });
+      qc.invalidateQueries({ queryKey: ["master_product", keep.id] });
       onOpenChange(false);
-      navigate(`/products/${target.id}`);
+      if (keep.id !== source.id) navigate(`/products/${keep.id}`);
     } catch (err: any) {
       toast.error(err?.message ?? "Fletning fejlede");
+
     } finally {
       setMerging(false);
     }
