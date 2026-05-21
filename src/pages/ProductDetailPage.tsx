@@ -23,6 +23,9 @@ import SyncTagsEditor from "@/components/SyncTagsEditor";
 import DescriptionAiActions from "@/components/DescriptionAiActions";
 import { LifecycleBadge, SendToShopifyButton, PullFromShopifyButton } from "@/components/LifecycleControls";
 import ProductVariantsTab from "@/components/ProductVariantsTab";
+import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
+import MergeProductDialog from "@/components/MergeProductDialog";
+import { Archive, ArchiveRestore, GitMerge } from "lucide-react";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
