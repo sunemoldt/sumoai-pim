@@ -29,6 +29,7 @@ export default function MergeProductDialog({ open, onOpenChange, source }: Props
   const [results, setResults] = useState<Candidate[]>([]);
   const [searching, setSearching] = useState(false);
   const [target, setTarget] = useState<Candidate | null>(null);
+  const [primaryId, setPrimaryId] = useState<string | null>(null);
   const [merging, setMerging] = useState(false);
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -52,28 +53,31 @@ export default function MergeProductDialog({ open, onOpenChange, source }: Props
   };
 
   const merge = async () => {
-    if (!target) return;
+    if (!target || !primaryId) return;
+    // Primary = beholdes, other = slettes
+    const keep = primaryId === source.id ? { id: source.id, title: source.title } : { id: target.id, title: target.title };
+    const drop = primaryId === source.id ? { id: target.id, title: target.title } : { id: source.id, title: source.title };
     setMerging(true);
     try {
-      // Move supplier_products: skip rows that already exist on target for same supplier
-      const { data: targetSps } = await supabase
+      // Move supplier_products: skip rows that already exist on keep for same supplier
+      const { data: keepSps } = await supabase
         .from("supplier_products")
         .select("supplier_id")
-        .eq("master_product_id", target.id);
-      const taken = new Set((targetSps ?? []).map((r: any) => r.supplier_id));
+        .eq("master_product_id", keep.id);
+      const taken = new Set((keepSps ?? []).map((r: any) => r.supplier_id));
 
-      const { data: sourceSps } = await supabase
+      const { data: dropSps } = await supabase
         .from("supplier_products")
         .select("id, supplier_id")
-        .eq("master_product_id", source.id);
+        .eq("master_product_id", drop.id);
 
-      const toMove = (sourceSps ?? []).filter((r: any) => !taken.has(r.supplier_id)).map((r: any) => r.id);
-      const toDelete = (sourceSps ?? []).filter((r: any) => taken.has(r.supplier_id)).map((r: any) => r.id);
+      const toMove = (dropSps ?? []).filter((r: any) => !taken.has(r.supplier_id)).map((r: any) => r.id);
+      const toDelete = (dropSps ?? []).filter((r: any) => taken.has(r.supplier_id)).map((r: any) => r.id);
 
       if (toMove.length > 0) {
         const { error } = await supabase
           .from("supplier_products")
-          .update({ master_product_id: target.id })
+          .update({ master_product_id: keep.id })
           .in("id", toMove);
         if (error) throw error;
       }
@@ -84,20 +88,21 @@ export default function MergeProductDialog({ open, onOpenChange, source }: Props
       // Move variants
       await supabase
         .from("product_variants")
-        .update({ master_product_id: target.id })
-        .eq("master_product_id", source.id);
+        .update({ master_product_id: keep.id })
+        .eq("master_product_id", drop.id);
 
-      // Delete source master product
-      const { error: delErr } = await supabase.from("master_products").delete().eq("id", source.id);
+      // Delete other master product
+      const { error: delErr } = await supabase.from("master_products").delete().eq("id", drop.id);
       if (delErr) throw delErr;
 
-      toast.success(`Flettet ind i "${target.title}"`);
+      toast.success(`Flettet ind i "${keep.title}"`);
       qc.invalidateQueries({ queryKey: ["master_products"] });
-      qc.invalidateQueries({ queryKey: ["master_product", target.id] });
+      qc.invalidateQueries({ queryKey: ["master_product", keep.id] });
       onOpenChange(false);
-      navigate(`/products/${target.id}`);
+      if (keep.id !== source.id) navigate(`/products/${keep.id}`);
     } catch (err: any) {
       toast.error(err?.message ?? "Fletning fejlede");
+
     } finally {
       setMerging(false);
     }
@@ -132,7 +137,7 @@ export default function MergeProductDialog({ open, onOpenChange, source }: Props
           {results.map((r) => (
             <button
               key={r.id}
-              onClick={() => setTarget(r)}
+              onClick={() => { setTarget(r); setPrimaryId(r.id); }}
               className={`w-full flex items-center gap-3 p-2 rounded-md text-left hover:bg-accent transition-colors ${target?.id === r.id ? "bg-accent ring-1 ring-primary" : ""}`}
             >
               <div className="h-10 w-10 rounded bg-secondary flex items-center justify-center shrink-0">
@@ -147,20 +152,42 @@ export default function MergeProductDialog({ open, onOpenChange, source }: Props
         </div>
 
         {target && (
-          <div className="text-sm bg-warning/10 border border-warning/30 rounded-md p-3 flex items-center gap-2">
-            <span className="font-medium">{source.title}</span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">{target.title}</span>
+          <div className="space-y-2 rounded-md border p-3">
+            <p className="text-sm font-medium">Hvilket produkt skal være det primære (beholdes)?</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                { id: source.id, title: source.title, ean: source.ean, shopify: undefined as string | null | undefined, label: "Dette produkt" },
+                { id: target.id, title: target.title, ean: target.ean, shopify: target.shopify_product_id, label: "Valgt produkt" },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => setPrimaryId(opt.id)}
+                  className={`flex flex-col items-start gap-1 rounded-md border p-3 text-left transition-colors ${primaryId === opt.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-accent"}`}
+                >
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{opt.label}{primaryId === opt.id && " · primær"}</span>
+                  <span className="text-sm font-medium truncate w-full">{opt.title}</span>
+                  <span className="text-xs text-muted-foreground font-mono">{opt.ean}{opt.shopify ? " · Shopify" : ""}</span>
+                </button>
+              ))}
+            </div>
+            {primaryId && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
+                Det andet produkt slettes
+                <ArrowRight className="h-3 w-3" />
+                leverandører og varianter flyttes til primær.
+              </p>
+            )}
           </div>
         )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={merging}>Annullér</Button>
-          <Button variant="destructive" onClick={merge} disabled={!target || merging}>
+          <Button variant="destructive" onClick={merge} disabled={!target || !primaryId || merging}>
             {merging && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Flet og slet kildeprodukt
+            Flet
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
