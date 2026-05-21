@@ -137,7 +137,7 @@ export default function MergeProductDialog({ open, onOpenChange, source }: Props
           {results.map((r) => (
             <button
               key={r.id}
-              onClick={() => setTarget(r)}
+              onClick={() => { setTarget(r); setPrimaryId(r.id); }}
               className={`w-full flex items-center gap-3 p-2 rounded-md text-left hover:bg-accent transition-colors ${target?.id === r.id ? "bg-accent ring-1 ring-primary" : ""}`}
             >
               <div className="h-10 w-10 rounded bg-secondary flex items-center justify-center shrink-0">
@@ -152,20 +152,42 @@ export default function MergeProductDialog({ open, onOpenChange, source }: Props
         </div>
 
         {target && (
-          <div className="text-sm bg-warning/10 border border-warning/30 rounded-md p-3 flex items-center gap-2">
-            <span className="font-medium">{source.title}</span>
-            <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">{target.title}</span>
+          <div className="space-y-2 rounded-md border p-3">
+            <p className="text-sm font-medium">Hvilket produkt skal være det primære (beholdes)?</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                { id: source.id, title: source.title, ean: source.ean, shopify: undefined as string | null | undefined, label: "Dette produkt" },
+                { id: target.id, title: target.title, ean: target.ean, shopify: target.shopify_product_id, label: "Valgt produkt" },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => setPrimaryId(opt.id)}
+                  className={`flex flex-col items-start gap-1 rounded-md border p-3 text-left transition-colors ${primaryId === opt.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-accent"}`}
+                >
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{opt.label}{primaryId === opt.id && " · primær"}</span>
+                  <span className="text-sm font-medium truncate w-full">{opt.title}</span>
+                  <span className="text-xs text-muted-foreground font-mono">{opt.ean}{opt.shopify ? " · Shopify" : ""}</span>
+                </button>
+              ))}
+            </div>
+            {primaryId && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
+                Det andet produkt slettes
+                <ArrowRight className="h-3 w-3" />
+                leverandører og varianter flyttes til primær.
+              </p>
+            )}
           </div>
         )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={merging}>Annullér</Button>
-          <Button variant="destructive" onClick={merge} disabled={!target || merging}>
+          <Button variant="destructive" onClick={merge} disabled={!target || !primaryId || merging}>
             {merging && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Flet og slet kildeprodukt
+            Flet
           </Button>
         </DialogFooter>
+
       </DialogContent>
     </Dialog>
   );
