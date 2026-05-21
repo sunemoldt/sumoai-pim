@@ -349,11 +349,37 @@ export default function ProductDetailPage() {
             {product.brand && <> · <span className="font-medium text-foreground">{product.brand}</span></>}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <QuickSupplierSyncButton
+            productId={product.id}
+            supplierIds={product.supplier_products.map((sp) => sp.supplier_id)}
+            variant="icon"
+          />
           <PullFromShopifyButton productId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
           <SendToShopifyButton product={product} />
+          <Button variant="outline" size="sm" onClick={() => setMergeOpen(true)}>
+            <GitMerge className="h-4 w-4 mr-2" />
+            Flet
+          </Button>
+          <Button variant="outline" size="sm" onClick={toggleArchived} disabled={togglingLifecycle}>
+            {togglingLifecycle ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : ((product as any).lifecycle_status === "archived" ? (
+              <ArchiveRestore className="h-4 w-4 mr-2" />
+            ) : (
+              <Archive className="h-4 w-4 mr-2" />
+            ))}
+            {(product as any).lifecycle_status === "archived" ? "Genaktivér" : "Deaktivér"}
+          </Button>
         </div>
       </div>
+
+      <MergeProductDialog
+        open={mergeOpen}
+        onOpenChange={setMergeOpen}
+        source={{ id: product.id, title: product.title, ean: product.ean }}
+      />
+
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-7">
         <Card className="shadow-sm">
