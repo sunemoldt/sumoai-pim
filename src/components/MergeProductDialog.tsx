@@ -29,6 +29,7 @@ export default function MergeProductDialog({ open, onOpenChange, source }: Props
   const [results, setResults] = useState<Candidate[]>([]);
   const [searching, setSearching] = useState(false);
   const [target, setTarget] = useState<Candidate | null>(null);
+  const [primaryId, setPrimaryId] = useState<string | null>(null);
   const [merging, setMerging] = useState(false);
   const qc = useQueryClient();
   const navigate = useNavigate();
