@@ -35,16 +35,28 @@ OPGAVE: Generér komplet produktopsætning på dansk ud fra brugerens basisinfo.
 
 FELTER:
 - title: Klar, sælgende produkttitel. Brand + model + key feature. Max ~70 tegn. Ingen ALLE CAPS.
-- short_description: HTML. SKAL altid følge denne opbygning – ligesom de eksisterende ~500 produkter i shoppen:
+- short_description: HTML. SKAL ALTID indeholde BÅDE en teasende sælgende intro OG en punktopstilling. Følg PRÆCIST denne opbygning – ligesom de eksisterende ~500 produkter på shoppen:
     1) <h2> med produktets navn/model
-    2) <p> med 1-2 sætningers teasende og sælgende intro (hook + hovedfordel, ikke ren spec-opremsning)
+    2) <p> med 1-2 sætningers teasende og sælgende intro (hook + hovedfordel)
     3) <ul> med 4-8 <li> bullets – korte, scanbare punkter med de vigtigste fordele/specs/USP'er
-  Ingen <div>, ingen inline styles, ingen Google Translate-rester. Ren, simpel HTML.
+  Det er FORBUDT at returnere short_description uden <ul><li>...</li></ul>. Ingen <div>, ingen inline styles, ingen Google Translate-rester.
+
+  EKSEMPEL på korrekt short_description:
+  <h2>Mercusys MS108GP 8-Port PoE+ Gigabit Switch</h2>
+  <p>Kompakt men kraftfuld switch der leverer stabil gigabit-forbindelse og PoE+ strøm til dine enheder – plug-and-play på få sekunder.</p>
+  <ul>
+  <li>8 x 10/100/1000 Mbps RJ-45 porte (7 med PoE+)</li>
+  <li>65 W samlet PoE-budget, op til 30 W pr. port</li>
+  <li>Plug-and-play – ingen konfiguration nødvendig</li>
+  <li>Desktop- eller vægmonterbar</li>
+  </ul>
+
 - long_description: Velstruktureret HTML med <p> intro, <ul><li> bullets med fordele/specs, evt. <h3> sektioner. 150-300 ord. Sælgende men troværdig tone.
 - meta_title: SEO titel max 60 tegn. Indeholder hovedkeyword. Format: "Produktnavn – USP | Brand"
 - meta_description: SEO beskrivelse 140-160 tegn. Hook + CTA. Indeholder hovedkeyword.
 
 REGLER:
+- short_description SKAL indeholde <h2>, <p> OG <ul> med mindst 4 <li> bullets – aldrig kun ren tekst
 - Aldrig opdigt tekniske specs der ikke er antydet i input
 - Brug brand/kategori naturligt hvis givet
 - Fokus på kundefordele, ikke kun specs
@@ -82,7 +94,7 @@ Generér alle 5 felter.`;
               type: "object",
               properties: {
                 title: { type: "string" },
-                short_description: { type: "string" },
+                short_description: { type: "string", description: "HTML med <h2> titel, <p> teasende sælgende intro OG <ul><li>...</li></ul> med 4-8 bullets. ALDRIG uden bullets." },
                 long_description: { type: "string" },
                 meta_title: { type: "string" },
                 meta_description: { type: "string" },
