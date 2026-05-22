@@ -34,17 +34,19 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
   const syncToShop = async () => {
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("wc-update-product", {
+      const { data, error } = await supabase.functions.invoke("shopify-update-product", {
         body: {
           master_product_id: productId,
           short_description: currentShort ?? "",
           description: currentLong ?? "",
+          source: "description-sync",
         },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success("Beskrivelse synket til WooCommerce");
+      toast.success("Beskrivelse synket til Shopify");
       qc.invalidateQueries({ queryKey: ["product_change_log", productId] });
+      qc.invalidateQueries({ queryKey: ["master_product", productId] });
     } catch (e: any) {
       toast.error(e?.message || "Kunne ikke synke til shop");
     } finally {
@@ -123,9 +125,9 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Skub beskrivelse til WooCommerce?</AlertDialogTitle>
+                <AlertDialogTitle>Skub beskrivelse til Shopify?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i shoppen lige nu.
+                  Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i Shopify lige nu.
                   Handlingen kan ikke fortrydes automatisk.
                 </AlertDialogDescription>
               </AlertDialogHeader>
