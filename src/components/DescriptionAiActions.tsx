@@ -125,9 +125,9 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Skub beskrivelse til WooCommerce?</AlertDialogTitle>
+                <AlertDialogTitle>Skub beskrivelse til Shopify?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i shoppen lige nu.
+                  Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i Shopify lige nu.
                   Handlingen kan ikke fortrydes automatisk.
                 </AlertDialogDescription>
               </AlertDialogHeader>
