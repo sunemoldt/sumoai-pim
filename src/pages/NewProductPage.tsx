@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Package, Upload } from "lucide-react";
+import { ArrowLeft, Loader2, Package, Sparkles, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -14,6 +14,8 @@ export default function NewProductPage() {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [aiBrief, setAiBrief] = useState("");
   const [form, setForm] = useState({
     title: "",
     ean: "",
@@ -22,6 +24,8 @@ export default function NewProductPage() {
     category: "",
     short_description: "",
     long_description: "",
+    meta_title: "",
+    meta_description: "",
     webshop_price: "",
     sale_price: "",
     image_url: "",
@@ -30,6 +34,37 @@ export default function NewProductPage() {
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const stripLeadingZeros = (v: string) => v.replace(/^0+/, "") || v;
+
+  const generateWithAi = async () => {
+    if (aiBrief.trim().length < 3) {
+      toast({ title: "Skriv lidt om produktet først", description: "F.eks. 'Blackview Tab 90 tablet 11\" 8GB/256GB Android 14'", variant: "destructive" });
+      return;
+    }
+    setGenerating(true);
+    const { data, error } = await supabase.functions.invoke("ai-generate-product", {
+      body: {
+        input: aiBrief,
+        brand: form.brand,
+        category: form.category,
+        ean: form.ean,
+        sku: form.sku,
+      },
+    });
+    setGenerating(false);
+    if (error || (data as any)?.error) {
+      toast({ title: "AI-generering fejlede", description: error?.message ?? (data as any)?.error, variant: "destructive" });
+      return;
+    }
+    setForm((p) => ({
+      ...p,
+      title: data.title || p.title,
+      short_description: data.short_description || p.short_description,
+      long_description: data.long_description || p.long_description,
+      meta_title: data.meta_title || p.meta_title,
+      meta_description: data.meta_description || p.meta_description,
+    }));
+    toast({ title: "AI har udfyldt felterne", description: "Tjek og ret efter behov før du gemmer." });
+  };
 
   const create = async (alsoPush: boolean) => {
     if (!form.title.trim()) { toast({ title: "Titel påkrævet", variant: "destructive" }); return; }
@@ -52,6 +87,8 @@ export default function NewProductPage() {
       categories: form.category.trim() ? [form.category.trim()] : [],
       short_description: form.short_description || null,
       long_description: form.long_description || null,
+      meta_title: form.meta_title.trim() || null,
+      meta_description: form.meta_description.trim() || null,
       image_url: form.image_url.trim() || null,
       webshop_price: form.webshop_price ? Number(form.webshop_price) : null,
       sale_price: form.sale_price ? Number(form.sale_price) : null,
@@ -87,6 +124,29 @@ export default function NewProductPage() {
         <h1 className="text-2xl font-semibold flex items-center gap-2"><Package className="h-6 w-6" /> Opret nyt produkt</h1>
       </div>
 
+      <Card className="border-primary/40 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> AI-assistent</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Indtast lidt basisinfo om produktet (model, hovedfunktioner, specs) — så genererer AI titel, kort/lang beskrivelse samt meta-titel og meta-beskrivelse på dansk.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            rows={4}
+            placeholder="F.eks.: Blackview Tab 90, 11&quot; tablet, 8GB RAM, 256GB lagring, Android 14, 8800 mAh batteri, 4G LTE, til arbejde og underholdning"
+            value={aiBrief}
+            onChange={(e) => setAiBrief(e.target.value)}
+          />
+          <div className="flex justify-end">
+            <Button onClick={generateWithAi} disabled={generating}>
+              {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+              Generér med AI
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Grundoplysninger</CardTitle>
@@ -103,6 +163,14 @@ export default function NewProductPage() {
           <div className="space-y-1.5 sm:col-span-2"><Label>Billede-URL</Label><Input value={form.image_url} onChange={(e) => set("image_url", e.target.value)} /></div>
           <div className="space-y-1.5 sm:col-span-2"><Label>Kort beskrivelse</Label><Textarea rows={2} value={form.short_description} onChange={(e) => set("short_description", e.target.value)} /></div>
           <div className="space-y-1.5 sm:col-span-2"><Label>Lang beskrivelse</Label><Textarea rows={6} value={form.long_description} onChange={(e) => set("long_description", e.target.value)} /></div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Meta titel <span className="text-xs text-muted-foreground">(SEO, max ~60 tegn) — {form.meta_title.length}</span></Label>
+            <Input value={form.meta_title} onChange={(e) => set("meta_title", e.target.value)} />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Meta beskrivelse <span className="text-xs text-muted-foreground">(SEO, 140–160 tegn) — {form.meta_description.length}</span></Label>
+            <Textarea rows={2} value={form.meta_description} onChange={(e) => set("meta_description", e.target.value)} />
+          </div>
         </CardContent>
       </Card>
 
