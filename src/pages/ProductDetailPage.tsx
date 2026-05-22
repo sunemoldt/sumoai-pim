@@ -25,7 +25,8 @@ import { LifecycleBadge, SendToShopifyButton, PullFromShopifyButton } from "@/co
 import ProductVariantsTab from "@/components/ProductVariantsTab";
 import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
 import MergeProductDialog from "@/components/MergeProductDialog";
-import { Archive, ArchiveRestore, GitMerge } from "lucide-react";
+import AiGenerateAllDialog from "@/components/AiGenerateAllDialog";
+import { Archive, ArchiveRestore, GitMerge, Sparkles } from "lucide-react";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
@@ -61,6 +62,7 @@ export default function ProductDetailPage() {
   const [syncInitialized, setSyncInitialized] = useState(false);
   const [applyingRec, setApplyingRec] = useState<string | null>(null);
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [aiGenOpen, setAiGenOpen] = useState(false);
   const [togglingLifecycle, setTogglingLifecycle] = useState(false);
 
   const toggleArchived = async () => {
@@ -357,6 +359,10 @@ export default function ProductDetailPage() {
           />
           <PullFromShopifyButton productId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
           <SendToShopifyButton product={product} />
+          <Button variant="outline" size="sm" onClick={() => setAiGenOpen(true)}>
+            <Sparkles className="h-4 w-4 mr-2" />
+            AI: generér felter
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setMergeOpen(true)}>
             <GitMerge className="h-4 w-4 mr-2" />
             Flet
@@ -379,6 +385,25 @@ export default function ProductDetailPage() {
         onOpenChange={setMergeOpen}
         source={{ id: product.id, title: product.title, ean: product.ean }}
       />
+
+      <AiGenerateAllDialog
+        open={aiGenOpen}
+        onOpenChange={setAiGenOpen}
+        product={{
+          id: product.id,
+          title: product.title,
+          brand: (product as any).brand,
+          category: (product as any).category,
+          ean: product.ean,
+          sku: (product as any).sku,
+          short_description: (product as any).short_description,
+          long_description: (product as any).long_description,
+          meta_title: (product as any).meta_title,
+          meta_description: (product as any).meta_description,
+          attributes: (product as any).attributes,
+        }}
+      />
+
 
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-7">
