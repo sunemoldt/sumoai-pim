@@ -94,7 +94,7 @@ Generér alle 5 felter.`;
               type: "object",
               properties: {
                 title: { type: "string" },
-                short_description: { type: "string" },
+                short_description: { type: "string", description: "HTML med <h2> titel, <p> teasende sælgende intro OG <ul><li>...</li></ul> med 4-8 bullets. ALDRIG uden bullets." },
                 long_description: { type: "string" },
                 meta_title: { type: "string" },
                 meta_description: { type: "string" },
