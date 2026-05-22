@@ -25,7 +25,8 @@ import { LifecycleBadge, SendToShopifyButton, PullFromShopifyButton } from "@/co
 import ProductVariantsTab from "@/components/ProductVariantsTab";
 import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
 import MergeProductDialog from "@/components/MergeProductDialog";
-import { Archive, ArchiveRestore, GitMerge } from "lucide-react";
+import AiGenerateAllDialog from "@/components/AiGenerateAllDialog";
+import { Archive, ArchiveRestore, GitMerge, Sparkles } from "lucide-react";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
