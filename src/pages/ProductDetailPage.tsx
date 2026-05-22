@@ -62,6 +62,7 @@ export default function ProductDetailPage() {
   const [syncInitialized, setSyncInitialized] = useState(false);
   const [applyingRec, setApplyingRec] = useState<string | null>(null);
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [aiGenOpen, setAiGenOpen] = useState(false);
   const [togglingLifecycle, setTogglingLifecycle] = useState(false);
 
   const toggleArchived = async () => {
