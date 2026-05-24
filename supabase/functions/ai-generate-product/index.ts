@@ -33,54 +33,27 @@ Deno.serve(async (req) => {
 
 OPGAVE: Generér komplet produktopsætning på dansk ud fra brugerens basisinfo.
 
-FELTER:
-- title: Klar, sælgende produkttitel. Brand + model + key feature. Max ~70 tegn. Ingen ALLE CAPS.
-- short_description: HTML. SKAL ALTID indeholde BÅDE en teasende sælgende intro OG en punktopstilling. Følg PRÆCIST denne opbygning – ligesom de eksisterende ~500 produkter på shoppen:
-    1) <h2> med produktets navn/model
-    2) <p> med 1-2 sætningers teasende og sælgende intro (hook + hovedfordel)
-    3) <ul> med 4-8 <li> bullets – korte, scanbare punkter med de vigtigste fordele/specs/USP'er
-  Det er FORBUDT at returnere short_description uden <ul><li>...</li></ul>. Ingen <div>, ingen inline styles, ingen Google Translate-rester.
+Generér 5 felter på dansk:
+- title: Brand + model + key feature. Max ~70 tegn. Ingen ALLE CAPS.
+- short_description: HTML. SKAL indeholde <h2> + <p> teaser (1-2 sætninger, hook+fordel) + <ul> med 4-8 <li> bullets. ALDRIG uden bullets. Ingen <div>/inline styles.
+  Eksempel:
+  <h2>Mercusys MS108GP 8-Port PoE+ Switch</h2>
+  <p>Kompakt switch med stabil gigabit og PoE+ – plug-and-play.</p>
+  <ul><li>8 x Gigabit RJ-45 (7 PoE+)</li><li>65 W PoE-budget</li><li>Plug-and-play</li><li>Desktop/væg</li></ul>
+- long_description: HTML <p> + <ul><li> + evt. <h3>. 150-300 ord.
+- meta_title: max 60 tegn. "Produkt – USP | Brand".
+- meta_description: 140-160 tegn. Hook + CTA.
 
-  EKSEMPEL på korrekt short_description:
-  <h2>Mercusys MS108GP 8-Port PoE+ Gigabit Switch</h2>
-  <p>Kompakt men kraftfuld switch der leverer stabil gigabit-forbindelse og PoE+ strøm til dine enheder – plug-and-play på få sekunder.</p>
-  <ul>
-  <li>8 x 10/100/1000 Mbps RJ-45 porte (7 med PoE+)</li>
-  <li>65 W samlet PoE-budget, op til 30 W pr. port</li>
-  <li>Plug-and-play – ingen konfiguration nødvendig</li>
-  <li>Desktop- eller vægmonterbar</li>
-  </ul>
+Regler: opdigt ikke specs. Brug brand/kategori naturligt. Korrekt dansk.`;
 
-- long_description: Velstruktureret HTML med <p> intro, <ul><li> bullets med fordele/specs, evt. <h3> sektioner. 150-300 ord. Sælgende men troværdig tone.
-- meta_title: SEO titel max 60 tegn. Indeholder hovedkeyword. Format: "Produktnavn – USP | Brand"
-- meta_description: SEO beskrivelse 140-160 tegn. Hook + CTA. Indeholder hovedkeyword.
-
-REGLER:
-- short_description SKAL indeholde <h2>, <p> OG <ul> med mindst 4 <li> bullets – aldrig kun ren tekst
-- Aldrig opdigt tekniske specs der ikke er antydet i input
-- Brug brand/kategori naturligt hvis givet
-- Fokus på kundefordele, ikke kun specs
-- Ingen "buzzwords" eller falske påstande
-- Korrekt dansk, ingen anglicismer hvor unødvendigt`;
-
-    const userPrompt = `Basisinfo fra bruger:
-"""
-${input}
-"""
-
-Kendt metadata:
-- Brand: ${brand || "(ikke angivet)"}
-- Kategori: ${category || "(ikke angivet)"}
-- EAN: ${ean || "(ikke angivet)"}
-- SKU: ${sku || "(ikke angivet)"}
-
-Generér alle 5 felter.`;
+    const userPrompt = `Info: ${input}
+Brand: ${brand || "-"} | Kategori: ${category || "-"} | EAN: ${ean || "-"} | SKU: ${sku || "-"}`;
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-3.5-flash",
+        model: "google/gemini-3.1-flash-lite-preview",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -94,7 +67,7 @@ Generér alle 5 felter.`;
               type: "object",
               properties: {
                 title: { type: "string" },
-                short_description: { type: "string", description: "HTML med <h2> titel, <p> teasende sælgende intro OG <ul><li>...</li></ul> med 4-8 bullets. ALDRIG uden bullets." },
+                short_description: { type: "string", description: "HTML: <h2> + <p> teaser + <ul><li> 4-8 bullets. ALDRIG uden bullets." },
                 long_description: { type: "string" },
                 meta_title: { type: "string" },
                 meta_description: { type: "string" },
