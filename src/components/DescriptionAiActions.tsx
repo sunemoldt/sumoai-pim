@@ -16,11 +16,14 @@ interface Props {
   productId: string;
   currentShort?: string | null;
   currentLong?: string | null;
+  shopifyProductId?: string | null;
+  webshopPlatform?: string | null;
+  webshopProductId?: string | null;
 }
 
 type Mode = "clean" | "rewrite";
 
-export default function DescriptionAiActions({ productId, currentShort, currentLong }: Props) {
+export default function DescriptionAiActions({ productId, currentShort, currentLong, shopifyProductId, webshopPlatform, webshopProductId }: Props) {
   const qc = useQueryClient();
   const [mode, setMode] = useState<Mode | null>(null);
   const [loading, setLoading] = useState(false);
@@ -30,11 +33,20 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
   const [syncing, setSyncing] = useState(false);
 
   const hasPimContent = !!(currentShort?.trim() || currentLong?.trim());
+  const hasShopify = !!shopifyProductId;
+  const hasWoo = webshopPlatform === "woocommerce" && !!webshopProductId;
+  const targetPlatform: "shopify" | "woocommerce" | null = hasShopify ? "shopify" : hasWoo ? "woocommerce" : null;
+  const targetLabel = targetPlatform === "shopify" ? "Shopify" : targetPlatform === "woocommerce" ? "WooCommerce" : "shop";
 
   const syncToShop = async () => {
+    if (!targetPlatform) {
+      toast.error("Produktet er ikke koblet til hverken Shopify eller WooCommerce");
+      return;
+    }
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("shopify-update-product", {
+      const fn = targetPlatform === "shopify" ? "shopify-update-product" : "wc-update-product";
+      const { data, error } = await supabase.functions.invoke(fn, {
         body: {
           master_product_id: productId,
           short_description: currentShort ?? "",
@@ -44,7 +56,7 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success("Beskrivelse synket til Shopify");
+      toast.success(`Beskrivelse synket til ${targetLabel}`);
       qc.invalidateQueries({ queryKey: ["product_change_log", productId] });
       qc.invalidateQueries({ queryKey: ["master_product", productId] });
     } catch (e: any) {
