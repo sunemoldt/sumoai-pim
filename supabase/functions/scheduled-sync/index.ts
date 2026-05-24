@@ -98,33 +98,39 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3. Auto stock sync — delegated to DB function recompute_product_stock.
-    // Triggers on supplier_products keep stock live; this loop is a safety-net
-    // sweep that respects each product's stock_sync_interval.
-    const { data: syncProducts } = await supabase
-      .from("master_products")
-      .select("id, stock_sync_interval")
-      .eq("auto_stock_sync", true);
+    // 3. Auto stock sync — safety-net sweep. DB triggers keep stock live;
+    // this only runs at minute 0 to avoid 60x duplicate work per hour.
+    const now = new Date();
+    const minute = now.getUTCMinutes();
+    const hour = now.getUTCHours();
+    const dow = now.getUTCDay();
 
-    if (syncProducts && syncProducts.length > 0) {
-      const now = new Date();
-      for (const product of syncProducts) {
-        const interval = (product as any).stock_sync_interval ?? "daily";
-        if (interval === "manual") continue;
-        if (interval === "daily" && now.getUTCHours() !== 6) continue;
-        if (interval === "weekly" && (now.getUTCHours() !== 6 || now.getUTCDay() !== 1)) continue;
-        // hourly = always; realtime relies on DB triggers anyway
+    if (minute === 0) {
+      const { data: syncProducts } = await supabase
+        .from("master_products")
+        .select("id, stock_sync_interval")
+        .eq("auto_stock_sync", true);
 
-        const { error } = await supabase.rpc("recompute_product_stock", {
-          p_master_product_id: product.id,
-        });
-        if (error) {
-          results.push({ type: "stock-sync", product_id: product.id, success: false, error: error.message });
-        } else {
-          results.push({ type: "stock-sync", product_id: product.id, success: true });
+      if (syncProducts && syncProducts.length > 0) {
+        for (const product of syncProducts) {
+          const interval = (product as any).stock_sync_interval ?? "daily";
+          if (interval === "manual") continue;
+          if (interval === "daily" && hour !== 6) continue;
+          if (interval === "weekly" && (hour !== 6 || dow !== 1)) continue;
+          // hourly = every minute 0 (= once per hour)
+
+          const { error } = await supabase.rpc("recompute_product_stock", {
+            p_master_product_id: product.id,
+          });
+          if (error) {
+            results.push({ type: "stock-sync", product_id: product.id, success: false, error: error.message });
+          } else {
+            results.push({ type: "stock-sync", product_id: product.id, success: true });
+          }
         }
       }
     }
+
 
     return new Response(JSON.stringify({ ok: true, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
