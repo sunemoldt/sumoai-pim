@@ -128,18 +128,18 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
               <Button
                 type="button"
                 size="sm"
-                disabled={!hasPimContent || syncing}
-                title={!hasPimContent ? "Gem en beskrivelse i PIM først" : "Skub PIM-beskrivelsen til WooCommerce"}
+                disabled={!hasPimContent || syncing || !targetPlatform}
+                title={!targetPlatform ? "Produktet er ikke koblet til en webshop" : !hasPimContent ? "Gem en beskrivelse i PIM først" : `Skub PIM-beskrivelsen til ${targetLabel}`}
               >
                 {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                Synk beskrivelse til shop
+                Synk beskrivelse til {targetLabel}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Skub beskrivelse til Shopify?</AlertDialogTitle>
+                <AlertDialogTitle>Skub beskrivelse til {targetLabel}?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i Shopify lige nu.
+                  Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i {targetLabel} lige nu.
                   Handlingen kan ikke fortrydes automatisk.
                 </AlertDialogDescription>
               </AlertDialogHeader>
