@@ -7,6 +7,7 @@ import { Pencil, Check, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import DOMPurify from "dompurify";
 
 type FieldType = "text" | "number" | "textarea" | "html" | "select" | "boolean";
 
@@ -95,7 +96,7 @@ export default function InlineEditField({
               <span className="text-muted-foreground text-sm">{placeholder}</span>
             ) : type === "html" ? (
               <div className="prose prose-sm max-w-none text-sm overflow-hidden break-words"
-                   dangerouslySetInnerHTML={{ __html: String(value) }} />
+                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(String(value)) }} />
             ) : type === "boolean" ? (
               <span className="text-sm">{value ? "Ja" : "Nej"}</span>
             ) : (
