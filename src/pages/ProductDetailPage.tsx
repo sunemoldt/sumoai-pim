@@ -26,6 +26,7 @@ import ProductVariantsTab from "@/components/ProductVariantsTab";
 import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
 import MergeProductDialog from "@/components/MergeProductDialog";
 import AiGenerateAllDialog from "@/components/AiGenerateAllDialog";
+import ProductLowMarginGuardCard from "@/components/ProductLowMarginGuardCard";
 import { Archive, ArchiveRestore, GitMerge, Sparkles } from "lucide-react";
 
 export default function ProductDetailPage() {
@@ -932,6 +933,13 @@ export default function ProductDetailPage() {
               </Button>
             </CardContent>
           </Card>
+
+          <ProductLowMarginGuardCard
+            productId={product.id}
+            initialMode={((product as any).low_margin_guard ?? "inherit") as "inherit" | "on" | "off"}
+            initialThreshold={(product as any).low_margin_threshold ?? null}
+            onSaved={() => queryClient.invalidateQueries({ queryKey: ["master_product", id] })}
+          />
         </TabsContent>
 
         <TabsContent value="comparison" className="space-y-4 mt-4">

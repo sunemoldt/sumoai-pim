@@ -20,6 +20,7 @@ import ShopifyBulkPullCard from "@/components/ShopifyBulkPullCard";
 import CleanupAuditCard from "@/components/CleanupAuditCard";
 import ShopifyQueueCard from "@/components/ShopifyQueueCard";
 import WoocommerceToggleCard from "@/components/WoocommerceToggleCard";
+import LowMarginGuardCard from "@/components/LowMarginGuardCard";
 
 export default function SettingsPage() {
   const { data: priceSettings = [] } = usePriceSettings();
@@ -436,6 +437,8 @@ export default function SettingsPage() {
       <LanguageSettingsCard />
 
       <FieldSyncPolicyCard />
+
+      <LowMarginGuardCard />
 
       <ShopifyBulkPullCard />
 
