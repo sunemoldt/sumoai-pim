@@ -7,6 +7,7 @@ import { Pencil, Check, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import DOMPurify from "dompurify";
 
 type FieldType = "text" | "number" | "textarea" | "html" | "select" | "boolean";
 
