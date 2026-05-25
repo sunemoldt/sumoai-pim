@@ -8,6 +8,19 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+function assertSafeFeedUrl(raw: string): void {
+  let parsed: URL;
+  try { parsed = new URL(raw); } catch { throw new Error("Invalid feed URL"); }
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("Feed URL must use http or https");
+  }
+  const host = parsed.hostname.toLowerCase();
+  const blocked = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|169\.254\.|::1$|0\.)/;
+  if (host === "localhost" || host === "::1" || blocked.test(host) || host.endsWith(".internal") || host.endsWith(".local")) {
+    throw new Error("Feed URL targets a private/internal address");
+  }
+}
+
 function parseCsv(text: string, delimiter: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
