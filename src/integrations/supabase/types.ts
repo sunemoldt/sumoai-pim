@@ -167,6 +167,8 @@ export type Database = {
           image_url: string | null
           lifecycle_status: string
           long_description: string | null
+          low_margin_guard: string
+          low_margin_threshold: number | null
           meta_description: string | null
           meta_title: string | null
           min_sync_margin: number | null
@@ -203,6 +205,8 @@ export type Database = {
           image_url?: string | null
           lifecycle_status?: string
           long_description?: string | null
+          low_margin_guard?: string
+          low_margin_threshold?: number | null
           meta_description?: string | null
           meta_title?: string | null
           min_sync_margin?: number | null
@@ -239,6 +243,8 @@ export type Database = {
           image_url?: string | null
           lifecycle_status?: string
           long_description?: string | null
+          low_margin_guard?: string
+          low_margin_threshold?: number | null
           meta_description?: string | null
           meta_title?: string | null
           min_sync_margin?: number | null
@@ -929,6 +935,10 @@ export type Database = {
       }
     }
     Functions: {
+      apply_low_margin_guard: {
+        Args: { p_master_product_id: string }
+        Returns: undefined
+      }
       get_change_log_daily: {
         Args: { days?: number }
         Returns: {
