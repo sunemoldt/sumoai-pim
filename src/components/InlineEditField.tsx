@@ -96,7 +96,7 @@ export default function InlineEditField({
               <span className="text-muted-foreground text-sm">{placeholder}</span>
             ) : type === "html" ? (
               <div className="prose prose-sm max-w-none text-sm overflow-hidden break-words"
-                   dangerouslySetInnerHTML={{ __html: String(value) }} />
+                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(String(value)) }} />
             ) : type === "boolean" ? (
               <span className="text-sm">{value ? "Ja" : "Nej"}</span>
             ) : (
