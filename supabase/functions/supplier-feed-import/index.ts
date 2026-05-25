@@ -396,6 +396,7 @@ Deno.serve(async (req) => {
         });
         console.log(`Streamed CSV: kept ${feedRows.length} matching rows`);
       } else {
+        assertSafeFeedUrl(supplier.feed_url!);
         const res = await fetch(supplier.feed_url!);
         if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
         text = await res.text();
