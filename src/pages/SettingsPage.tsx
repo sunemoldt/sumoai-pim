@@ -438,6 +438,8 @@ export default function SettingsPage() {
 
       <FieldSyncPolicyCard />
 
+      <LowMarginGuardCard />
+
       <ShopifyBulkPullCard />
 
       <ShopifyQueueCard />
