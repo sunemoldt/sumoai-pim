@@ -22,6 +22,7 @@ interface Props {
 }
 
 type Mode = "clean" | "rewrite";
+type Platform = "shopify" | "woocommerce";
 
 export default function DescriptionAiActions({ productId, currentShort, currentLong, shopifyProductId, webshopPlatform, webshopProductId }: Props) {
   const qc = useQueryClient();
@@ -30,22 +31,17 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
   const [shortDraft, setShortDraft] = useState("");
   const [longDraft, setLongDraft] = useState("");
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [syncing, setSyncing] = useState<Platform | null>(null);
 
   const hasPimContent = !!(currentShort?.trim() || currentLong?.trim());
   const hasShopify = !!shopifyProductId;
   const hasWoo = webshopPlatform === "woocommerce" && !!webshopProductId;
-  const targetPlatform: "shopify" | "woocommerce" | null = hasShopify ? "shopify" : hasWoo ? "woocommerce" : null;
-  const targetLabel = targetPlatform === "shopify" ? "Shopify" : targetPlatform === "woocommerce" ? "WooCommerce" : "shop";
 
-  const syncToShop = async () => {
-    if (!targetPlatform) {
-      toast.error("Produktet er ikke koblet til hverken Shopify eller WooCommerce");
-      return;
-    }
-    setSyncing(true);
+  const syncToShop = async (platform: Platform) => {
+    setSyncing(platform);
     try {
-      const fn = targetPlatform === "shopify" ? "shopify-update-product" : "wc-update-product";
+      const fn = platform === "shopify" ? "shopify-update-product" : "wc-update-product";
+      const label = platform === "shopify" ? "Shopify" : "WooCommerce";
       const { data, error } = await supabase.functions.invoke(fn, {
         body: {
           master_product_id: productId,
@@ -56,13 +52,13 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success(`Beskrivelse synket til ${targetLabel}`);
+      toast.success(`Beskrivelse synket til ${label}`);
       qc.invalidateQueries({ queryKey: ["product_change_log", productId] });
       qc.invalidateQueries({ queryKey: ["master_product", productId] });
     } catch (e: any) {
       toast.error(e?.message || "Kunne ikke synke til shop");
     } finally {
-      setSyncing(false);
+      setSyncing(null);
     }
   };
 
@@ -106,6 +102,41 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
     }
   };
 
+  const SyncButton = ({ platform }: { platform: Platform }) => {
+    const label = platform === "shopify" ? "Shopify" : "WooCommerce";
+    const isSyncing = syncing === platform;
+    const disabled = !hasPimContent || syncing !== null;
+    return (
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button
+            type="button"
+            size="sm"
+            variant={platform === "shopify" ? "default" : "outline"}
+            disabled={disabled}
+            title={!hasPimContent ? "Gem en beskrivelse i PIM først" : `Skub PIM-beskrivelsen til ${label}`}
+          >
+            {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            Synk beskrivelse til {label}
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Skub beskrivelse til {label}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i {label} lige nu.
+              Handlingen kan ikke fortrydes automatisk.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annullér</AlertDialogCancel>
+            <AlertDialogAction onClick={() => syncToShop(platform)}>Ja, synk nu</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
+  };
+
   return (
     <>
       <div className="flex flex-wrap gap-2">
@@ -122,33 +153,12 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> AI arbejder…
           </span>
         )}
-        <div className="ml-auto">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                type="button"
-                size="sm"
-                disabled={!hasPimContent || syncing || !targetPlatform}
-                title={!targetPlatform ? "Produktet er ikke koblet til en webshop" : !hasPimContent ? "Gem en beskrivelse i PIM først" : `Skub PIM-beskrivelsen til ${targetLabel}`}
-              >
-                {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                Synk beskrivelse til {targetLabel}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Skub beskrivelse til {targetLabel}?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i {targetLabel} lige nu.
-                  Handlingen kan ikke fortrydes automatisk.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Annullér</AlertDialogCancel>
-                <AlertDialogAction onClick={syncToShop}>Ja, synk nu</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+        <div className="ml-auto flex flex-wrap gap-2">
+          {hasShopify && <SyncButton platform="shopify" />}
+          {hasWoo && <SyncButton platform="woocommerce" />}
+          {!hasShopify && !hasWoo && (
+            <span className="text-xs text-muted-foreground self-center">Ikke koblet til webshop</span>
+          )}
         </div>
       </div>
 
