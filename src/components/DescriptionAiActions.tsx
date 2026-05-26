@@ -105,7 +105,8 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
   const SyncButton = ({ platform }: { platform: Platform }) => {
     const label = platform === "shopify" ? "Shopify" : "WooCommerce";
     const isSyncing = syncing === platform;
-    const disabled = !hasPimContent || syncing !== null;
+    const linked = platform === "shopify" ? hasShopify : hasWoo;
+    const disabled = !hasPimContent || !linked || syncing !== null;
     return (
       <AlertDialog>
         <AlertDialogTrigger asChild>
