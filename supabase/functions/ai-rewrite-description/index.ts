@@ -82,7 +82,7 @@ ${mode === "clean" ? "Rens beskrivelserne ovenfor og returnér resultatet." : "S
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: mode === "clean" ? "google/gemini-3.5-flash" : "google/gemini-3.5-flash",
+        model: mode === "clean" ? "google/gemini-3.1-flash-lite-preview" : "google/gemini-3.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
