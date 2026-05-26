@@ -35,7 +35,7 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
 
   const hasPimContent = !!(currentShort?.trim() || currentLong?.trim());
   const hasShopify = !!shopifyProductId;
-  const hasWoo = webshopPlatform === "woocommerce" && !!webshopProductId;
+  const hasWoo = !!webshopProductId && (webshopPlatform === "woocommerce" || webshopPlatform == null);
 
   const syncToShop = async (platform: Platform) => {
     setSyncing(platform);
