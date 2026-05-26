@@ -115,7 +115,7 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
             size="sm"
             variant={platform === "shopify" ? "default" : "outline"}
             disabled={disabled}
-            title={!hasPimContent ? "Gem en beskrivelse i PIM først" : `Skub PIM-beskrivelsen til ${label}`}
+            title={!linked ? `Produktet er ikke koblet til ${label}` : !hasPimContent ? "Gem en beskrivelse i PIM først" : `Skub PIM-beskrivelsen til ${label}`}
           >
             {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
             Synk beskrivelse til {label}
