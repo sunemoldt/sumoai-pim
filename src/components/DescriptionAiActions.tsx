@@ -154,11 +154,8 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
           </span>
         )}
         <div className="ml-auto flex flex-wrap gap-2">
-          {hasShopify && <SyncButton platform="shopify" />}
-          {hasWoo && <SyncButton platform="woocommerce" />}
-          {!hasShopify && !hasWoo && (
-            <span className="text-xs text-muted-foreground self-center">Ikke koblet til webshop</span>
-          )}
+          <SyncButton platform="shopify" />
+          <SyncButton platform="woocommerce" />
         </div>
       </div>
 
