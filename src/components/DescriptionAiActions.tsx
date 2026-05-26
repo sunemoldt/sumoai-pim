@@ -35,7 +35,7 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
 
   const hasPimContent = !!(currentShort?.trim() || currentLong?.trim());
   const hasShopify = !!shopifyProductId;
-  const hasWoo = webshopPlatform === "woocommerce" && !!webshopProductId;
+  const hasWoo = !!webshopProductId && (webshopPlatform === "woocommerce" || webshopPlatform == null);
 
   const syncToShop = async (platform: Platform) => {
     setSyncing(platform);
@@ -105,7 +105,8 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
   const SyncButton = ({ platform }: { platform: Platform }) => {
     const label = platform === "shopify" ? "Shopify" : "WooCommerce";
     const isSyncing = syncing === platform;
-    const disabled = !hasPimContent || syncing !== null;
+    const linked = platform === "shopify" ? hasShopify : hasWoo;
+    const disabled = !hasPimContent || !linked || syncing !== null;
     return (
       <AlertDialog>
         <AlertDialogTrigger asChild>
@@ -114,7 +115,7 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
             size="sm"
             variant={platform === "shopify" ? "default" : "outline"}
             disabled={disabled}
-            title={!hasPimContent ? "Gem en beskrivelse i PIM først" : `Skub PIM-beskrivelsen til ${label}`}
+            title={!linked ? `Produktet er ikke koblet til ${label}` : !hasPimContent ? "Gem en beskrivelse i PIM først" : `Skub PIM-beskrivelsen til ${label}`}
           >
             {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
             Synk beskrivelse til {label}
@@ -154,11 +155,8 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
           </span>
         )}
         <div className="ml-auto flex flex-wrap gap-2">
-          {hasShopify && <SyncButton platform="shopify" />}
-          {hasWoo && <SyncButton platform="woocommerce" />}
-          {!hasShopify && !hasWoo && (
-            <span className="text-xs text-muted-foreground self-center">Ikke koblet til webshop</span>
-          )}
+          <SyncButton platform="shopify" />
+          <SyncButton platform="woocommerce" />
         </div>
       </div>
 
