@@ -60,10 +60,11 @@ type EanCollision = {
 // EAN-kollision: WC #38552 "Blackview MP100" ville bruge 810354024146 (allerede taget af WC #12345) → tildelt wc-38552
 const COLLISION_REGEX = /^EAN-kollision: WC #(\S+) "(.+)" ville bruge (\S+) \(allerede taget af WC #(\S+)\) → tildelt (\S+)$/;
 
-function parseCollisions(errors: string[] | null | undefined): { collisions: EanCollision[]; otherErrors: string[] } {
+function parseCollisions(errors: unknown[] | null | undefined): { collisions: EanCollision[]; otherErrors: string[] } {
   const collisions: EanCollision[] = [];
   const otherErrors: string[] = [];
-  for (const e of errors ?? []) {
+  for (const raw of errors ?? []) {
+    const e = typeof raw === "string" ? raw : (raw && typeof raw === "object" ? JSON.stringify(raw) : String(raw ?? ""));
     const m = e.match(COLLISION_REGEX);
     if (m) {
       collisions.push({
