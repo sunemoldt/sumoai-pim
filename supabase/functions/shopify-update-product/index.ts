@@ -193,6 +193,14 @@ Deno.serve(async (req) => {
         updatedFields.push("short_description");
       } else { skippedFields.push("short_description"); }
     }
+    if (status !== undefined && status !== null) {
+      const s = String(status).toUpperCase();
+      if (s === "ACTIVE" || s === "ARCHIVED" || s === "DRAFT") {
+        productInput.status = s;
+        logChange("shopify_status", null, s, "status_update");
+        updatedFields.push("status");
+      }
+    }
     if (Object.keys(productInput).length > 1) {
       const productMutation = `#graphql
         mutation UpdateProduct($input: ProductInput!) {
