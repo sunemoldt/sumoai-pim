@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, description, short_description, force, enqueue_on_throttle, queued, source } = body;
+    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, description, short_description, force, enqueue_on_throttle, queued, source, status } = body;
     if (!master_product_id) {
       return new Response(JSON.stringify({ error: "master_product_id is required" }), {
         status: 400,
@@ -192,6 +192,14 @@ Deno.serve(async (req) => {
         logChange("short_description", product.short_description, short_description, "description_update");
         updatedFields.push("short_description");
       } else { skippedFields.push("short_description"); }
+    }
+    if (status !== undefined && status !== null) {
+      const s = String(status).toUpperCase();
+      if (s === "ACTIVE" || s === "ARCHIVED" || s === "DRAFT") {
+        productInput.status = s;
+        logChange("shopify_status", null, s, "status_update");
+        updatedFields.push("status");
+      }
     }
     if (Object.keys(productInput).length > 1) {
       const productMutation = `#graphql

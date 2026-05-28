@@ -75,12 +75,28 @@ export default function ProductDetailPage() {
       .from("master_products")
       .update({ lifecycle_status: next })
       .eq("id", product.id);
-    setTogglingLifecycle(false);
     if (error) {
+      setTogglingLifecycle(false);
       toast.error(error.message);
       return;
     }
-    toast.success(next === "archived" ? "Produkt deaktiveret" : "Produkt genaktiveret");
+
+    // Also push status to Shopify if connected
+    let shopifyMsg = "";
+    if (product.shopify_product_id) {
+      const shopifyStatus = next === "archived" ? "ARCHIVED" : "ACTIVE";
+      const { data, error: fnErr } = await supabase.functions.invoke("shopify-update-product", {
+        body: { master_product_id: product.id, status: shopifyStatus, force: true },
+      });
+      if (fnErr || (data as any)?.error) {
+        shopifyMsg = ` (Shopify-opdatering fejlede: ${fnErr?.message ?? (data as any)?.error})`;
+      } else {
+        shopifyMsg = next === "archived" ? " og arkiveret i Shopify" : " og aktiveret i Shopify";
+      }
+    }
+
+    setTogglingLifecycle(false);
+    toast.success((next === "archived" ? "Produkt deaktiveret" : "Produkt genaktiveret") + shopifyMsg);
     queryClient.invalidateQueries({ queryKey: ["master_product", id] });
     queryClient.invalidateQueries({ queryKey: ["master_products"] });
   };
