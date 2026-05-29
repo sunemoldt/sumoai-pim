@@ -444,7 +444,7 @@ export default function ProductDetailPage() {
           <main className="lg:col-span-6 lg:border-r border-border min-w-0 p-6 lg:p-8">
             <Tabs defaultValue="details" className="w-full">
 
-        <TabsList>
+        <TabsList className="h-auto flex-wrap justify-start gap-1 p-1 w-full">
           <TabsTrigger value="details">Produktdetaljer</TabsTrigger>
           <TabsTrigger value="attributes">Attributter</TabsTrigger>
           <TabsTrigger value="variants">Varianter</TabsTrigger>
@@ -463,6 +463,7 @@ export default function ProductDetailPage() {
           <TabsTrigger value="translations">Oversættelser</TabsTrigger>
           <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
+
 
         <TabsContent value="details" className="space-y-4 mt-4">
           <Card className="shadow-sm">
