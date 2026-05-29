@@ -62,6 +62,17 @@ Deno.serve(async (req) => {
   const batchSize = Math.min(Number(url.searchParams.get("batch") ?? 10), 25);
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+  // Early-exit: cheap count first so empty cron ticks don't run select+update transaction
+  const { count: pendingCount, error: countErr } = await supabase
+    .from("shopify_update_queue")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .lte("next_attempt_at", new Date().toISOString());
+  if (countErr) return json({ error: countErr.message }, 500);
+  if (!pendingCount || pendingCount === 0) {
+    return json({ processed: 0, message: "Ingen opgaver i kø" });
+  }
+
   // Pick up due pending items
   const { data: items, error } = await supabase
     .from("shopify_update_queue")
