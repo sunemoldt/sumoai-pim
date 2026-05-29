@@ -65,6 +65,25 @@ export default function ProductDetailPage() {
   const [mergeOpen, setMergeOpen] = useState(false);
   const [aiGenOpen, setAiGenOpen] = useState(false);
   const [togglingLifecycle, setTogglingLifecycle] = useState(false);
+  const [rematchingSuppliers, setRematchingSuppliers] = useState(false);
+
+  const rematchSuppliers = async () => {
+    if (!product) return;
+    setRematchingSuppliers(true);
+    const { data, error } = await supabase.functions.invoke("supplier-rematch-product", {
+      body: { master_product_id: product.id },
+    });
+    setRematchingSuppliers(false);
+    if (error || (data as any)?.error) {
+      toast.error(`Genmatch fejlede: ${error?.message ?? (data as any)?.error}`);
+      return;
+    }
+    const imported = (data as any)?.total_imported ?? 0;
+    toast.success(imported > 0
+      ? `Fandt ${imported} leverand\u00f8r-match`
+      : "Ingen leverand\u00f8rer havde dette EAN i deres feed");
+    queryClient.invalidateQueries({ queryKey: ["master_product", product.id] });
+  };
 
   const toggleArchived = async () => {
     if (!product) return;
