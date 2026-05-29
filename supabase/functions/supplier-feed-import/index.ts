@@ -271,13 +271,17 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    const { supplier_id } = await req.json();
+    const { supplier_id, target_ean: rawTargetEan } = await req.json();
     if (!supplier_id) {
       return new Response(JSON.stringify({ error: "supplier_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    // Optional: only process rows matching this normalized EAN (used by supplier-rematch-product)
+    const targetEan: string | null = rawTargetEan
+      ? (String(rawTargetEan).trim().replace(/^0+/, "") || String(rawTargetEan).trim())
+      : null;
 
     // Get supplier
     const { data: supplier, error: supErr } = await supabase
@@ -400,6 +404,7 @@ Deno.serve(async (req) => {
           const rawEan = (vals[eanIdx] ?? "").trim().replace(/^["']|["']$/g, "");
           if (!rawEan) return;
           const ean = rawEan.replace(/^0+/, "") || rawEan;
+          if (targetEan && ean !== targetEan) return;
           if (!eanToIdEarlyOuter!.has(ean)) return;
           const row: Record<string, string> = {};
           headers.forEach((h, idx) => {
@@ -471,6 +476,7 @@ Deno.serve(async (req) => {
       const rawEan = row[mapping.ean]?.trim();
       if (!rawEan) { skipped++; continue; }
       const ean = rawEan.replace(/^0+/, "") || rawEan;
+      if (targetEan && ean !== targetEan) { skipped++; continue; }
 
       const masterProductId = eanToId.get(ean);
       if (!masterProductId) { skipped++; continue; }
@@ -560,19 +566,23 @@ Deno.serve(async (req) => {
       console.log(`Logged ${changeLogs.length} changes`);
     }
 
-    // Recompute master stock for all products linked to this supplier (single batch call)
-    const { error: recomputeErr } = await supabase.rpc("recompute_stock_for_supplier", {
-      p_supplier_id: supplier.id,
-    });
-    if (recomputeErr) {
-      console.error("Stock recompute error:", recomputeErr.message);
+    // Recompute master stock for all products linked to this supplier (skip in targeted mode — trigger handles it)
+    if (!targetEan) {
+      const { error: recomputeErr } = await supabase.rpc("recompute_stock_for_supplier", {
+        p_supplier_id: supplier.id,
+      });
+      if (recomputeErr) {
+        console.error("Stock recompute error:", recomputeErr.message);
+      }
     }
 
-    // Update last_sync_at
-    await supabase
-      .from("suppliers")
-      .update({ last_sync_at: new Date().toISOString() })
-      .eq("id", supplier.id);
+    // Update last_sync_at (skip in targeted mode — this is a single-product rematch, not a full sync)
+    if (!targetEan) {
+      await supabase
+        .from("suppliers")
+        .update({ last_sync_at: new Date().toISOString() })
+        .eq("id", supplier.id);
+    }
 
     return new Response(
       JSON.stringify({

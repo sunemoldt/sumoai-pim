@@ -201,6 +201,26 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Auto-rematch suppliers if EAN was set/changed and product has no supplier links yet
+        if (update.ean) {
+          const { count: spCount } = await supabase
+            .from("supplier_products")
+            .select("id", { count: "exact", head: true })
+            .eq("master_product_id", t.id);
+          if ((spCount ?? 0) === 0) {
+            // Fire-and-forget — runs in parallel against all active auto-feeds with target_ean filter
+            fetch(`${SUPABASE_URL}/functions/v1/supplier-rematch-product`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                "apikey": SUPABASE_SERVICE_ROLE_KEY,
+              },
+              body: JSON.stringify({ master_product_id: t.id }),
+            }).catch((e) => console.error("rematch trigger failed:", e));
+          }
+        }
+
         results.push({ id: t.id, ok: true, updated: Object.keys(update), variants: variantRows.length });
       } catch (e) {
         results.push({ id: t.id, ok: false, error: e instanceof Error ? e.message : String(e) });
