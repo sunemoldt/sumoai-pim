@@ -576,11 +576,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update last_sync_at
-    await supabase
-      .from("suppliers")
-      .update({ last_sync_at: new Date().toISOString() })
-      .eq("id", supplier.id);
+    // Update last_sync_at (skip in targeted mode — this is a single-product rematch, not a full sync)
+    if (!targetEan) {
+      await supabase
+        .from("suppliers")
+        .update({ last_sync_at: new Date().toISOString() })
+        .eq("id", supplier.id);
+    }
 
     return new Response(
       JSON.stringify({
