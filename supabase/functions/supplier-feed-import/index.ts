@@ -565,12 +565,14 @@ Deno.serve(async (req) => {
       console.log(`Logged ${changeLogs.length} changes`);
     }
 
-    // Recompute master stock for all products linked to this supplier (single batch call)
-    const { error: recomputeErr } = await supabase.rpc("recompute_stock_for_supplier", {
-      p_supplier_id: supplier.id,
-    });
-    if (recomputeErr) {
-      console.error("Stock recompute error:", recomputeErr.message);
+    // Recompute master stock for all products linked to this supplier (skip in targeted mode — trigger handles it)
+    if (!targetEan) {
+      const { error: recomputeErr } = await supabase.rpc("recompute_stock_for_supplier", {
+        p_supplier_id: supplier.id,
+      });
+      if (recomputeErr) {
+        console.error("Stock recompute error:", recomputeErr.message);
+      }
     }
 
     // Update last_sync_at
