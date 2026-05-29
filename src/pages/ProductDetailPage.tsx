@@ -1553,6 +1553,151 @@ export default function ProductDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+          </main>
+
+          {/* Right rail (40%): actions + KPIs */}
+          <aside className="lg:col-span-4 bg-muted/30 p-6 lg:p-8 flex flex-col gap-6">
+            {/* Actions */}
+            <section className="space-y-3">
+              <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest px-1">
+                Handlinger
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <PullFromShopifyButton productId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
+                <SendToShopifyButton product={product} />
+                <Button variant="outline" size="sm" onClick={() => setAiGenOpen(true)}>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  AI: generér felter
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setMergeOpen(true)}>
+                  <GitMerge className="h-4 w-4 mr-2" />
+                  Flet
+                </Button>
+                <Button variant="outline" size="sm" onClick={rematchSuppliers} disabled={rematchingSuppliers}>
+                  {rematchingSuppliers ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Genmatch leverandører
+                </Button>
+                <QuickSupplierSyncButton
+                  productId={product.id}
+                  supplierIds={product.supplier_products.map((sp) => sp.supplier_id)}
+                  variant="icon"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-destructive border-destructive/20 hover:bg-destructive/5 hover:text-destructive"
+                onClick={toggleArchived}
+                disabled={togglingLifecycle}
+              >
+                {togglingLifecycle ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (product as any).lifecycle_status === "archived" ? (
+                  <ArchiveRestore className="h-4 w-4 mr-2" />
+                ) : (
+                  <Archive className="h-4 w-4 mr-2" />
+                )}
+                {(product as any).lifecycle_status === "archived" ? "Genaktivér produkt" : "Deaktivér produkt"}
+              </Button>
+            </section>
+
+            {/* KPI matrix */}
+            <section className="space-y-3">
+              <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest px-1">
+                Pris & Performance
+              </h3>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="p-4 bg-card border border-border rounded-xl">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight mb-1">Indkøb</p>
+                  <p className="font-display text-lg font-semibold text-foreground leading-tight">{formatPrice(cheapestPrice)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {cheapestAny?.suppliers?.name ?? "ex. moms"}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-card border border-primary/20 ring-1 ring-primary/5 rounded-xl">
+                  <p className="text-[10px] font-bold text-primary uppercase tracking-tight mb-1">Webshop</p>
+                  <p className="font-display text-lg font-semibold text-foreground leading-tight">{formatPrice(product.webshop_price)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    ex. {formatPrice(product.webshop_price ? exVat(product.webshop_price) : null)}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-card border border-border rounded-xl">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight mb-1">Tilbud</p>
+                  <p className={`font-display text-lg font-semibold leading-tight ${product.sale_price ? "text-warning" : "text-muted-foreground"}`}>
+                    {formatPrice(product.sale_price)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {product.sale_price ? `ex. ${formatPrice(exVat(product.sale_price))}` : "ingen"}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-card border border-border rounded-xl">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight mb-1">Avance</p>
+                  <p className={`font-display text-lg font-semibold leading-tight ${
+                    margin !== null ? (margin < 10 ? "text-destructive" : margin < 20 ? "text-warning" : "text-success") : "text-foreground"
+                  }`}>
+                    {margin !== null ? `${margin.toFixed(1)}%` : "—"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {product.custom_markup_percentage != null ? `markup ${product.custom_markup_percentage}%` : `markup ${globalMarkup}%`}
+                  </p>
+                </div>
+
+                <div className="col-span-2 p-4 bg-card border border-dashed border-border rounded-xl flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Anbefalet pris</p>
+                    <p className="font-display text-base font-semibold text-primary leading-tight mt-0.5">
+                      {formatPrice(recommendedPriceInclVat ? applyRounding(recommendedPriceInclVat, roundingMode) : null)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      ex. {formatPrice(recommendedPriceExVat)}
+                    </p>
+                  </div>
+                  {priceDiff !== null && recommendedPriceInclVat && (() => {
+                    const roundedDiff = currentPrice! - applyRounding(recommendedPriceInclVat, roundingMode);
+                    return (
+                      <span className={`text-xs font-semibold whitespace-nowrap ${roundedDiff > 0 ? "text-success" : roundedDiff < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        {roundedDiff > 0 ? "+" : ""}{formatPrice(roundedDiff)}
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                <div className="p-4 bg-card border border-border rounded-xl">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Eye className="h-3 w-3 text-muted-foreground" />
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Besøg 30d</p>
+                  </div>
+                  <p className="font-display text-lg font-semibold text-foreground leading-tight">{analytics?.page_views ?? "—"}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">sidevisninger</p>
+                </div>
+
+                <div className="p-4 bg-card border border-border rounded-xl">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <ShoppingCart className="h-3 w-3 text-muted-foreground" />
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Konv. 30d</p>
+                  </div>
+                  <p className={`font-display text-lg font-semibold leading-tight ${
+                    analytics?.conversion_rate && analytics.conversion_rate > 0 ? "text-success" : "text-muted-foreground"
+                  }`}>
+                    {analytics?.conversion_rate != null ? `${analytics.conversion_rate.toFixed(1)}%` : "—"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {analytics?.purchases ? `${analytics.purchases} solgt` : "ingen salg"}
+                  </p>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }
+
