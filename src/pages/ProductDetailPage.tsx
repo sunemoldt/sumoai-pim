@@ -403,6 +403,10 @@ export default function ProductDetailPage() {
             <GitMerge className="h-4 w-4 mr-2" />
             Flet
           </Button>
+          <Button variant="outline" size="sm" onClick={rematchSuppliers} disabled={rematchingSuppliers}>
+            {rematchingSuppliers ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Genmatch leverandører
+          </Button>
           <Button variant="outline" size="sm" onClick={toggleArchived} disabled={togglingLifecycle}>
             {togglingLifecycle ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
