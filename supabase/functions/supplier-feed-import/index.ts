@@ -475,6 +475,7 @@ Deno.serve(async (req) => {
       const rawEan = row[mapping.ean]?.trim();
       if (!rawEan) { skipped++; continue; }
       const ean = rawEan.replace(/^0+/, "") || rawEan;
+      if (targetEan && ean !== targetEan) { skipped++; continue; }
 
       const masterProductId = eanToId.get(ean);
       if (!masterProductId) { skipped++; continue; }
