@@ -371,55 +371,7 @@ export default function ProductDetailPage() {
   const attributes = (product as any).attributes as Record<string, string> | null | undefined;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-semibold text-foreground">{product.title}</h1>
-            <LifecycleBadge status={(product as any).lifecycle_status ?? "active"} />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            EAN: {product.ean}
-            {(product as any).sku && <> · SKU: <span className="font-mono">{(product as any).sku}</span></>}
-            {product.brand && <> · <span className="font-medium text-foreground">{product.brand}</span></>}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <QuickSupplierSyncButton
-            productId={product.id}
-            supplierIds={product.supplier_products.map((sp) => sp.supplier_id)}
-            variant="icon"
-          />
-          <PullFromShopifyButton productId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
-          <SendToShopifyButton product={product} />
-          <Button variant="outline" size="sm" onClick={() => setAiGenOpen(true)}>
-            <Sparkles className="h-4 w-4 mr-2" />
-            AI: generér felter
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setMergeOpen(true)}>
-            <GitMerge className="h-4 w-4 mr-2" />
-            Flet
-          </Button>
-          <Button variant="outline" size="sm" onClick={rematchSuppliers} disabled={rematchingSuppliers}>
-            {rematchingSuppliers ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Genmatch leverandører
-          </Button>
-          <Button variant="outline" size="sm" onClick={toggleArchived} disabled={togglingLifecycle}>
-            {togglingLifecycle ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : ((product as any).lifecycle_status === "archived" ? (
-              <ArchiveRestore className="h-4 w-4 mr-2" />
-            ) : (
-              <Archive className="h-4 w-4 mr-2" />
-            ))}
-            {(product as any).lifecycle_status === "archived" ? "Genaktivér" : "Deaktivér"}
-          </Button>
-        </div>
-      </div>
-
+    <div>
       <MergeProductDialog
         open={mergeOpen}
         onOpenChange={setMergeOpen}
@@ -444,106 +396,55 @@ export default function ProductDetailPage() {
         }}
       />
 
-
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-7">
-        <Card className="shadow-sm">
-          <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Billigste indkøbspris</p>
-            <p className="text-2xl font-semibold text-foreground mt-1">{formatPrice(cheapestPrice)}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">ex. moms</p>
-            {cheapestAny?.suppliers && (
-              <p className="text-xs text-muted-foreground">
-                {cheapestAny.suppliers.name}
-                {!cheapestAny.in_stock && <Badge variant="outline" className="ml-1.5 text-[10px] px-1 py-0 text-warning border-warning/30">Ikke på lager</Badge>}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Webshop pris</p>
-            <p className="text-2xl font-semibold text-foreground mt-1">{formatPrice(product.webshop_price)}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              inkl. moms · ex. {formatPrice(product.webshop_price ? exVat(product.webshop_price) : null)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Tilbudspris</p>
-            <p className={`text-2xl font-semibold mt-1 ${product.sale_price ? "text-warning" : "text-muted-foreground"}`}>
-              {formatPrice(product.sale_price)}
-            </p>
-            {product.sale_price && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                inkl. moms · ex. {formatPrice(exVat(product.sale_price))}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Anbefalet pris</p>
-            <p className="text-2xl font-semibold text-primary mt-1">{formatPrice(recommendedPriceInclVat ? applyRounding(recommendedPriceInclVat, roundingMode) : null)}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              inkl. moms · ex. {formatPrice(recommendedPriceExVat)}
-            </p>
-            {priceDiff !== null && recommendedPriceInclVat && (
-              (() => {
-                const roundedDiff = currentPrice! - applyRounding(recommendedPriceInclVat, roundingMode);
-                return (
-                  <p className={`text-xs mt-0.5 ${roundedDiff > 0 ? "text-success" : roundedDiff < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                    {roundedDiff > 0 ? "+" : ""}{formatPrice(roundedDiff)} vs. anbefalet
-                  </p>
-                );
-              })()
-            )}
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="p-5">
-            <p className="text-sm text-muted-foreground">Avance (ex. moms)</p>
-            <p className={`text-2xl font-semibold mt-1 ${
-              margin !== null ? (margin < 10 ? "text-destructive" : margin < 20 ? "text-warning" : "text-success") : "text-foreground"
-            }`}>
-              {margin !== null ? `${margin.toFixed(1)}%` : "—"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {product.custom_markup_percentage != null ? `Produkt-markup: ${product.custom_markup_percentage}%` : `Global markup: ${globalMarkup}%`}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-1.5">
-              <Eye className="h-4 w-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Besøg (30d)</p>
+      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+        {/* Header */}
+        <header className="px-6 lg:px-8 py-5 border-b border-border">
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex-1 min-w-0">
+              <button
+                onClick={() => navigate(-1)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors mb-2"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Produkter
+                {product.brand && (
+                  <>
+                    <span className="mx-1 text-border">/</span>
+                    <span className="text-primary normal-case tracking-normal">{product.brand}</span>
+                  </>
+                )}
+              </button>
+              <h1 className="font-display text-2xl lg:text-3xl font-bold text-foreground leading-tight max-w-3xl">
+                {product.title}
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                <span>
+                  <span className="font-medium text-foreground/70">EAN:</span> {product.ean}
+                </span>
+                {(product as any).sku && (
+                  <>
+                    <span className="w-1 h-1 rounded-full bg-border" />
+                    <span>
+                      <span className="font-medium text-foreground/70">SKU:</span>{" "}
+                      <span className="font-mono">{(product as any).sku}</span>
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
-            <p className="text-2xl font-semibold text-foreground mt-1">{analytics?.page_views ?? "—"}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">sidevisninger</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-1.5">
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Konv. % (30d)</p>
+            <div className="shrink-0">
+              <LifecycleBadge status={(product as any).lifecycle_status ?? "active"} />
             </div>
-            <p className={`text-2xl font-semibold mt-1 ${
-              analytics?.conversion_rate && analytics.conversion_rate > 0 ? "text-success" : "text-muted-foreground"
-            }`}>
-              {analytics?.conversion_rate != null ? `${analytics.conversion_rate.toFixed(1)}%` : "—"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {analytics?.purchases ? `${analytics.purchases} solgt` : "ingen salg"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </header>
 
-      <Tabs defaultValue="details" className="w-full">
-        <TabsList>
+        {/* 60/40 split: content + utility rail */}
+        <div className="grid grid-cols-1 lg:grid-cols-10">
+          {/* Left rail (60%) */}
+          <main className="lg:col-span-6 lg:border-r border-border min-w-0 p-6 lg:p-8">
+            <Tabs defaultValue="details" className="w-full">
+
+        <TabsList className="h-auto flex-wrap justify-start gap-1 p-1 w-full">
           <TabsTrigger value="details">Produktdetaljer</TabsTrigger>
           <TabsTrigger value="attributes">Attributter</TabsTrigger>
           <TabsTrigger value="variants">Varianter</TabsTrigger>
@@ -562,6 +463,7 @@ export default function ProductDetailPage() {
           <TabsTrigger value="translations">Oversættelser</TabsTrigger>
           <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
+
 
         <TabsContent value="details" className="space-y-4 mt-4">
           <Card className="shadow-sm">
@@ -1652,6 +1554,151 @@ export default function ProductDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+          </main>
+
+          {/* Right rail (40%): actions + KPIs */}
+          <aside className="lg:col-span-4 bg-muted/30 p-6 lg:p-8 flex flex-col gap-6">
+            {/* Actions */}
+            <section className="space-y-3">
+              <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest px-1">
+                Handlinger
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <PullFromShopifyButton productId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
+                <SendToShopifyButton product={product} />
+                <Button variant="outline" size="sm" onClick={() => setAiGenOpen(true)}>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  AI: generér felter
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setMergeOpen(true)}>
+                  <GitMerge className="h-4 w-4 mr-2" />
+                  Flet
+                </Button>
+                <Button variant="outline" size="sm" onClick={rematchSuppliers} disabled={rematchingSuppliers}>
+                  {rematchingSuppliers ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Genmatch leverandører
+                </Button>
+                <QuickSupplierSyncButton
+                  productId={product.id}
+                  supplierIds={product.supplier_products.map((sp) => sp.supplier_id)}
+                  variant="icon"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-destructive border-destructive/20 hover:bg-destructive/5 hover:text-destructive"
+                onClick={toggleArchived}
+                disabled={togglingLifecycle}
+              >
+                {togglingLifecycle ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (product as any).lifecycle_status === "archived" ? (
+                  <ArchiveRestore className="h-4 w-4 mr-2" />
+                ) : (
+                  <Archive className="h-4 w-4 mr-2" />
+                )}
+                {(product as any).lifecycle_status === "archived" ? "Genaktivér produkt" : "Deaktivér produkt"}
+              </Button>
+            </section>
+
+            {/* KPI matrix */}
+            <section className="space-y-3">
+              <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest px-1">
+                Pris & Performance
+              </h3>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="p-4 bg-card border border-border rounded-xl">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight mb-1">Indkøb</p>
+                  <p className="font-display text-lg font-semibold text-foreground leading-tight">{formatPrice(cheapestPrice)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {cheapestAny?.suppliers?.name ?? "ex. moms"}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-card border border-primary/20 ring-1 ring-primary/5 rounded-xl">
+                  <p className="text-[10px] font-bold text-primary uppercase tracking-tight mb-1">Webshop</p>
+                  <p className="font-display text-lg font-semibold text-foreground leading-tight">{formatPrice(product.webshop_price)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    ex. {formatPrice(product.webshop_price ? exVat(product.webshop_price) : null)}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-card border border-border rounded-xl">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight mb-1">Tilbud</p>
+                  <p className={`font-display text-lg font-semibold leading-tight ${product.sale_price ? "text-warning" : "text-muted-foreground"}`}>
+                    {formatPrice(product.sale_price)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {product.sale_price ? `ex. ${formatPrice(exVat(product.sale_price))}` : "ingen"}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-card border border-border rounded-xl">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight mb-1">Avance</p>
+                  <p className={`font-display text-lg font-semibold leading-tight ${
+                    margin !== null ? (margin < 10 ? "text-destructive" : margin < 20 ? "text-warning" : "text-success") : "text-foreground"
+                  }`}>
+                    {margin !== null ? `${margin.toFixed(1)}%` : "—"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {product.custom_markup_percentage != null ? `markup ${product.custom_markup_percentage}%` : `markup ${globalMarkup}%`}
+                  </p>
+                </div>
+
+                <div className="col-span-2 p-4 bg-card border border-dashed border-border rounded-xl flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Anbefalet pris</p>
+                    <p className="font-display text-base font-semibold text-primary leading-tight mt-0.5">
+                      {formatPrice(recommendedPriceInclVat ? applyRounding(recommendedPriceInclVat, roundingMode) : null)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      ex. {formatPrice(recommendedPriceExVat)}
+                    </p>
+                  </div>
+                  {priceDiff !== null && recommendedPriceInclVat && (() => {
+                    const roundedDiff = currentPrice! - applyRounding(recommendedPriceInclVat, roundingMode);
+                    return (
+                      <span className={`text-xs font-semibold whitespace-nowrap ${roundedDiff > 0 ? "text-success" : roundedDiff < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                        {roundedDiff > 0 ? "+" : ""}{formatPrice(roundedDiff)}
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                <div className="p-4 bg-card border border-border rounded-xl">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Eye className="h-3 w-3 text-muted-foreground" />
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Besøg 30d</p>
+                  </div>
+                  <p className="font-display text-lg font-semibold text-foreground leading-tight">{analytics?.page_views ?? "—"}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">sidevisninger</p>
+                </div>
+
+                <div className="p-4 bg-card border border-border rounded-xl">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <ShoppingCart className="h-3 w-3 text-muted-foreground" />
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Konv. 30d</p>
+                  </div>
+                  <p className={`font-display text-lg font-semibold leading-tight ${
+                    analytics?.conversion_rate && analytics.conversion_rate > 0 ? "text-success" : "text-muted-foreground"
+                  }`}>
+                    {analytics?.conversion_rate != null ? `${analytics.conversion_rate.toFixed(1)}%` : "—"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {analytics?.purchases ? `${analytics.purchases} solgt` : "ingen salg"}
+                  </p>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }
+
