@@ -169,6 +169,20 @@ Deno.serve(async (req) => {
         updatedFields.push("inventoryPolicy");
       } else { skippedFields.push("backorders_allowed"); }
     }
+    // Barcode (EAN). Default to PIM's current ean unless caller overrode. Skip fallback 'wc-' EANs.
+    {
+      const eanCandidate = eanInput !== undefined ? eanInput : product.ean;
+      if (eanCandidate && typeof eanCandidate === "string" && !eanCandidate.startsWith("wc-")) {
+        if (canPush("ean")) {
+          // Only push if it actually differs from what we last knew, OR caller forced
+          if (force === true || eanInput !== undefined) {
+            variantInput.barcode = String(eanCandidate);
+            logChange("ean", product.ean, eanCandidate, "ean_update");
+            updatedFields.push("barcode");
+          }
+        } else { skippedFields.push("ean"); }
+      }
+    }
 
     // Product-level update (description / excerpt)
     const productInput: Record<string, unknown> = { id: productGid };
