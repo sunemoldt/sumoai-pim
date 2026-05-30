@@ -1,68 +1,51 @@
+## Diagnose
 
-# Optimering af Cloud- og AI-forbrug
+Shopify-fejlen `application_cannot_be_found: api_key 387bdcbf19...` betyder at Shopify ikke kan finde nogen app med det client_id. Vores edge function bygger linket korrekt — den læser bare en forkert `SHOPIFY_CLIENT_ID` fra Cloud-secrets.
 
-Baseret på gennemgang af edge functions, cron-jobs og AI-kald er der 4 områder hvor vi bruger penge unødigt. Ingen funktionalitet ændres — kun hvor ofte og hvor dyrt ting kører.
+Den Partner-app der virkede tidligere har client_id `efbc597f0d9faea46003b76496026f69` (bekræftet ved at dekode signaturen i install-linket du sendte).
 
-## 1. Cron-jobs kører for ofte (Cloud-forbrug)
+Hverken kode, database, butik eller flow er ændret. Kun de to secrets peger på en app der ikke findes mere.
 
-**Problem nu:**
-- `shopify-queue-worker` kører hvert 2. minut → 720 invocations/døgn. Logs viser den booter konstant, men næsten alle kald returnerer "Ingen opgaver i kø".
-- `scheduled-sync` kører hvert 5. minut → 288 invocations/døgn. WC er pauset, så 99% af kaldene laver intet arbejde.
+## Plan
 
-**Forslag:**
-- Queue-worker: skift til **DB-trigger på `shopify_update_queue` INSERT** via `pg_net.http_post` + behold cron som safety-net hvert **15. minut** (kun hvis der ligger pending items > 5 min gamle).
-- `scheduled-sync`: ned til **hvert 15. minut** (cron-udtryk i suppliers/wc bruger alligevel kun time-præcision). Sparer ~75% af invocations.
-- Behold `minute === 0` stock-sweep — den koster reelt intet.
+### Trin 1 — Opdater secrets (du gør det manuelt i sikker formular)
 
-**Besparelse:** ~900 → ~150 edge invocations/døgn (≈ -83%).
+Jeg åbner en formular til opdatering af:
+- `SHOPIFY_CLIENT_ID` → sæt til `efbc597f0d9faea46003b76496026f69`
+- `SHOPIFY_CLIENT_SECRET` → den tilhørende Client Secret fra samme app
 
-## 2. AI-model er for dyr til simple opgaver
+**Hvor du finder dem:**
+1. Log ind på https://partners.shopify.com
+2. Apps → find appen med Client ID der starter med `efbc597f`
+3. Klik appen → **Client credentials** (eller "API credentials")
+4. Kopier Client ID og Client Secret derfra
 
-**Problem nu:**
-- `ai-rewrite-description` (rewrite mode) bruger `google/gemini-3.5-flash`.
-- `ai-generate-product` bruger `gemini-3.1-flash-lite-preview` (allerede billig — OK).
-- `ai-analyze` og `bulk-clean-descriptions` skal tjekkes.
+Hvis du ikke kan finde appen i Partners, sig til — så skifter vi til Custom App-token i comtek-webshop i stedet (kræver en lille kodeændring i edge functions, men er mere robust til single-tenant).
 
-**Forslag:**
-- Skift rewrite til `google/gemini-3.1-flash-lite-preview` (samme som clean). Kvalitetstest viser den klarer dansk produktcopy fint med vores stramme system prompt + tool calling.
-- Hvis brugeren vil have "premium" rewrite, tilføj en eksplicit "Brug stor model"-knap der bruger `gemini-3.5-flash` — opt-in i stedet for default.
-- Verificér `ai-analyze` og `bulk-clean-descriptions` bruger flash-lite.
+### Trin 2 — Verificér Partner-app indstillinger
 
-**Besparelse:** ~5-8x billigere per rewrite-kald.
+Inden installation, tjek i Partner Dashboard at appen har:
+- **App URL:** `https://pim.sumoai.dk/shopify`
+- **Allowed redirection URL:** `https://qanxmacwntyxfhznxriz.supabase.co/functions/v1/shopify-oauth-callback`
 
-## 3. Queue-worker laver tomme kald
+Hvis ikke, tilføj dem — ellers afviser Shopify callback'et.
 
-**Problem nu:** Selv når køen er tom, kører den fulde JWT-validering, DB-query og logger boot. 720 tomme calls/døgn.
+### Trin 3 — Test installation
 
-**Forslag:** Ud over #1 (DB-trigger), tilføj **early-exit** på selve worker'en: lav først et `count(*) where status='pending' and next_attempt_at <= now()`. Hvis 0 → returnér med det samme uden at lave `select … limit 10` + status-update transaktion.
+1. Gå til `/shopify` i PIM
+2. Indtast `comtek-webshop.myshopify.com`
+3. Klik "Installér"
+4. Godkend på Shopify
+5. Du sendes tilbage til PIM med "✓ Forbundet!"
 
-## 4. Auto-enqueue laver redundante Shopify push
+Den nye forbindelse markeres automatisk som aktiv tenant, og den gamle `lovable-project-iv45c`-række forbliver registreret (du kan slette den bagefter på samme side).
 
-**Problem nu:** `auto_enqueue_shopify_update`-triggeren enqueuer ved enhver ændring i 12 felter — inklusive `stock_quantity` som ofte ændres af stock-sync (men det filtreres heldigvis). Men `webshop_price` og `sale_price` ændres af guard og rounding, og hver edit i PIM lægger et nyt job.
+### Trin 4 — Validering
 
-**Forslag:** Tilføj **debounce/coalesce**: hvis der allerede ligger et pending job for produktet, opdater dets `next_attempt_at` til `now() + 30s` og merge `changed_fields` i payload, i stedet for at skippe (som nu) eller lave nyt. Det betyder færre Shopify API-kald per produkt under bulk-redigering.
+Tryk "Test forbindelse" på `/shopify`. Hvis den returnerer butiksnavn + scopes er alt OK.
 
-## Teknisk overblik
+## Tekniske detaljer
 
-```text
-Cron-forbrug           Nu              Efter
-─────────────────────────────────────────────
-queue-worker           720/døgn        ~96/døgn  (kun safety-net)
-scheduled-sync         288/døgn        96/døgn
-AI rewrite model       3.5-flash       3.1-flash-lite  (-80% pris)
-```
-
-**Filer der ændres:**
-- `supabase/migrations/*` — ny migration: opdater cron-schedules, tilføj DB-trigger på `shopify_update_queue` der kalder worker via pg_net, opdater `auto_enqueue_shopify_update` med coalesce-logik.
-- `supabase/functions/shopify-queue-worker/index.ts` — early-exit hvis kø er tom.
-- `supabase/functions/ai-rewrite-description/index.ts` — skift rewrite-mode model.
-- `supabase/functions/ai-analyze/index.ts` + `bulk-clean-descriptions/index.ts` — verificér model.
-
-## Rækkefølge
-
-1. AI-model skift (instant besparelse, 1 fil).
-2. Cron-frekvens ned (1 migration).
-3. Queue-worker early-exit + DB-trigger (1 migration + 1 fil).
-4. Auto-enqueue coalesce (1 migration).
-
-Skal jeg køre alle 4, eller vil du starte med #1 + #2 (de billigste at implementere og giver allerede ~70% af besparelsen)?
+- Ingen kodeændringer nødvendige — `shopify-oauth-start` og `shopify-oauth-callback` virker korrekt med en gyldig CLIENT_ID/SECRET.
+- Tidligere kalde fra preview viser at edge-funktionen returnerer `install_url` med korrekt struktur, korrekt redirect_uri og gyldig state. Eneste problem er CLIENT_ID-værdien.
+- Ingen migration eller schema-ændring kræves.
