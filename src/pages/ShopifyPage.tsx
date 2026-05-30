@@ -10,6 +10,9 @@ import { ShoppingBag, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, C
 
 interface Status {
   shop_domain: string | null;
+  requested_shop_domain?: string | null;
+  primary_domain_url?: string | null;
+  shop_name?: string | null;
   scope: string | null;
   installed_at: string | null;
   is_connected: boolean;
@@ -19,6 +22,9 @@ interface Status {
 interface ConnectionRow {
   id: string;
   shop_domain: string;
+  requested_shop_domain: string | null;
+  primary_domain_url: string | null;
+  shop_name: string | null;
   scope: string | null;
   is_active: boolean;
   installed_at: string;
@@ -50,6 +56,9 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
     setConnections(rows);
     setStatus(active ? {
       shop_domain: active.shop_domain,
+      requested_shop_domain: active.requested_shop_domain,
+      primary_domain_url: active.primary_domain_url,
+      shop_name: active.shop_name,
       scope: active.scope,
       installed_at: active.installed_at,
       is_connected: true,
