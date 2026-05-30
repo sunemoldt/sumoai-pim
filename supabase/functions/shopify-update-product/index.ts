@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, description, short_description, force, enqueue_on_throttle, queued, source, status } = body;
+    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, description, short_description, force, enqueue_on_throttle, queued, source, status, ean: eanInput } = body;
     if (!master_product_id) {
       return new Response(JSON.stringify({ error: "master_product_id is required" }), {
         status: 400,
@@ -168,6 +168,20 @@ Deno.serve(async (req) => {
         logChange("backorders_allowed", product.backorders_allowed, allowed, "stock_update");
         updatedFields.push("inventoryPolicy");
       } else { skippedFields.push("backorders_allowed"); }
+    }
+    // Barcode (EAN). Default to PIM's current ean unless caller overrode. Skip fallback 'wc-' EANs.
+    {
+      const eanCandidate = eanInput !== undefined ? eanInput : product.ean;
+      if (eanCandidate && typeof eanCandidate === "string" && !eanCandidate.startsWith("wc-")) {
+        if (canPush("ean")) {
+          // Only push if it actually differs from what we last knew, OR caller forced
+          if (force === true || eanInput !== undefined) {
+            variantInput.barcode = String(eanCandidate);
+            logChange("ean", product.ean, eanCandidate, "ean_update");
+            updatedFields.push("barcode");
+          }
+        } else { skippedFields.push("ean"); }
+      }
     }
 
     // Product-level update (description / excerpt)
