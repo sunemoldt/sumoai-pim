@@ -86,7 +86,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
     };
   }, [shopDomainInput]);
 
-  const validateInstallLink = (e: React.MouseEvent<HTMLAnchorElement>) => {
+  const openInstallLink = (e: React.MouseEvent<HTMLAnchorElement>) => {
     const domain = shopDomainInput.trim();
     if (!isValidShopDomain(domain)) {
       e.preventDefault();
@@ -98,7 +98,15 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       toast({ title: "Install-link ikke klar", description: "Vent et øjeblik og prøv igen.", variant: "destructive" });
       return;
     }
-    toast({ title: "Shopify-installation åbner", description: "Godkend appen i Shopify-vinduet." });
+    e.preventDefault();
+    const popup = window.open(installUrl, "shopify_oauth", "popup=yes,width=1100,height=800,noopener,noreferrer");
+    if (!popup) {
+      navigator.clipboard.writeText(installUrl).catch(() => undefined);
+      toast({ title: "Popup blev blokeret", description: "Install-linket er kopieret — indsæt det i en ny browserfane.", variant: "destructive" });
+      return;
+    }
+    popup.focus();
+    toast({ title: "Shopify-installation åbner", description: "Godkend appen i det nye Shopify-vindue." });
   };
 
   const copyInstallLink = async () => {
@@ -250,8 +258,9 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
             <Button asChild>
               <a
                 href={installUrl ?? "#"}
-                target="_top"
-                onClick={validateInstallLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={openInstallLink}
                 aria-disabled={!installUrl || installUrlLoading}
               >
                 {installUrlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
