@@ -278,12 +278,17 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
                 aria-disabled={!installUrl || installUrlLoading}
               >
                 {installUrlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                {isLovablePreview() ? "Åbn PIM-domænet" : `Installér på ${shopDomainInput.trim() || "..."}`}
+                {isLovablePreview() ? "Kopiér sikkert install-link" : `Installér på ${shopDomainInput.trim() || "..."}`}
               </a>
             </Button>
             <Button variant="outline" onClick={copyInstallLink}>
               <Copy className="h-4 w-4" /> Kopiér install-link
             </Button>
+            {isLovablePreview() && (
+              <p className="basis-full text-xs text-muted-foreground">
+                Shopify blokerer OAuth inde i Lovable preview. Brug knappen til at kopiere linket og indsæt det direkte i browserens adressefelt.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
