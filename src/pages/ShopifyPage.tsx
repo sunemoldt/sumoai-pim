@@ -44,13 +44,18 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
 
   const loadStatus = async () => {
     setLoading(true);
-    const [{ data: statusData, error: statusErr }, connsRes] = await Promise.all([
-      supabase.from("shopify_connection_status").select("*").maybeSingle(),
-      supabase.functions.invoke<{ connections: ConnectionRow[] }>("shopify-connections", { method: "GET" }),
-    ]);
-    if (statusErr) console.error(statusErr);
-    setStatus(statusData ?? { shop_domain: null, scope: null, installed_at: null, is_connected: false });
-    if (connsRes.data?.connections) setConnections(connsRes.data.connections);
+    const { data, error } = await supabase.functions.invoke<{ connections: ConnectionRow[] }>("shopify-connections", { method: "GET" });
+    if (error) console.error(error);
+    const rows = data?.connections ?? [];
+    const active = rows.find((connection) => connection.is_active) ?? null;
+    setConnections(rows);
+    setStatus(active ? {
+      shop_domain: active.shop_domain,
+      scope: active.scope,
+      installed_at: active.installed_at,
+      is_connected: true,
+      is_active: active.is_active,
+    } : { shop_domain: null, scope: null, installed_at: null, is_connected: false });
     setLoading(false);
   };
 
@@ -102,8 +107,8 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
     }
     if (isLovablePreview() && window.location.hostname !== "pim.sumoai.dk") {
       e.preventDefault();
-      window.open(CUSTOM_SHOPIFY_PAGE, "_blank", "noopener,noreferrer");
-      toast({ title: "Åbn PIM-domænet", description: "Shopify blokerer preview-rammen. Installér fra pim.sumoai.dk-fanen i stedet." });
+      navigator.clipboard.writeText(installUrl).catch(() => undefined);
+      toast({ title: "Install-link kopieret", description: "Indsæt linket direkte i browserens adressefelt — Shopify blokerer Lovable preview-rammen." });
       return;
     }
 
