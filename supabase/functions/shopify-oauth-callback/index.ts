@@ -82,6 +82,12 @@ Deno.serve(async (req) => {
     }
     if (stateRow.shop_domain !== shop) {
       console.warn("OAuth shop changed during install", { expected_shop: stateRow.shop_domain, received_shop: shop });
+      await supabase.from("shopify_oauth_state").delete().eq("state", state);
+      return htmlResponse(
+        "Forkert Shopify-butik",
+        `Installationen blev startet for <strong>${stateRow.shop_domain}</strong>, men Shopify returnerede <strong>${shop}</strong>. Log ud af den forkerte Shopify-butik eller brug en inkognito-fane, og start installationen igen.`,
+        false
+      );
     }
     if (new Date(stateRow.expires_at) < new Date()) {
       await supabase.from("shopify_oauth_state").delete().eq("state", state);
