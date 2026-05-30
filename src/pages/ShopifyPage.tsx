@@ -222,7 +222,9 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
             </div>
           ) : status?.is_connected ? (
             <div className="space-y-2 text-sm">
-              <div><span className="text-muted-foreground">Butik:</span> <span className="font-mono">{status.shop_domain}</span></div>
+              <div><span className="text-muted-foreground">Butik:</span> <span className="font-medium">{status.shop_name || "COMTEK.DK"}</span></div>
+              <div><span className="text-muted-foreground">Domæne:</span> <span className="font-mono">{status.requested_shop_domain || status.primary_domain_url?.replace(/^https?:\/\//, "") || status.shop_domain}</span></div>
+              <div><span className="text-muted-foreground">Shopify API-id:</span> <span className="font-mono text-xs">{status.shop_domain}</span></div>
               <div><span className="text-muted-foreground">Scopes:</span> <span className="font-mono text-xs">{status.scope}</span></div>
               <div><span className="text-muted-foreground">Installeret:</span> {status.installed_at ? new Date(status.installed_at).toLocaleString("da-DK") : "—"}</div>
             </div>
@@ -302,7 +304,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
                 <div key={c.id} className={`flex items-center justify-between rounded-md border p-3 ${c.is_active ? "border-primary bg-primary/5" : "border-border"}`}>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm">{c.shop_domain}</span>
+                      <span className="text-sm font-medium">{c.shop_name || c.requested_shop_domain || c.shop_domain}</span>
                       {c.is_active && (
                         <Badge variant="default" className="text-xs">
                           <Star className="mr-1 h-3 w-3" /> Aktiv
@@ -310,7 +312,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Installeret {new Date(c.installed_at).toLocaleString("da-DK")}
+                      {c.requested_shop_domain || c.primary_domain_url?.replace(/^https?:\/\//, "") || c.shop_domain} · API-id {c.shop_domain} · Installeret {new Date(c.installed_at).toLocaleString("da-DK")}
                     </div>
                   </div>
                   <div className="flex gap-2">
