@@ -18,6 +18,10 @@ function normalizeShopDomain(value: string) {
   return value.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
 }
 
+function shopDomainToAdminStoreHandle(shopDomain: string) {
+  return shopDomain.replace(/\.myshopify\.com$/i, "");
+}
+
 async function createInstallUrl(shopDomainOverride?: string) {
   if (!SHOPIFY_CLIENT_ID || !SHOPIFY_STORE_DOMAIN) {
     throw new Error("Shopify credentials not configured");
@@ -35,7 +39,8 @@ async function createInstallUrl(shopDomainOverride?: string) {
   await supabase.from("shopify_oauth_state").delete().lt("expires_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
   const redirectUri = `${SUPABASE_URL}/functions/v1/shopify-oauth-callback`;
-  const installUrl = `https://${shopDomain}/admin/oauth/authorize?` + new URLSearchParams({
+  const adminStoreHandle = shopDomainToAdminStoreHandle(shopDomain);
+  const installUrl = `https://admin.shopify.com/store/${encodeURIComponent(adminStoreHandle)}/oauth/authorize?` + new URLSearchParams({
     client_id: SHOPIFY_CLIENT_ID,
     scope: SCOPES,
     redirect_uri: redirectUri,
