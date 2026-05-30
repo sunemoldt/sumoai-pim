@@ -92,7 +92,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
     };
   }, [shopDomainInput]);
 
-  const openInstallLink = (e: React.MouseEvent<HTMLAnchorElement>) => {
+  const openInstallLink = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     const domain = shopDomainInput.trim();
     if (!isValidShopDomain(domain)) {
@@ -265,17 +265,9 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild>
-              <a
-                href={installUrl ?? "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={openInstallLink}
-                aria-disabled={!installUrl || installUrlLoading}
-              >
-                {installUrlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                {isLovablePreview() ? "Kopiér sikkert install-link" : `Installér på ${shopDomainInput.trim() || "..."}`}
-              </a>
+            <Button onClick={openInstallLink} disabled={!installUrl || installUrlLoading}>
+              {installUrlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+              {isLovablePreview() ? "Kopiér sikkert install-link" : `Installér på ${shopDomainInput.trim() || "..."}`}
             </Button>
             <Button variant="outline" onClick={copyInstallLink}>
               <Copy className="h-4 w-4" /> Kopiér install-link
