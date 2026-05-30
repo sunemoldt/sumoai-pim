@@ -29,7 +29,6 @@ type ShopifyTestResult = Record<string, unknown>;
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const isValidShopDomain = (domain: string) => /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(domain);
-const CUSTOM_SHOPIFY_PAGE = "https://pim.sumoai.dk/shopify";
 const isLovablePreview = () => window.location.hostname.includes("lovableproject.com") || window.location.hostname.includes("lovable.app");
 
 const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref) {
