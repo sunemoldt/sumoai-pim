@@ -63,6 +63,7 @@ Deno.serve(async (req) => {
     const title = String(body.title ?? "Ubiquiti UniFi CloudKey+ SSD");
     const apply = body.apply === true;
     const deleteProductId = body.delete_product_id ? String(body.delete_product_id) : null;
+    const keepProductId = body.keep_product_id ? String(body.keep_product_id) : null;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: conn, error: connErr } = await supabase
@@ -123,14 +124,34 @@ Deno.serve(async (req) => {
       };
     });
 
-    const safeDeleteIds = annotated
-      .filter((product) => !product.linked_in_pim && annotated.some((other) => other.linked_in_pim))
-      .map((product) => product.product_id);
+    const preferredKeep = keepProductId
+      ? annotated.find((product) => product.product_id === keepProductId)
+      : annotated.find((product) => product.status === "ACTIVE" && product.has_ean_match)
+        ?? annotated.find((product) => product.linked_in_pim)
+        ?? annotated[0];
+    const safeDeleteIds = preferredKeep
+      ? annotated.filter((product) => product.product_id !== preferredKeep.product_id).map((product) => product.product_id)
+      : [];
 
     if (apply) {
       if (!deleteProductId) throw new Error("delete_product_id er påkrævet ved apply=true");
+      if (!preferredKeep) throw new Error("Ingen Shopify-vare fundet at beholde");
       if (!safeDeleteIds.includes(deleteProductId)) {
         throw new Error(`Afviser sletning: ${deleteProductId} er ikke en entydig ikke-PIM-linket dublet`);
+      }
+      const keepVariant = preferredKeep.variants.find((variant) => variant.ean_match) ?? preferredKeep.variants[0];
+      if (!keepVariant?.variant_id) throw new Error("Varen der skal beholdes mangler variant-id");
+      if (expectedPim?.id) {
+        const { error: updateErr } = await supabase
+          .from("master_products")
+          .update({
+            shopify_product_id: preferredKeep.product_id,
+            shopify_variant_id: keepVariant.variant_id,
+            shopify_sync_enabled: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", expectedPim.id);
+        if (updateErr) throw updateErr;
       }
       const deleted = annotated.find((product) => product.product_id === deleteProductId)!;
       const result = await gql(conn.shop_domain, conn.access_token, `
@@ -140,7 +161,14 @@ Deno.serve(async (req) => {
       `, { input: { id: deleted.gid } });
       const errors = result.productDelete?.userErrors ?? [];
       if (errors.length) throw new Error(`Shopify afviste sletning: ${errors.map((e: any) => e.message).join(", ")}`);
-      return new Response(JSON.stringify({ success: true, deleted_product_id: deleteProductId, deleted_title: deleted.title, kept_product_id: linkedProductId }), {
+      return new Response(JSON.stringify({
+        success: true,
+        deleted_product_id: deleteProductId,
+        deleted_title: deleted.title,
+        kept_product_id: preferredKeep.product_id,
+        kept_variant_id: keepVariant.variant_id,
+        pim_relinked: Boolean(expectedPim?.id),
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -157,8 +185,9 @@ Deno.serve(async (req) => {
       searched: { ean, normalized_ean: normEan(ean), title },
       shopify_matches: annotated,
       safe_delete_product_ids: safeDeleteIds,
-      recommendation: safeDeleteIds.length === 1
-        ? `Kan slette dubletten ${safeDeleteIds[0]} og beholde PIM-linket ${linkedProductId}`
+      recommended_keep_product_id: preferredKeep?.product_id ?? null,
+      recommendation: safeDeleteIds.length === 1 && preferredKeep
+        ? `Behold ${preferredKeep.product_id} (${preferredKeep.status}), relink PIM hertil, og slet dubletten ${safeDeleteIds[0]}`
         : "Ingen entydig dublet fundet til automatisk sletning",
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err: any) {
