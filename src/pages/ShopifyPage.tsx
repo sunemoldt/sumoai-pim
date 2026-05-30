@@ -29,6 +29,8 @@ type ShopifyTestResult = Record<string, unknown>;
 
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const isValidShopDomain = (domain: string) => /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(domain);
+const CUSTOM_SHOPIFY_PAGE = "https://pim.sumoai.dk/shopify";
+const isLovablePreview = () => window.location.hostname.includes("lovableproject.com") || window.location.hostname.includes("lovable.app");
 
 const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref) {
   const [status, setStatus] = useState<Status | null>(null);
@@ -98,6 +100,13 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       toast({ title: "Install-link ikke klar", description: "Vent et øjeblik og prøv igen.", variant: "destructive" });
       return;
     }
+    if (isLovablePreview() && window.location.hostname !== "pim.sumoai.dk") {
+      e.preventDefault();
+      window.open(CUSTOM_SHOPIFY_PAGE, "_blank", "noopener,noreferrer");
+      toast({ title: "Åbn PIM-domænet", description: "Shopify blokerer preview-rammen. Installér fra pim.sumoai.dk-fanen i stedet." });
+      return;
+    }
+
     e.preventDefault();
     const popup = window.open(installUrl, "shopify_oauth", "popup=yes,width=1100,height=800,noopener,noreferrer");
     if (!popup) {
@@ -264,7 +273,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
                 aria-disabled={!installUrl || installUrlLoading}
               >
                 {installUrlLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                Installér på {shopDomainInput.trim() || "..."}
+                {isLovablePreview() ? "Åbn PIM-domænet" : `Installér på ${shopDomainInput.trim() || "..."}`}
               </a>
             </Button>
             <Button variant="outline" onClick={copyInstallLink}>
