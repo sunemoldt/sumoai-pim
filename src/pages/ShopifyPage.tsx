@@ -93,25 +93,22 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
   }, [shopDomainInput]);
 
   const openInstallLink = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
     const domain = shopDomainInput.trim();
     if (!isValidShopDomain(domain)) {
-      e.preventDefault();
       toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
     if (!installUrl) {
-      e.preventDefault();
       toast({ title: "Install-link ikke klar", description: "Vent et øjeblik og prøv igen.", variant: "destructive" });
       return;
     }
     if (isLovablePreview() && window.location.hostname !== "pim.sumoai.dk") {
-      e.preventDefault();
       navigator.clipboard.writeText(installUrl).catch(() => undefined);
       toast({ title: "Install-link kopieret", description: "Indsæt linket direkte i browserens adressefelt — Shopify blokerer Lovable preview-rammen." });
       return;
     }
 
-    e.preventDefault();
     const popup = window.open(installUrl, "shopify_oauth", "popup=yes,width=1100,height=800,noopener,noreferrer");
     if (!popup) {
       navigator.clipboard.writeText(installUrl).catch(() => undefined);
