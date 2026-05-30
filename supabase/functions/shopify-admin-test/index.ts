@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: conn } = await supabase
       .from("shopify_connection")
-      .select("shop_domain, access_token, scope")
+      .select("shop_domain, requested_shop_domain, primary_domain_url, shop_name, access_token, scope")
       .order("is_active", { ascending: false })
       .order("installed_at", { ascending: false })
       .limit(1).maybeSingle();
@@ -69,6 +69,9 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       connected: true,
       shop_domain: conn.shop_domain,
+      requested_shop_domain: conn.requested_shop_domain,
+      primary_domain_url: conn.primary_domain_url,
+      shop_name: conn.shop_name,
       scope: conn.scope,
       shop: gqlData.data?.shop,
     }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });

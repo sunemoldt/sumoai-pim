@@ -706,8 +706,11 @@ export type Database = {
           id: string
           installed_at: string
           is_active: boolean
+          primary_domain_url: string | null
+          requested_shop_domain: string | null
           scope: string | null
           shop_domain: string
+          shop_name: string | null
           updated_at: string
         }
         Insert: {
@@ -715,8 +718,11 @@ export type Database = {
           id?: string
           installed_at?: string
           is_active?: boolean
+          primary_domain_url?: string | null
+          requested_shop_domain?: string | null
           scope?: string | null
           shop_domain: string
+          shop_name?: string | null
           updated_at?: string
         }
         Update: {
@@ -724,8 +730,11 @@ export type Database = {
           id?: string
           installed_at?: string
           is_active?: boolean
+          primary_domain_url?: string | null
+          requested_shop_domain?: string | null
           scope?: string | null
           shop_domain?: string
+          shop_name?: string | null
           updated_at?: string
         }
         Relationships: []

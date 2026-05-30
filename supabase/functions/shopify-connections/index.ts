@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     if (req.method === "GET") {
       const { data, error } = await supabase
         .from("shopify_connection")
-        .select("id, shop_domain, scope, is_active, installed_at, updated_at")
+        .select("id, shop_domain, requested_shop_domain, primary_domain_url, shop_name, scope, is_active, installed_at, updated_at")
         .order("installed_at", { ascending: false });
       if (error) throw error;
       return new Response(JSON.stringify({ connections: data ?? [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
