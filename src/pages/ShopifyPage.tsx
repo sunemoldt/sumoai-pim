@@ -98,7 +98,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       toast({ title: "Install-link ikke klar", description: "Vent et øjeblik og prøv igen.", variant: "destructive" });
       return;
     }
-    toast({ title: "Shopify-installation åbner", description: "Godkend appen i den nye browserfane." });
+    toast({ title: "Shopify-installation åbner", description: "Godkend appen i Shopify-vinduet." });
   };
 
   const copyInstallLink = async () => {
@@ -250,8 +250,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
             <Button asChild>
               <a
                 href={installUrl ?? "#"}
-                target="_blank"
-                rel="noopener noreferrer"
+                target="_top"
                 onClick={validateInstallLink}
                 aria-disabled={!installUrl || installUrlLoading}
               >
@@ -312,7 +311,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>1. Indtast butikkens shop-domæne (f.eks. <code>comtek-webshop.myshopify.com</code>) og klik installér.</p>
-          <p>2. Du sendes til Shopify hvor du godkender app'en. Shopify sender dig tilbage med et access token.</p>
+            <p>2. Du sendes ud af preview-rammen til Shopify hvor du godkender app'en. Shopify sender dig tilbage med et access token.</p>
           <p>3. Den nyligt installerede butik bliver automatisk **aktiv tenant** — alle PIM-handlinger arbejder herefter mod den.</p>
           <p>4. Du kan registrere flere butikker (f.eks. dev-store + produktion) og skifte mellem dem ovenfor.</p>
           <p className="pt-2 text-xs">Scopes: <code className="text-xs">read_products, write_products, read_inventory, write_inventory, read_product_listings</code></p>
