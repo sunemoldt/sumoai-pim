@@ -116,6 +116,24 @@ Deno.serve(async (req) => {
       return htmlResponse("Token mangler", "Shopify returnerede ingen access token.", false);
     }
 
+    let shopName: string | null = null;
+    let primaryDomainUrl: string | null = null;
+    try {
+      const shopRes = await fetch(`https://${shop}/admin/api/2026-04/graphql.json`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": accessToken,
+        },
+        body: JSON.stringify({ query: `query { shop { name primaryDomain { url } } }` }),
+      });
+      const shopJson = await shopRes.json();
+      shopName = shopJson?.data?.shop?.name ?? null;
+      primaryDomainUrl = shopJson?.data?.shop?.primaryDomain?.url ?? null;
+    } catch (detailsErr) {
+      console.warn("Could not fetch Shopify shop display details", detailsErr);
+    }
+
     // Deaktiver alle eksisterende forbindelser før ny aktiveres (sikrer unique-index)
     await supabase.from("shopify_connection").update({ is_active: false }).eq("is_active", true);
 
@@ -125,6 +143,9 @@ Deno.serve(async (req) => {
       access_token: accessToken,
       scope,
       is_active: true,
+      requested_shop_domain: stateRow.shop_domain,
+      primary_domain_url: primaryDomainUrl,
+      shop_name: shopName,
       installed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }, { onConflict: "shop_domain" });
@@ -134,7 +155,7 @@ Deno.serve(async (req) => {
 
     return htmlResponse(
       "✓ Forbundet!",
-      `Shopify-butikken <strong>${shop}</strong> er nu forbundet til PIM. Du sendes tilbage...`,
+      `Shopify-butikken <strong>${shopName || stateRow.shop_domain}</strong> er nu forbundet til PIM. Du sendes tilbage...`,
       true
     );
   } catch (err: any) {
