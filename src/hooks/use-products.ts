@@ -43,7 +43,13 @@ export function useMasterProducts(search?: string) {
         .order("title");
       
       if (search) {
-        query = query.or(`title.ilike.%${search}%,ean.ilike.%${search}%,brand.ilike.%${search}%,sku.ilike.%${search}%`);
+        // EAN: match regardless of leading zeros (e.g. "0810177161929" should also find "810177161929" and vice versa)
+        const isDigits = /^\d+$/.test(search);
+        const eanStripped = isDigits ? search.replace(/^0+/, "") : search;
+        const eanFilters = isDigits && eanStripped !== search
+          ? `ean.ilike.%${search}%,ean.ilike.%${eanStripped}%`
+          : `ean.ilike.%${search}%`;
+        query = query.or(`title.ilike.%${search}%,${eanFilters},brand.ilike.%${search}%,sku.ilike.%${search}%`);
       }
 
       const { data, error } = await query;
