@@ -41,7 +41,7 @@ export default function MergeProductDialog({ open, onOpenChange, source }: Props
     const { data, error } = await supabase
       .from("master_products")
       .select("id,title,ean,brand,image_url,shopify_product_id,webshop_product_id")
-      .or(`title.ilike.%${term}%,ean.ilike.%${term}%,sku.ilike.%${term}%`)
+      .or((() => { const isDigits = /^\d+$/.test(term); const s = isDigits ? term.replace(/^0+/, "") : term; const eanF = isDigits && s !== term ? `ean.ilike.%${term}%,ean.ilike.%${s}%` : `ean.ilike.%${term}%`; return `title.ilike.%${term}%,${eanF},sku.ilike.%${term}%`; })())
       .neq("id", source.id)
       .limit(20);
     setSearching(false);
