@@ -446,6 +446,7 @@ export default function SettingsPage() {
       <ShopifyQueueCard />
 
       <WoocommerceToggleCard />
+      <WoocommerceForcePushCard />
 
       <CleanupAuditCard />
 
