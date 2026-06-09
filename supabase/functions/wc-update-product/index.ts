@@ -231,20 +231,29 @@ Deno.serve(async (req) => {
         wcRes.status === 403 &&
         typeof wcData === "string" &&
         wcData.includes("challenges.cloudflare.com");
+      // Forsøg at hente WC's egen fejlbesked (typisk { code, message, data })
+      let wcMsg: string | null = null;
+      if (wcData && typeof wcData === "object") {
+        wcMsg = wcData.message || wcData.error || null;
+        if (wcData.code) wcMsg = `${wcMsg ?? ""} [${wcData.code}]`.trim();
+      } else if (typeof wcData === "string" && wcData.length < 300) {
+        wcMsg = wcData;
+      }
       const friendly = isCloudflareChallenge
         ? "WooCommerce blokerede requestet via Cloudflare (legacy-sync er pauset)."
-        : `WooCommerce afviste opdateringen (HTTP ${wcRes.status})`;
-      // Return 200 + fallback so callers don't crash on 5xx — WC sync is paused/legacy.
+        : `WC HTTP ${wcRes.status}: ${wcMsg ?? "ukendt fejl"}`;
       return new Response(
         JSON.stringify({
           success: false,
           fallback: true,
           skipped: true,
           error: friendly,
+          wc_message: wcMsg,
           status: wcRes.status,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+
     }
 
     // Log changes and update local DB
