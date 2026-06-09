@@ -281,6 +281,9 @@ Deno.serve(async (req) => {
     if (short_description !== undefined && !isVariation) {
       logChange("short_description", product.short_description, short_description, "shop_update");
     }
+    if (ean !== undefined && ean !== null && String(ean).length > 0 && !String(ean).startsWith("wc-")) {
+      logChange("ean", product.ean, String(ean), "shop_update");
+    }
 
     if (Object.keys(dbUpdate).length > 0) {
       await supabase.from("master_products").update(dbUpdate).eq("id", master_product_id);
