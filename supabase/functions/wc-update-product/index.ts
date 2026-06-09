@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const {
+    let {
       master_product_id,
       regular_price,    // inkl. moms
       sale_price,       // inkl. moms or null
@@ -72,7 +72,10 @@ Deno.serve(async (req) => {
       backorders,       // "yes" | "no" | "notify"
       description,        // lang beskrivelse (HTML)
       short_description,  // kort beskrivelse (HTML)
-    } = body;
+      ean,                // push EAN -> WC meta _avecdo_ean (+ sku if force_sku)
+      force_sku,          // when true, also overwrite WC sku with ean
+      use_db_values,      // when true, fill regular_price/sale_price/stock_*/ean from DB
+    } = body as Record<string, any>;
 
     if (!master_product_id) {
       return new Response(
@@ -104,6 +107,15 @@ Deno.serve(async (req) => {
 
     const isVariation = !!product.webshop_parent_id;
 
+    // Force-push: fill any unspecified field from PIM DB.
+    if (use_db_values) {
+      if (regular_price === undefined && product.webshop_price != null) regular_price = product.webshop_price;
+      if (sale_price === undefined) sale_price = product.sale_price ?? null;
+      if (stock_quantity === undefined && product.stock_quantity != null) stock_quantity = product.stock_quantity;
+      if (!stock_status && product.stock_status) stock_status = product.stock_status;
+      if (ean === undefined && product.ean) ean = product.ean;
+    }
+
     // Build WooCommerce update payload
     const wcPayload: Record<string, any> = {};
 
@@ -128,6 +140,12 @@ Deno.serve(async (req) => {
     }
     if (short_description !== undefined && !isVariation && wcScope === "full") {
       wcPayload.short_description = short_description ?? "";
+    }
+    // EAN -> WC meta `_avecdo_ean` (priority key used by import). Skip 'wc-...' fallback EANs.
+    if (ean !== undefined && ean !== null && String(ean).length > 0 && !String(ean).startsWith("wc-")) {
+      const eanStr = String(ean);
+      wcPayload.meta_data = [{ key: "_avecdo_ean", value: eanStr }];
+      if (force_sku) wcPayload.sku = eanStr;
     }
 
     // Use variation endpoint if this is a variation
