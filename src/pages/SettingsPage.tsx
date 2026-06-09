@@ -20,6 +20,7 @@ import ShopifyBulkPullCard from "@/components/ShopifyBulkPullCard";
 import CleanupAuditCard from "@/components/CleanupAuditCard";
 import ShopifyQueueCard from "@/components/ShopifyQueueCard";
 import WoocommerceToggleCard from "@/components/WoocommerceToggleCard";
+import WoocommerceForcePushCard from "@/components/WoocommerceForcePushCard";
 import LowMarginGuardCard from "@/components/LowMarginGuardCard";
 
 export default function SettingsPage() {
@@ -445,6 +446,7 @@ export default function SettingsPage() {
       <ShopifyQueueCard />
 
       <WoocommerceToggleCard />
+      <WoocommerceForcePushCard />
 
       <CleanupAuditCard />
 
