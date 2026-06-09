@@ -141,10 +141,15 @@ Deno.serve(async (req) => {
     if (short_description !== undefined && !isVariation && wcScope === "full") {
       wcPayload.short_description = short_description ?? "";
     }
-    // EAN -> WC meta `_avecdo_ean` (priority key used by import). Skip 'wc-...' fallback EANs.
+    // EAN push: WC's indbyggede GTIN/EAN-felt (under Beholdning) = `global_unique_id` (WC 9.2+)
+    // + `_avecdo_ean` meta (bagudkompatibilitet med importen). Skip 'wc-...' fallback-EANs.
     if (ean !== undefined && ean !== null && String(ean).length > 0 && !String(ean).startsWith("wc-")) {
       const eanStr = String(ean);
-      wcPayload.meta_data = [{ key: "_avecdo_ean", value: eanStr }];
+      wcPayload.global_unique_id = eanStr;
+      wcPayload.meta_data = [
+        { key: "_avecdo_ean", value: eanStr },
+        { key: "_global_unique_id", value: eanStr }, // fallback for ældre WC-versioner
+      ];
       if (force_sku) wcPayload.sku = eanStr;
     }
 
