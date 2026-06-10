@@ -42,14 +42,15 @@ export default function ProductCard({
 
   const cheapestAny = getCheapestSupplierAny(product.supplier_products);
   const cheapestPrice = cheapestAny?.purchase_price ?? null;
-  // Recommendation is based on the cheapest IN-STOCK supplier (avoid pricing below cost)
+  // Recommendation: prefer cheapest IN-STOCK supplier, fall back to cheapest any
+  // (so we still show a guideline price when everything is out of stock)
   const cheapestInStock = product.supplier_products
     .filter((sp) => sp.in_stock)
     .reduce<typeof product.supplier_products[number] | null>(
       (min, sp) => (!min || sp.purchase_price < min.purchase_price ? sp : min),
       null
     );
-  const recommendedBasePrice = cheapestInStock?.purchase_price ?? null;
+  const recommendedBasePrice = cheapestInStock?.purchase_price ?? cheapestPrice;
   const recommended = recommendedBasePrice
     ? getRecommendedPriceInclVat(recommendedBasePrice, product.custom_markup_percentage ?? globalMarkup)
     : null;
