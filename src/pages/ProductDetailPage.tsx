@@ -1566,6 +1566,19 @@ export default function ProductDetailPage() {
               <div className="flex flex-wrap gap-2">
                 <PullFromShopifyButton productId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
                 <SendToShopifyButton product={product} />
+                {product.shopify_product_id && (
+                  <div className="basis-full text-xs text-muted-foreground">
+                    {(() => {
+                      const ts = (product as { last_shopify_sync_at?: string | null }).last_shopify_sync_at;
+                      const st = (product as { last_shopify_sync_status?: string | null }).last_shopify_sync_status;
+                      if (!ts && !st) return <span>Endnu ikke synket via ny logik</span>;
+                      const when = ts ? new Date(ts).toLocaleString("da-DK") : "—";
+                      const icon = st === "ok" ? "✓" : st === "failed" ? "✗" : "⏱";
+                      const color = st === "ok" ? "text-green-600" : st === "failed" ? "text-red-600" : "text-amber-600";
+                      return <span className={color}>Shopify: {icon} sidst synket {when}{st !== "ok" ? ` (${st})` : ""}</span>;
+                    })()}
+                  </div>
+                )}
                 <Button variant="outline" size="sm" onClick={() => setAiGenOpen(true)}>
                   <Sparkles className="h-4 w-4 mr-2" />
                   AI: generér felter
