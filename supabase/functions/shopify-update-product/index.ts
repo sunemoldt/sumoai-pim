@@ -322,6 +322,13 @@ Deno.serve(async (req) => {
     const isThrottle = /rate.?limit|throttl|429|too many requests|exceeded for trace/i.test(message);
     const shouldEnqueue = isThrottle && enqueue_on_throttle !== false && queued !== true;
 
+    // Stamp failure on product (best-effort, ignore errors)
+    try {
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await sb.from("master_products").update({ last_shopify_sync_status: shouldEnqueue ? "queued" : "failed" }).eq("id", master_product_id);
+    } catch { /* ignore */ }
+
+
     if (shouldEnqueue) {
       try {
         const supabaseSvc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
