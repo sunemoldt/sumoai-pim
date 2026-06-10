@@ -14,3 +14,10 @@ verify_jwt = false
 
 [functions.shopify-queue-worker]
 verify_jwt = false
+
+[functions.nightly-backup]
+verify_jwt = false
+
+[functions.shopify-order-webhook]
+verify_jwt = false
+

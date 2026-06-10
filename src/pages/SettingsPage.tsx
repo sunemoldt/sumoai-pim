@@ -22,6 +22,7 @@ import ShopifyQueueCard from "@/components/ShopifyQueueCard";
 import WoocommerceToggleCard from "@/components/WoocommerceToggleCard";
 import WoocommerceForcePushCard from "@/components/WoocommerceForcePushCard";
 import ShopifyOrderSyncCard from "@/components/ShopifyOrderSyncCard";
+import { NightlyBackupCard } from "@/components/NightlyBackupCard";
 import LowMarginGuardCard from "@/components/LowMarginGuardCard";
 
 export default function SettingsPage() {
@@ -447,6 +448,10 @@ export default function SettingsPage() {
       <ShopifyQueueCard />
 
       <ShopifyOrderSyncCard />
+
+      <NightlyBackupCard />
+
+
 
       <WoocommerceToggleCard />
       <WoocommerceForcePushCard />
