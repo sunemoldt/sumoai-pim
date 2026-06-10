@@ -796,6 +796,33 @@ export type Database = {
         }
         Relationships: []
       }
+      shopify_skipped_orders: {
+        Row: {
+          created_at: string
+          id: string
+          order_id: number
+          raw: Json | null
+          shopify_order_number: string | null
+          skipped_reason: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_id: number
+          raw?: Json | null
+          shopify_order_number?: string | null
+          skipped_reason: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_id?: number
+          raw?: Json | null
+          shopify_order_number?: string | null
+          skipped_reason?: string
+        }
+        Relationships: []
+      }
       shopify_update_queue: {
         Row: {
           attempts: number
@@ -1007,6 +1034,10 @@ export type Database = {
       apply_low_margin_guard: {
         Args: { p_master_product_id: string }
         Returns: undefined
+      }
+      decrement_stock_from_shopify_order: {
+        Args: { p_master_product_id: string; p_qty: number }
+        Returns: Json
       }
       get_change_log_daily: {
         Args: { days?: number }
