@@ -301,14 +301,16 @@ Deno.serve(async (req) => {
       } else { skippedFields.push("stock_status"); }
     }
 
-    if (Object.keys(dbUpdate).length > 0) {
-      await supabase.from("master_products").update({ ...dbUpdate, updated_at: new Date().toISOString() }).eq("id", master_product_id);
-    }
+    // Always stamp sync timestamp on success (even if no fields actually pushed — call succeeded)
+    dbUpdate.last_shopify_sync_at = new Date().toISOString();
+    dbUpdate.last_shopify_sync_status = "ok";
+
+    await supabase.from("master_products").update({ ...dbUpdate, updated_at: new Date().toISOString() }).eq("id", master_product_id);
     if (changeLogs.length > 0) {
       await supabase.from("product_change_log").insert(changeLogs);
     }
 
-    return new Response(JSON.stringify({ success: true, shopify_product_id: product.shopify_product_id, shopify_variant_id: product.shopify_variant_id, updated_fields: updatedFields, skipped_fields: skippedFields }), {
+    return new Response(JSON.stringify({ success: true, shopify_product_id: product.shopify_product_id, shopify_variant_id: product.shopify_variant_id, updated_fields: updatedFields, skipped_fields: skippedFields, last_shopify_sync_at: dbUpdate.last_shopify_sync_at }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
