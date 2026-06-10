@@ -229,19 +229,22 @@ Deno.serve(async (req) => {
     const elapsedMs = Date.now() - startedAt;
 
     // 5) Log til import_logs så det er synligt i UI
+    const totalRows = Object.values(meta).reduce((a, b) => a + b.count, 0);
     await sb.from("import_logs").insert({
       source: "nightly-backup",
       status: "success",
-      total_items: Object.values(meta).reduce((a, b) => a + b.count, 0),
-      summary: {
+      total_fetched: totalRows,
+      imported: totalRows,
+      completed_at: new Date().toISOString(),
+      results: [{
         folder: FOLDER_NAME,
         json_file_id: jsonId,
         csv_file_id: csvId,
         tables: meta,
         deleted_old_files: deleted,
         elapsed_ms: elapsedMs,
-      },
-    }).then(() => {}, () => {}); // ignore if import_logs schema differs
+      }],
+    });
 
     return json({
       success: true,
