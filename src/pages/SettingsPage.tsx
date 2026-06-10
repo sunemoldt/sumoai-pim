@@ -449,6 +449,10 @@ export default function SettingsPage() {
 
       <ShopifyOrderSyncCard />
 
+      <NightlyBackupCard />
+
+
+
       <WoocommerceToggleCard />
       <WoocommerceForcePushCard />
 
