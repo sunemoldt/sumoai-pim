@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMasterProduct, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog, useProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +66,13 @@ export default function ProductDetailPage() {
   const [aiGenOpen, setAiGenOpen] = useState(false);
   const [togglingLifecycle, setTogglingLifecycle] = useState(false);
   const [rematchingSuppliers, setRematchingSuppliers] = useState(false);
+
+  useEffect(() => {
+    const prev = document.title;
+    if (product?.title) document.title = `${product.title} · Comtek PIM`;
+    return () => { document.title = prev; };
+  }, [product?.title]);
+
 
   const rematchSuppliers = async () => {
     if (!product) return;
