@@ -260,7 +260,12 @@ Deno.serve(async (req) => {
     console.error("[nightly-backup] FEJL:", message);
     try {
       const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-      await sb.from("import_logs").insert({ source: "nightly-backup", status: "failed", error_message: message });
+      await sb.from("import_logs").insert({
+        source: "nightly-backup",
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        errors: [{ message }],
+      });
     } catch { /* ignore */ }
     return json({ error: message }, 500);
   }
