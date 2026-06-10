@@ -1,5 +1,5 @@
 // Shopify orders/create webhook — decrements PIM stock for future orders only.
-// Protected by HMAC signature + cutoff timestamp + idempotency table.
+// Protected by HMAC signature + cutoff timestamp + atomic claim idempotency.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
@@ -9,8 +9,7 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-// Shopify signs webhooks created via Admin API with the app's API secret (SHOPIFY_CLIENT_SECRET).
-// Fallback to SHOPIFY_WEBHOOK_SECRET if user has set a custom one.
+// Shopify signs Admin-API-oprettede webhooks med app secret. Fallback hvis brugeren har sat egen secret.
 const SHOPIFY_WEBHOOK_SECRET = Deno.env.get("SHOPIFY_WEBHOOK_SECRET") ?? Deno.env.get("SHOPIFY_CLIENT_SECRET") ?? "";
 
 function json(body: unknown, status = 200) {
@@ -31,7 +30,6 @@ async function verifyHmac(rawBody: string, providedHmac: string): Promise<boolea
   );
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
   const computed = btoa(String.fromCharCode(...new Uint8Array(sig)));
-  // Constant-time compare
   if (computed.length !== providedHmac.length) return false;
   let mismatch = 0;
   for (let i = 0; i < computed.length; i++) mismatch |= computed.charCodeAt(i) ^ providedHmac.charCodeAt(i);
@@ -65,44 +63,69 @@ Deno.serve(async (req) => {
 
   const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // 1) Cutoff check — never touch historical orders
+  const logSkip = async (reason: string) => {
+    await sb.from("shopify_skipped_orders").insert({
+      order_id: orderId,
+      shopify_order_number: orderNumber,
+      skipped_reason: reason,
+      raw: { created_at: createdAtRaw, line_count: lineItems.length },
+    });
+  };
+
+  // 1) Cutoff check — aldrig rør historiske ordrer
   const { data: cfg } = await sb.from("shopify_webhook_config").select("orders_cutoff_at").eq("id", 1).maybeSingle();
   const cutoff = cfg?.orders_cutoff_at ? new Date(cfg.orders_cutoff_at) : null;
   if (!cutoff) {
-    await sb.from("shopify_processed_orders").upsert({
-      order_id: orderId, shopify_order_number: orderNumber, line_count: lineItems.length,
-      total_decremented: 0, skipped_reason: "no_cutoff_configured",
-    });
+    await logSkip("no_cutoff_configured");
     return json({ skipped: "no_cutoff_configured" });
   }
   if (createdAt < cutoff) {
-    await sb.from("shopify_processed_orders").upsert({
-      order_id: orderId, shopify_order_number: orderNumber, line_count: lineItems.length,
-      total_decremented: 0, skipped_reason: "before_cutoff",
-    });
+    await logSkip("before_cutoff");
     return json({ skipped: "before_cutoff", order_id: orderId, created_at: createdAtRaw, cutoff: cutoff.toISOString() });
   }
 
-  // 2) Idempotency check
-  const { data: existing } = await sb.from("shopify_processed_orders").select("order_id").eq("order_id", orderId).maybeSingle();
-  if (existing) return json({ skipped: "duplicate", order_id: orderId });
+  // 2) Atomar claim — insert virker som lås. Hvis order_id allerede findes → duplicate.
+  const { data: claim, error: claimErr } = await sb
+    .from("shopify_processed_orders")
+    .insert({
+      order_id: orderId,
+      shopify_order_number: orderNumber,
+      line_count: lineItems.length,
+      total_decremented: 0,
+    })
+    .select("order_id")
+    .maybeSingle();
 
-  // 3) Decrement stock per line item
+  if (claimErr) {
+    // Unique constraint violation = anden process har allerede claimet ordren
+    const isDuplicate = /duplicate key|unique constraint/i.test(claimErr.message);
+    if (isDuplicate) return json({ skipped: "duplicate", order_id: orderId });
+    console.error("[shopify-order-webhook] Claim failed", claimErr);
+    return json({ error: "Claim failed", details: claimErr.message }, 500);
+  }
+  if (!claim) return json({ skipped: "duplicate", order_id: orderId });
+
+  // 3) Decrement stock per line item via atomar SQL-funktion
   let totalDecremented = 0;
   const lineResults: Array<Record<string, unknown>> = [];
 
   for (const item of lineItems) {
     const variantId = item.variant_id ? String(item.variant_id) : null;
     const qty = Number(item.quantity ?? 0);
-    if (!variantId || qty <= 0) {
-      lineResults.push({ variant_id: variantId, skipped: "no_variant_or_qty" });
+
+    if (!variantId || !/^\d+$/.test(variantId)) {
+      lineResults.push({ variant_id: variantId, skipped: "invalid_variant_id" });
+      continue;
+    }
+    if (qty <= 0) {
+      lineResults.push({ variant_id: variantId, skipped: "invalid_qty" });
       continue;
     }
 
-    // Find product by shopify_variant_id (stored as string or numeric)
+    // Find produkt via shopify_variant_id (numeric eller GID)
     const { data: products } = await sb
       .from("master_products")
-      .select("id, title, stock_quantity, auto_stock_sync, lifecycle_status")
+      .select("id, title")
       .or(`shopify_variant_id.eq.${variantId},shopify_variant_id.eq.gid://shopify/ProductVariant/${variantId}`)
       .limit(1);
     const product = products?.[0];
@@ -111,42 +134,41 @@ Deno.serve(async (req) => {
       lineResults.push({ variant_id: variantId, skipped: "product_not_found" });
       continue;
     }
-    if (product.auto_stock_sync) {
-      lineResults.push({ variant_id: variantId, product_id: product.id, skipped: "auto_stock_sync_managed" });
-      continue;
-    }
-    if (product.lifecycle_status === "draft") {
-      lineResults.push({ variant_id: variantId, product_id: product.id, skipped: "draft" });
+
+    const { data: rpcResult, error: rpcErr } = await sb.rpc("decrement_stock_from_shopify_order", {
+      p_master_product_id: product.id,
+      p_qty: qty,
+    });
+
+    if (rpcErr) {
+      lineResults.push({ variant_id: variantId, product_id: product.id, error: rpcErr.message });
       continue;
     }
 
-    const newQty = Math.max((product.stock_quantity ?? 0) - qty, 0);
-    // Mark change source so auto_enqueue_shopify_update skip-list catches it (no push-back to Shopify)
-    await sb.rpc("set_change_source", { source: "shopify-order" });
-    const { error: updErr } = await sb
-      .from("master_products")
-      .update({
-        stock_quantity: newQty,
-        stock_status: newQty > 0 ? "instock" : "outofstock",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", product.id);
-
-    if (updErr) {
-      lineResults.push({ variant_id: variantId, product_id: product.id, error: updErr.message });
+    const result = (rpcResult ?? {}) as Record<string, unknown>;
+    if (result.skipped) {
+      lineResults.push({ variant_id: variantId, product_id: product.id, skipped: result.skipped });
       continue;
     }
-    totalDecremented += qty;
-    lineResults.push({ variant_id: variantId, product_id: product.id, decremented: qty, new_qty: newQty });
+
+    const dec = Number(result.decremented ?? 0);
+    totalDecremented += dec;
+    lineResults.push({
+      variant_id: variantId,
+      product_id: product.id,
+      decremented: dec,
+      old_qty: result.old,
+      new_qty: result.new,
+    });
   }
 
-  await sb.from("shopify_processed_orders").insert({
-    order_id: orderId,
-    shopify_order_number: orderNumber,
-    line_count: lineItems.length,
-    total_decremented: totalDecremented,
-    raw: { line_results: lineResults, created_at: createdAtRaw },
-  });
+  // 4) Opdater claim-rækken med slutresultat
+  await sb.from("shopify_processed_orders")
+    .update({
+      total_decremented: totalDecremented,
+      raw: { line_results: lineResults, created_at: createdAtRaw },
+    })
+    .eq("order_id", orderId);
 
   return json({ success: true, order_id: orderId, decremented: totalDecremented, lines: lineResults });
 });
