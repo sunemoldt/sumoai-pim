@@ -364,12 +364,14 @@ export default function ProductDetailPage() {
 
   const cheapest = getCheapestSupplier(product.supplier_products);
   const cheapestAny = getCheapestSupplierAny(product.supplier_products);
-  // Display "Indkøb" still reflects the absolute cheapest supplier (incl. out-of-stock),
-  // but the recommended sales price uses cheapest IN-STOCK only.
+  // Display "Indkøb" still reflects the absolute cheapest supplier (incl. out-of-stock).
+  // Recommended price prefers cheapest IN-STOCK but falls back to cheapest any so we
+  // always show a guideline price, even when all suppliers are out of stock.
   const cheapestPrice = cheapestAny?.purchase_price ?? null;
   const cheapestInStockPrice = cheapest?.purchase_price ?? null;
-  const recommendedPriceExVat = cheapestInStockPrice ? getRecommendedPrice(cheapestInStockPrice, effectiveMarkup) : null;
-  const recommendedPriceInclVat = cheapestInStockPrice ? getRecommendedPriceInclVat(cheapestInStockPrice, effectiveMarkup) : null;
+  const recommendedBasePrice = cheapestInStockPrice ?? cheapestPrice;
+  const recommendedPriceExVat = recommendedBasePrice ? getRecommendedPrice(recommendedBasePrice, effectiveMarkup) : null;
+  const recommendedPriceInclVat = recommendedBasePrice ? getRecommendedPriceInclVat(recommendedBasePrice, effectiveMarkup) : null;
   const currentPrice = product.sale_price ?? product.webshop_price;
   const currentPriceExVat = currentPrice ? exVat(currentPrice) : null;
   const margin = currentPriceExVat && cheapestPrice ? getMarginPercent(currentPriceExVat, cheapestPrice) : null;
