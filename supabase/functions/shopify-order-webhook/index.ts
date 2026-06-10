@@ -9,7 +9,9 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const SHOPIFY_WEBHOOK_SECRET = Deno.env.get("SHOPIFY_WEBHOOK_SECRET") ?? "";
+// Shopify signs webhooks created via Admin API with the app's API secret (SHOPIFY_CLIENT_SECRET).
+// Fallback to SHOPIFY_WEBHOOK_SECRET if user has set a custom one.
+const SHOPIFY_WEBHOOK_SECRET = Deno.env.get("SHOPIFY_WEBHOOK_SECRET") ?? Deno.env.get("SHOPIFY_CLIENT_SECRET") ?? "";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
