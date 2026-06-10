@@ -165,6 +165,8 @@ export type Database = {
           ean: string
           id: string
           image_url: string | null
+          last_shopify_sync_at: string | null
+          last_shopify_sync_status: string | null
           lifecycle_status: string
           long_description: string | null
           low_margin_guard: string
@@ -203,6 +205,8 @@ export type Database = {
           ean: string
           id?: string
           image_url?: string | null
+          last_shopify_sync_at?: string | null
+          last_shopify_sync_status?: string | null
           lifecycle_status?: string
           long_description?: string | null
           low_margin_guard?: string
@@ -241,6 +245,8 @@ export type Database = {
           ean?: string
           id?: string
           image_url?: string | null
+          last_shopify_sync_at?: string | null
+          last_shopify_sync_status?: string | null
           lifecycle_status?: string
           long_description?: string | null
           low_margin_guard?: string
@@ -760,6 +766,36 @@ export type Database = {
         }
         Relationships: []
       }
+      shopify_processed_orders: {
+        Row: {
+          line_count: number
+          order_id: number
+          processed_at: string
+          raw: Json | null
+          shopify_order_number: string | null
+          skipped_reason: string | null
+          total_decremented: number
+        }
+        Insert: {
+          line_count?: number
+          order_id: number
+          processed_at?: string
+          raw?: Json | null
+          shopify_order_number?: string | null
+          skipped_reason?: string | null
+          total_decremented?: number
+        }
+        Update: {
+          line_count?: number
+          order_id?: number
+          processed_at?: string
+          raw?: Json | null
+          shopify_order_number?: string | null
+          skipped_reason?: string | null
+          total_decremented?: number
+        }
+        Relationships: []
+      }
       shopify_update_queue: {
         Row: {
           attempts: number
@@ -801,6 +837,30 @@ export type Database = {
           payload?: Json
           source?: string | null
           status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shopify_webhook_config: {
+        Row: {
+          id: number
+          orders_cutoff_at: string | null
+          orders_webhook_id: string | null
+          registered_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          orders_cutoff_at?: string | null
+          orders_webhook_id?: string | null
+          registered_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          orders_cutoff_at?: string | null
+          orders_webhook_id?: string | null
+          registered_at?: string | null
           updated_at?: string
         }
         Relationships: []
