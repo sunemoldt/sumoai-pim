@@ -101,12 +101,19 @@ Deno.serve(async (req) => {
           userErrors { field message }
         }
       }`;
+    const effectiveWeight = p.weight_kg != null ? Number(p.weight_kg) : 1;
+    const inventoryPolicy = p.backorder_policy === "yes" ? "CONTINUE" : "DENY";
     const variantInput: Record<string, unknown> = {
       id: variantGid,
       price: p.webshop_price != null ? String(p.webshop_price) : undefined,
       compareAtPrice: p.sale_price != null ? String(p.sale_price) : undefined,
       barcode: p.ean ?? undefined,
-      inventoryItem: { sku: p.sku ?? p.ean ?? undefined, tracked: true },
+      inventoryPolicy,
+      inventoryItem: {
+        sku: p.sku ?? p.ean ?? undefined,
+        tracked: true,
+        measurement: { weight: { value: effectiveWeight, unit: "KILOGRAMS" } },
+      },
     };
     const vData = await shopifyGraphql(conn.shop_domain, conn.access_token, variantMutation, {
       productId: productGid, variants: [variantInput],
