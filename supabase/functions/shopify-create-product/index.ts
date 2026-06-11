@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: p, error: pErr } = await supabase
       .from("master_products")
-      .select("id, title, ean, sku, brand, category, webshop_price, sale_price, stock_quantity, short_description, long_description, lifecycle_status, shopify_product_id")
+      .select("id, title, ean, sku, brand, category, webshop_price, sale_price, stock_quantity, short_description, long_description, lifecycle_status, shopify_product_id, weight_kg, backorder_policy")
       .eq("id", master_product_id)
       .single();
     if (pErr || !p) {
