@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
           shopify_variant_id: v.id?.split("/").pop() ?? null,
           shopify_inventory_item_id: v.inventoryItem?.id?.split("/").pop() ?? null,
           sku: v.sku ?? null,
-          ean: v.barcode ?? null,
+          ean: v.barcode ? (String(v.barcode).trim().replace(/^0+/, "") || String(v.barcode).trim()) : null,
           webshop_price: v.price ? Number(v.price) : null,
           sale_price: v.compareAtPrice ? Number(v.compareAtPrice) : null,
           stock_quantity: typeof v.inventoryQuantity === "number" ? v.inventoryQuantity : 0,
