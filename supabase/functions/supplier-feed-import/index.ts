@@ -468,9 +468,12 @@ Deno.serve(async (req) => {
       stock_quantity: number | null;
       in_stock: boolean;
       supplier_sku: string | null;
+      weight_kg: number | null;
       last_updated: string;
     }> = [];
     const nowIso = new Date().toISOString();
+    // Track best (cheapest) weight per master to backfill master_products.weight_kg later
+    const bestWeightByMaster = new Map<string, { weight: number; price: number }>();
 
     for (const row of feedRows) {
       const rawEan = row[mapping.ean]?.trim();
