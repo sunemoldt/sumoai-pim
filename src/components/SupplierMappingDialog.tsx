@@ -18,6 +18,7 @@ const SYSTEM_FIELDS = [
   { key: "purchase_price", label: "Indkøbspris", required: true },
   { key: "stock_quantity", label: "Lagerantal", required: false },
   { key: "in_stock", label: "På lager (ja/nej)", required: false },
+  { key: "weight_kg", label: "Vægt (kg)", required: false },
 ];
 
 interface Props {
