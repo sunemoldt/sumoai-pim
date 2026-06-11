@@ -251,7 +251,7 @@ export default function ProductDetailPage() {
       setPushStockQty(supplierStockTotal > 0 ? supplierStockTotal.toString() : (product.stock_quantity?.toString() ?? "0"));
       setPushStockStatus(hasSupplierStock ? "instock" : (product.stock_status ?? "outofstock"));
     }
-    setPushBackorders(product.backorders_allowed ? backorderMode : "no");
+    setPushBackorders((product as any).backorder_policy ?? (product.backorders_allowed ? "yes" : "no"));
     setPushInitialized(true);
   };
 
