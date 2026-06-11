@@ -64,7 +64,9 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, description, short_description, force, enqueue_on_throttle, queued, source, status, ean: eanInput } = body;
+    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, backorder_policy, weight_kg, description, short_description, force, enqueue_on_throttle, queued, source, status, ean: eanInput } = body;
+    // Normalize backorder input: accept legacy 'backorders' ('yes'/'no'/'notify') or new 'backorder_policy'
+    const backordersNorm: string | undefined = backorder_policy ?? backorders;
     if (!master_product_id) {
       return new Response(JSON.stringify({ error: "master_product_id is required" }), {
         status: 400,
@@ -75,7 +77,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: product, error: productError } = await supabase
       .from("master_products")
-      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, shopify_product_id, shopify_variant_id, short_description, long_description, lifecycle_status")
+      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, backorder_policy, weight_kg, shopify_product_id, shopify_variant_id, short_description, long_description, lifecycle_status")
       .eq("id", master_product_id)
       .single();
 
