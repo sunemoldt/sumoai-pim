@@ -161,13 +161,16 @@ Deno.serve(async (req) => {
       if (isAlready) {
         alreadyMatched++;
       } else if (!dryRun) {
+        const updatePayload: Record<string, unknown> = {
+          shopify_product_id: v.productId,
+          shopify_variant_id: v.variantId,
+          updated_at: new Date().toISOString(),
+        };
+        // When linking a previously-unlinked product, also enable sync so triggers/queue start working.
+        if (!p.shopify_product_id) updatePayload.shopify_sync_enabled = true;
         const { error: upErr } = await supabase
           .from("master_products")
-          .update({
-            shopify_product_id: v.productId,
-            shopify_variant_id: v.variantId,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq("id", p.id);
         if (upErr) { console.error("Update", p.ean, upErr); continue; }
         updated++;
