@@ -1,62 +1,50 @@
-## Mål
 
-1. Tilføj **vægt (kg)** på produkter i PIM, synk til Shopify, læs fra leverandørfeeds. Felt er valgfrit — hvis tomt, sendes **1 kg** til Shopify.
-2. Udvid **restordre** fra boolean til 3 valgmuligheder, og map korrekt til Shopify `inventoryPolicy`:
-   - Nej → `DENY`
-   - Ja → `CONTINUE`
-   - Ja, med besked → `DENY` (må ikke sælges ved udsolgt; "besked" håndteres via Shopifys "Notify me when available", ikke salg)
+## Problem
 
-## Database
+87 aktive PIM-produkter har ingen `shopify_product_id` og bliver derfor sprunget over af både auto-kø-triggeren og `shopify-update-product`. Eksempel: `Ubiquiti UniFi 7 Pro` (EAN `0810084693650` — leading zero bryder match-reglen).
 
-Migration:
-- `master_products`: tilføj `weight_kg numeric` (nullable), tilføj `backorder_policy text` (`'no' | 'yes' | 'notify'`, default `'no'`).
-  - Backfill `backorder_policy` ud fra eksisterende `backorders_allowed` (true → `'yes'`, false → `'no'`).
-  - Behold `backorders_allowed` indtil videre (bruges af triggers/queue) — opdater triggeren `auto_enqueue_shopify_update` til også at lytte på `backorder_policy` og `weight_kg`.
-- `supplier_products`: tilføj `weight_kg numeric` (nullable).
-- `product_variants`: tilføj `weight_kg numeric` (nullable) så varianter kan have egen vægt.
-- Tilføj kolonner til whitelists i `revert_change_log_entry` (`weight_kg` numeric, `backorder_policy` text).
+Fordeling:
+- 3 med leading-zero EAN
+- 63 med fallback `wc-` EAN (ikke ægte EAN — disse skal IKKE auto-matches)
+- ~21 med "rigtigt" EAN der burde matche
 
-## Backend (edge functions)
+## Anbefalet løsning: Bulk EAN-rematch (option A skaleret op)
 
-**shopify-update-product / shopify-create-product**
-- Læs `weight_kg` (fallback `1`) og send som variant weight (`inventoryItem.measurement.weight { value, unit: KILOGRAMS }` via GraphQL, eller `weight`/`weight_unit` på REST variant — brug samme API som filen allerede bruger).
-- Erstat `toInventoryPolicy(backorders)` så den mapper:
-  - `'yes'` → `CONTINUE`
-  - `'no' | 'notify'` → `DENY`
-- Acceptér både gammel (`'yes'|'no'|'notify'`) og nyt felt `backorder_policy` i payload.
-- Inkludér `weight_kg` og `backorder_policy` i `auto_enqueue_shopify_update`-triggerens changed-fields detektion.
+Den bedste vej er at lave et batch-værktøj der gør det samme som det vi gjorde manuelt for G6 Bullet, men automatisk for alle 87 (med fallback-EAN'er ekskluderet).
 
-**shopify-pull / shopify-import**
-- Læs variant weight fra Shopify og skriv til `weight_kg` (kun hvis feltet er tomt i PIM, ellers respektér field_sync_policy).
-- Map `inventoryPolicy === 'CONTINUE'` → `backorder_policy = 'yes'`, ellers `'no'` (kan ikke skelne `notify` fra Shopify).
+### Hvad bygges
 
-**Leverandørimport (`supplier-feed-import`, `wc-import`, Aurdel)**
-- Tilføj `weight_kg` til felt-mapping (CSV/XML kolonne → `supplier_products.weight_kg`).
-- Ved match til master: hvis `master_products.weight_kg` er tom, kopier fra billigste/primære leverandør.
+1. **Ny edge function `shopify-bulk-rematch`** (kalder eksisterende `shopify-match` logik):
+   - Henter alle `master_products` hvor `shopify_product_id IS NULL`, `lifecycle_status='active'`, EAN findes og ikke starter med `wc-`.
+   - For hvert produkt: normaliser EAN (strip leading zeros), søg Shopify via GraphQL `productVariants(query: "barcode:...")`.
+   - Ved præcis match → opdater `shopify_product_id`, `shopify_variant_id`, sæt `shopify_sync_enabled=true`.
+   - Returner rapport: matched / not_found / ambiguous (flere Shopify-varianter har samme EAN).
 
-## Frontend
+2. **Dry-run mode** (`{ apply: false }` default): viser hvad der ville ske uden at skrive — så du kan reviewe før commit.
 
-**ProductDetailPage**
-- Nyt input "Vægt (kg)" (decimal, valgfri, placeholder "1.0 (standard hvis tom)").
-- Erstat checkbox "Restordre tilladt" med RadioGroup/Select med 3 valg:
-  - Nej (kan ikke købes når udsolgt)
-  - Ja (kan købes når udsolgt)
-  - Ja, med besked (vis "Giv mig besked"-knap i Shopify, kan ikke købes)
+3. **Ny UI-knap på `ShopifyPage.tsx`**: "Rematch ulinkede produkter" → kalder funktionen i dry-run, viser tabel med foreslåede matches, derefter "Bekræft og link" → kører `apply: true`.
 
-**ProductListPage / ProductCard**
-- Vis vægt i evt. detaljevisning (read-only).
+4. **EAN-normalisering ved import**: Tilføj `TRIM(LEADING '0' FROM ean)` i `wc-import`, `supplier-feed-import` og `shopify-pull` så fremtidige imports ikke genintroducerer problemet (matcher core memory-reglen "Strip leading zeros from EANs").
 
-**NewProductPage**
-- Tilføj `weight_kg`-felt og restordre-valg ved oprettelse.
+### Hvorfor denne tilgang
 
-**SupplierMappingDialog / feed preview**
-- Tilføj `weight_kg` til liste af mappable felter.
+- **Skalerbart**: ét klik dækker alle nuværende og fremtidige unlinkede produkter.
+- **Sikker**: dry-run + manuel godkendelse før vi rører Shopify-ID'er.
+- **Selvhelende**: import-normaliseringen forhindrer at problemet kommer igen.
+- **Fallback-EAN'er ignoreres**: `wc-`-produkter har ikke et rigtigt EAN — de skal håndteres separat (manuel link eller send som ny kladde).
 
-**FieldSyncPolicyCard**
-- Tilføj `weight_kg` og `backorder_policy` til policy-listen.
+### Hvad der IKKE er med (kan tilføjes senere)
 
-## Tekniske noter
+- Auto-oprettelse i Shopify for produkter uden match (kræver lifecycle=draft + bevidst beslutning per produkt — for risikabelt at bulk-køre).
+- Håndtering af `wc-`-fallback produkter (separat oprydningstask).
 
-- Behold `backorders_allowed` som beregnet view i koden: `backorders_allowed = backorder_policy === 'yes'`. Den bruges fortsat af triggere indtil migrering er færdig.
-- Stripping af leading zeros mv. rører vi ikke. EAN-logik uændret.
-- Vægt valideres ≥ 0; tom = NULL = "1 kg ved push".
+### Filer der ændres
+
+- `supabase/functions/shopify-bulk-rematch/index.ts` (ny)
+- `supabase/functions/wc-import/index.ts` (EAN-strip ved insert)
+- `supabase/functions/supplier-feed-import/index.ts` (EAN-strip)
+- `supabase/functions/shopify-pull/index.ts` (EAN-strip ved write-back)
+- `src/pages/ShopifyPage.tsx` (ny rematch-card med dry-run preview)
+- Migration: engangs-UPDATE der stripper leading zeros fra eksisterende `master_products.ean` (3 rækker)
+
+Godkend, så bygger jeg.
