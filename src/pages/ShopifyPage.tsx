@@ -332,6 +332,8 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
           </CardContent>
         </Card>
       )}
+      {status?.is_connected && <ShopifyRematchCard />}
+
 
       <Card>
         <CardHeader>
