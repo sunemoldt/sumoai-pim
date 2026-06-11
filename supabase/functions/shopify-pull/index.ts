@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
               : Number(wRaw.value);
             tryField("weight_kg", wKg);
           }
-          tryField("ean", firstVariant.barcode);
+          tryField("ean", firstVariant.barcode ? String(firstVariant.barcode).trim().replace(/^0+/, "") || String(firstVariant.barcode).trim() : firstVariant.barcode);
           tryField("sku", firstVariant.sku);
         }
 
