@@ -162,15 +162,38 @@ Deno.serve(async (req) => {
         updatedFields.push("compareAtPrice");
       } else { skippedFields.push("sale_price"); }
     }
-    const inventoryPolicy = toInventoryPolicy(backorders);
+    const inventoryPolicy = toInventoryPolicy(backordersNorm);
     if (inventoryPolicy) {
-      if (canPush("backorders_allowed")) {
+      if (canPush("backorders_allowed") || canPush("backorder_policy")) {
         variantInput.inventoryPolicy = inventoryPolicy;
         const allowed = inventoryPolicy === "CONTINUE";
+        const policyValue = backordersNorm === "yes" || backordersNorm === "no" || backordersNorm === "notify" ? backordersNorm : (allowed ? "yes" : "no");
         dbUpdate.backorders_allowed = allowed;
+        dbUpdate.backorder_policy = policyValue;
         logChange("backorders_allowed", product.backorders_allowed, allowed, "stock_update");
+        logChange("backorder_policy", product.backorder_policy, policyValue, "stock_update");
         updatedFields.push("inventoryPolicy");
       } else { skippedFields.push("backorders_allowed"); }
+    }
+
+    // Weight (kg) — send to Shopify via inventoryItem measurement. Defaults to 1 kg if no value set in PIM.
+    {
+      const effectiveWeight = weight_kg !== undefined && weight_kg !== null
+        ? Number(weight_kg)
+        : (product.weight_kg != null ? Number(product.weight_kg) : 1);
+      if (Number.isFinite(effectiveWeight) && effectiveWeight >= 0) {
+        if (canPush("weight_kg")) {
+          variantInput.inventoryItem = {
+            ...(variantInput.inventoryItem as Record<string, unknown> ?? {}),
+            measurement: { weight: { value: effectiveWeight, unit: "KILOGRAMS" } },
+          };
+          if (weight_kg !== undefined && weight_kg !== null) {
+            dbUpdate.weight_kg = weight_kg;
+            logChange("weight_kg", product.weight_kg, weight_kg, "weight_update");
+          }
+          updatedFields.push("weight");
+        } else { skippedFields.push("weight_kg"); }
+      }
     }
     // Barcode (EAN). Default to PIM's current ean unless caller overrode. Skip fallback 'wc-' EANs.
     {
