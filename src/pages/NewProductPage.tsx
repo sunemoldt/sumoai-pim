@@ -29,6 +29,8 @@ export default function NewProductPage() {
     webshop_price: "",
     sale_price: "",
     image_url: "",
+    weight_kg: "",
+    backorder_policy: "no",
   });
 
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
