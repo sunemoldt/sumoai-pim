@@ -40,7 +40,8 @@ async function shopifyGraphql(shopDomain: string, accessToken: string, query: st
 
 function toInventoryPolicy(backorders?: string) {
   if (!backorders) return undefined;
-  return backorders === "yes" || backorders === "notify" ? "CONTINUE" : "DENY";
+  // Only 'yes' allows backorders. 'notify' and 'no' both DENY purchases when out of stock.
+  return backorders === "yes" ? "CONTINUE" : "DENY";
 }
 
 function toGid(type: "Product" | "ProductVariant" | "InventoryItem" | "Location", id: string | number | null | undefined): string | null {
