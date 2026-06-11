@@ -94,6 +94,8 @@ export default function NewProductPage() {
       image_url: form.image_url.trim() || null,
       webshop_price: form.webshop_price ? Number(form.webshop_price) : null,
       sale_price: form.sale_price ? Number(form.sale_price) : null,
+      weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
+      backorder_policy: form.backorder_policy || "no",
       lifecycle_status: "draft",
       webshop_platform: "shopify",
       shopify_sync_enabled: false,
