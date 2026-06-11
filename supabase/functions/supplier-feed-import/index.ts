@@ -505,6 +505,15 @@ Deno.serve(async (req) => {
 
       const supplierSku = mapping.sku ? row[mapping.sku]?.trim() || null : null;
 
+      // Weight in kg (optional). Accept comma-decimals; if column missing/invalid, leave null.
+      let weightKg: number | null = null;
+      const weightColKey = (mapping as any).weight_kg as string | undefined;
+      if (weightColKey) {
+        const wStr = row[weightColKey]?.trim().replace(",", ".");
+        const wNum = wStr ? parseFloat(wStr) : NaN;
+        if (!isNaN(wNum) && wNum >= 0) weightKg = wNum;
+      }
+
       // Detect changes for changelog
       const existing = existingMap.get(masterProductId);
       if (existing) {
@@ -521,6 +530,11 @@ Deno.serve(async (req) => {
         changeLogs.push({ master_product_id: masterProductId, change_type: "supplier_added", field_name: "supplier_product", old_value: null, new_value: `${supplier.name}: ${price} DKK`, source: `supplier:${supplier.name}` });
       }
 
+      if (weightKg !== null) {
+        const prev = bestWeightByMaster.get(masterProductId);
+        if (!prev || price < prev.price) bestWeightByMaster.set(masterProductId, { weight: weightKg, price });
+      }
+
       spRows.push({
         supplier_id: supplier.id,
         master_product_id: masterProductId,
@@ -528,6 +542,7 @@ Deno.serve(async (req) => {
         stock_quantity: stockQty !== null && !isNaN(stockQty) ? stockQty : null,
         in_stock: inStock,
         supplier_sku: supplierSku,
+        weight_kg: weightKg,
         last_updated: nowIso,
       });
     }
