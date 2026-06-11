@@ -29,6 +29,8 @@ export default function NewProductPage() {
     webshop_price: "",
     sale_price: "",
     image_url: "",
+    weight_kg: "",
+    backorder_policy: "no",
   });
 
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
@@ -92,6 +94,8 @@ export default function NewProductPage() {
       image_url: form.image_url.trim() || null,
       webshop_price: form.webshop_price ? Number(form.webshop_price) : null,
       sale_price: form.sale_price ? Number(form.sale_price) : null,
+      weight_kg: form.weight_kg ? Number(form.weight_kg) : null,
+      backorder_policy: form.backorder_policy || "no",
       lifecycle_status: "draft",
       webshop_platform: "shopify",
       shopify_sync_enabled: false,
@@ -160,6 +164,22 @@ export default function NewProductPage() {
           <div className="space-y-1.5"><Label>Kategori</Label><Input value={form.category} onChange={(e) => set("category", e.target.value)} /></div>
           <div className="space-y-1.5"><Label>Salgspris (inkl. moms)</Label><Input type="number" step="0.01" value={form.webshop_price} onChange={(e) => set("webshop_price", e.target.value)} /></div>
           <div className="space-y-1.5"><Label>Tilbudspris (inkl. moms)</Label><Input type="number" step="0.01" value={form.sale_price} onChange={(e) => set("sale_price", e.target.value)} /></div>
+          <div className="space-y-1.5">
+            <Label>Vægt (kg) <span className="text-xs text-muted-foreground">(valgfri — 1 kg bruges hvis tom)</span></Label>
+            <Input type="number" step="0.01" min="0" value={form.weight_kg} onChange={(e) => set("weight_kg", e.target.value)} placeholder="1.0" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Restordre</Label>
+            <select
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+              value={form.backorder_policy}
+              onChange={(e) => set("backorder_policy", e.target.value)}
+            >
+              <option value="no">Nej (kan ikke købes når udsolgt)</option>
+              <option value="yes">Ja (kan købes når udsolgt)</option>
+              <option value="notify">Ja, med besked (kan ikke købes)</option>
+            </select>
+          </div>
           <div className="space-y-1.5 sm:col-span-2"><Label>Billede-URL</Label><Input value={form.image_url} onChange={(e) => set("image_url", e.target.value)} /></div>
           <div className="space-y-1.5 sm:col-span-2"><Label>Kort beskrivelse</Label><Textarea rows={2} value={form.short_description} onChange={(e) => set("short_description", e.target.value)} /></div>
           <div className="space-y-1.5 sm:col-span-2"><Label>Lang beskrivelse</Label><Textarea rows={6} value={form.long_description} onChange={(e) => set("long_description", e.target.value)} /></div>

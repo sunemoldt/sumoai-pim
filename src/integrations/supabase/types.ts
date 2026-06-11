@@ -156,6 +156,7 @@ export type Database = {
         Row: {
           attributes: Json | null
           auto_stock_sync: boolean
+          backorder_policy: string
           backorders_allowed: boolean | null
           brand: string | null
           categories: string[]
@@ -192,10 +193,12 @@ export type Database = {
           webshop_platform: string | null
           webshop_price: number | null
           webshop_product_id: string | null
+          weight_kg: number | null
         }
         Insert: {
           attributes?: Json | null
           auto_stock_sync?: boolean
+          backorder_policy?: string
           backorders_allowed?: boolean | null
           brand?: string | null
           categories?: string[]
@@ -232,10 +235,12 @@ export type Database = {
           webshop_platform?: string | null
           webshop_price?: number | null
           webshop_product_id?: string | null
+          weight_kg?: number | null
         }
         Update: {
           attributes?: Json | null
           auto_stock_sync?: boolean
+          backorder_policy?: string
           backorders_allowed?: boolean | null
           brand?: string | null
           categories?: string[]
@@ -272,6 +277,7 @@ export type Database = {
           webshop_platform?: string | null
           webshop_price?: number | null
           webshop_product_id?: string | null
+          weight_kg?: number | null
         }
         Relationships: []
       }
@@ -560,6 +566,7 @@ export type Database = {
           updated_at: string
           webshop_price: number | null
           weight: number | null
+          weight_kg: number | null
         }
         Insert: {
           attributes?: Json
@@ -577,6 +584,7 @@ export type Database = {
           updated_at?: string
           webshop_price?: number | null
           weight?: number | null
+          weight_kg?: number | null
         }
         Update: {
           attributes?: Json
@@ -594,6 +602,7 @@ export type Database = {
           updated_at?: string
           webshop_price?: number | null
           weight?: number | null
+          weight_kg?: number | null
         }
         Relationships: [
           {
@@ -904,6 +913,7 @@ export type Database = {
           supplier_id: string
           supplier_sku: string | null
           updated_at: string
+          weight_kg: number | null
         }
         Insert: {
           created_at?: string
@@ -916,6 +926,7 @@ export type Database = {
           supplier_id: string
           supplier_sku?: string | null
           updated_at?: string
+          weight_kg?: number | null
         }
         Update: {
           created_at?: string
@@ -928,6 +939,7 @@ export type Database = {
           supplier_id?: string
           supplier_sku?: string | null
           updated_at?: string
+          weight_kg?: number | null
         }
         Relationships: [
           {

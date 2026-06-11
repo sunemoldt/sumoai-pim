@@ -468,9 +468,12 @@ Deno.serve(async (req) => {
       stock_quantity: number | null;
       in_stock: boolean;
       supplier_sku: string | null;
+      weight_kg: number | null;
       last_updated: string;
     }> = [];
     const nowIso = new Date().toISOString();
+    // Track best (cheapest) weight per master to backfill master_products.weight_kg later
+    const bestWeightByMaster = new Map<string, { weight: number; price: number }>();
 
     for (const row of feedRows) {
       const rawEan = row[mapping.ean]?.trim();
@@ -502,6 +505,15 @@ Deno.serve(async (req) => {
 
       const supplierSku = mapping.sku ? row[mapping.sku]?.trim() || null : null;
 
+      // Weight in kg (optional). Accept comma-decimals; if column missing/invalid, leave null.
+      let weightKg: number | null = null;
+      const weightColKey = (mapping as any).weight_kg as string | undefined;
+      if (weightColKey) {
+        const wStr = row[weightColKey]?.trim().replace(",", ".");
+        const wNum = wStr ? parseFloat(wStr) : NaN;
+        if (!isNaN(wNum) && wNum >= 0) weightKg = wNum;
+      }
+
       // Detect changes for changelog
       const existing = existingMap.get(masterProductId);
       if (existing) {
@@ -518,6 +530,11 @@ Deno.serve(async (req) => {
         changeLogs.push({ master_product_id: masterProductId, change_type: "supplier_added", field_name: "supplier_product", old_value: null, new_value: `${supplier.name}: ${price} DKK`, source: `supplier:${supplier.name}` });
       }
 
+      if (weightKg !== null) {
+        const prev = bestWeightByMaster.get(masterProductId);
+        if (!prev || price < prev.price) bestWeightByMaster.set(masterProductId, { weight: weightKg, price });
+      }
+
       spRows.push({
         supplier_id: supplier.id,
         master_product_id: masterProductId,
@@ -525,6 +542,7 @@ Deno.serve(async (req) => {
         stock_quantity: stockQty !== null && !isNaN(stockQty) ? stockQty : null,
         in_stock: inStock,
         supplier_sku: supplierSku,
+        weight_kg: weightKg,
         last_updated: nowIso,
       });
     }
@@ -564,6 +582,23 @@ Deno.serve(async (req) => {
         await supabase.from("product_change_log").insert(changeLogs.slice(i, i + 500));
       }
       console.log(`Logged ${changeLogs.length} changes`);
+    }
+
+    // Backfill master_products.weight_kg ONLY when master is currently null, using cheapest supplier's weight
+    if (bestWeightByMaster.size > 0) {
+      const ids = Array.from(bestWeightByMaster.keys());
+      const { data: existingWeights } = await supabase
+        .from("master_products")
+        .select("id, weight_kg")
+        .in("id", ids);
+      const needBackfill = (existingWeights ?? []).filter((m) => m.weight_kg == null);
+      for (const m of needBackfill) {
+        const w = bestWeightByMaster.get(m.id)?.weight;
+        if (w != null) {
+          await supabase.rpc("set_change_source", { source: `supplier:${supplier.name}` });
+          await supabase.from("master_products").update({ weight_kg: w }).eq("id", m.id);
+        }
+      }
     }
 
     // Recompute master stock for all products linked to this supplier (skip in targeted mode — trigger handles it)

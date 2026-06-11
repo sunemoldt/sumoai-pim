@@ -40,7 +40,8 @@ async function shopifyGraphql(shopDomain: string, accessToken: string, query: st
 
 function toInventoryPolicy(backorders?: string) {
   if (!backorders) return undefined;
-  return backorders === "yes" || backorders === "notify" ? "CONTINUE" : "DENY";
+  // Only 'yes' allows backorders. 'notify' and 'no' both DENY purchases when out of stock.
+  return backorders === "yes" ? "CONTINUE" : "DENY";
 }
 
 function toGid(type: "Product" | "ProductVariant" | "InventoryItem" | "Location", id: string | number | null | undefined): string | null {
@@ -63,7 +64,9 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, description, short_description, force, enqueue_on_throttle, queued, source, status, ean: eanInput } = body;
+    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, backorder_policy, weight_kg, description, short_description, force, enqueue_on_throttle, queued, source, status, ean: eanInput } = body;
+    // Normalize backorder input: accept legacy 'backorders' ('yes'/'no'/'notify') or new 'backorder_policy'
+    const backordersNorm: string | undefined = backorder_policy ?? backorders;
     if (!master_product_id) {
       return new Response(JSON.stringify({ error: "master_product_id is required" }), {
         status: 400,
@@ -74,7 +77,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: product, error: productError } = await supabase
       .from("master_products")
-      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, shopify_product_id, shopify_variant_id, short_description, long_description, lifecycle_status")
+      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, backorder_policy, weight_kg, shopify_product_id, shopify_variant_id, short_description, long_description, lifecycle_status")
       .eq("id", master_product_id)
       .single();
 
@@ -159,15 +162,38 @@ Deno.serve(async (req) => {
         updatedFields.push("compareAtPrice");
       } else { skippedFields.push("sale_price"); }
     }
-    const inventoryPolicy = toInventoryPolicy(backorders);
+    const inventoryPolicy = toInventoryPolicy(backordersNorm);
     if (inventoryPolicy) {
-      if (canPush("backorders_allowed")) {
+      if (canPush("backorders_allowed") || canPush("backorder_policy")) {
         variantInput.inventoryPolicy = inventoryPolicy;
         const allowed = inventoryPolicy === "CONTINUE";
+        const policyValue = backordersNorm === "yes" || backordersNorm === "no" || backordersNorm === "notify" ? backordersNorm : (allowed ? "yes" : "no");
         dbUpdate.backorders_allowed = allowed;
+        dbUpdate.backorder_policy = policyValue;
         logChange("backorders_allowed", product.backorders_allowed, allowed, "stock_update");
+        logChange("backorder_policy", product.backorder_policy, policyValue, "stock_update");
         updatedFields.push("inventoryPolicy");
       } else { skippedFields.push("backorders_allowed"); }
+    }
+
+    // Weight (kg) — send to Shopify via inventoryItem measurement. Defaults to 1 kg if no value set in PIM.
+    {
+      const effectiveWeight = weight_kg !== undefined && weight_kg !== null
+        ? Number(weight_kg)
+        : (product.weight_kg != null ? Number(product.weight_kg) : 1);
+      if (Number.isFinite(effectiveWeight) && effectiveWeight >= 0) {
+        if (canPush("weight_kg")) {
+          variantInput.inventoryItem = {
+            ...(variantInput.inventoryItem as Record<string, unknown> ?? {}),
+            measurement: { weight: { value: effectiveWeight, unit: "KILOGRAMS" } },
+          };
+          if (weight_kg !== undefined && weight_kg !== null) {
+            dbUpdate.weight_kg = weight_kg;
+            logChange("weight_kg", product.weight_kg, weight_kg, "weight_update");
+          }
+          updatedFields.push("weight");
+        } else { skippedFields.push("weight_kg"); }
+      }
     }
     // Barcode (EAN). Default to PIM's current ean unless caller overrode. Skip fallback 'wc-' EANs.
     {

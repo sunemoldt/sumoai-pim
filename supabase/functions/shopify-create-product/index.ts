@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: p, error: pErr } = await supabase
       .from("master_products")
-      .select("id, title, ean, sku, brand, category, webshop_price, sale_price, stock_quantity, short_description, long_description, lifecycle_status, shopify_product_id")
+      .select("id, title, ean, sku, brand, category, webshop_price, sale_price, stock_quantity, short_description, long_description, lifecycle_status, shopify_product_id, weight_kg, backorder_policy")
       .eq("id", master_product_id)
       .single();
     if (pErr || !p) {
@@ -101,12 +101,19 @@ Deno.serve(async (req) => {
           userErrors { field message }
         }
       }`;
+    const effectiveWeight = p.weight_kg != null ? Number(p.weight_kg) : 1;
+    const inventoryPolicy = p.backorder_policy === "yes" ? "CONTINUE" : "DENY";
     const variantInput: Record<string, unknown> = {
       id: variantGid,
       price: p.webshop_price != null ? String(p.webshop_price) : undefined,
       compareAtPrice: p.sale_price != null ? String(p.sale_price) : undefined,
       barcode: p.ean ?? undefined,
-      inventoryItem: { sku: p.sku ?? p.ean ?? undefined, tracked: true },
+      inventoryPolicy,
+      inventoryItem: {
+        sku: p.sku ?? p.ean ?? undefined,
+        tracked: true,
+        measurement: { weight: { value: effectiveWeight, unit: "KILOGRAMS" } },
+      },
     };
     const vData = await shopifyGraphql(conn.shop_domain, conn.access_token, variantMutation, {
       productId: productGid, variants: [variantInput],
