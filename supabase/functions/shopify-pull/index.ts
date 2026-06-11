@@ -155,6 +155,17 @@ Deno.serve(async (req) => {
           tryField("sale_price", firstVariant.compareAtPrice ? Number(firstVariant.compareAtPrice) : null);
           tryField("stock_quantity", typeof firstVariant.inventoryQuantity === "number" ? firstVariant.inventoryQuantity : null);
           tryField("backorders_allowed", firstVariant.inventoryPolicy === "CONTINUE");
+          // Mirror to backorder_policy (Shopify can't distinguish 'notify' from 'no', so map CONTINUE→yes, DENY→no)
+          tryField("backorder_policy", firstVariant.inventoryPolicy === "CONTINUE" ? "yes" : "no");
+          // Weight in kg from inventoryItem measurement
+          const wRaw = firstVariant.inventoryItem?.measurement?.weight;
+          if (wRaw?.value != null) {
+            const wKg = wRaw.unit === "GRAMS" ? Number(wRaw.value) / 1000
+              : wRaw.unit === "POUNDS" ? Number(wRaw.value) * 0.45359237
+              : wRaw.unit === "OUNCES" ? Number(wRaw.value) * 0.0283495231
+              : Number(wRaw.value);
+            tryField("weight_kg", wKg);
+          }
           tryField("ean", firstVariant.barcode);
           tryField("sku", firstVariant.sku);
         }
