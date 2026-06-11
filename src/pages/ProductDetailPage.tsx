@@ -544,8 +544,25 @@ export default function ProductDetailPage() {
                   />
                 </div>
                 <div>
-                  <Label className="text-muted-foreground text-xs">Restordre tilladt</Label>
-                  <InlineEditField productId={product.id} field="backorders_allowed" value={(product as any).backorders_allowed} type="boolean" />
+                  <Label className="text-muted-foreground text-xs">Restordre</Label>
+                  <InlineEditField
+                    productId={product.id}
+                    field="backorder_policy"
+                    value={(product as any).backorder_policy ?? ((product as any).backorders_allowed ? "yes" : "no")}
+                    type="select"
+                    options={[
+                      { value: "no", label: "Nej (kan ikke købes når udsolgt)" },
+                      { value: "yes", label: "Ja (kan købes når udsolgt)" },
+                      { value: "notify", label: "Ja, med besked (kan ikke købes)" },
+                    ]}
+                    display={(v) => v === "yes" ? <Badge variant="outline" className="text-success border-success/30">Ja</Badge>
+                      : v === "notify" ? <Badge variant="outline" className="text-warning border-warning/30">Ja, med besked</Badge>
+                      : <Badge variant="outline">Nej</Badge>}
+                  />
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Vægt (kg) — standard 1 kg hvis tom</Label>
+                  <InlineEditField productId={product.id} field="weight_kg" value={(product as any).weight_kg} type="number" />
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Webshop pris (inkl. moms)</Label>
