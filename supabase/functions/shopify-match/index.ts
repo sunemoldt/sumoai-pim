@@ -53,6 +53,7 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const filterEan = body.ean || url.searchParams.get("ean") || null;
   const dryRun = body.dryRun === true || url.searchParams.get("dryRun") === "true";
+  const onlyUnlinked = body.onlyUnlinked === true || url.searchParams.get("onlyUnlinked") === "true";
 
   try {
     const { data: conn, error: connErr } = await supabase
