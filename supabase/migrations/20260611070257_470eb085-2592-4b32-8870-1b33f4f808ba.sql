@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.sync_backorders_allowed_from_policy() FROM PUBLIC, anon, authenticated;
