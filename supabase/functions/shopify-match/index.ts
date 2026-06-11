@@ -128,8 +128,9 @@ Deno.serve(async (req) => {
     }
 
     // Hent PIM
-    let q = supabase.from("master_products").select("id, ean, sku, title, shopify_product_id, shopify_variant_id");
+    let q = supabase.from("master_products").select("id, ean, sku, title, shopify_product_id, shopify_variant_id, shopify_sync_enabled, lifecycle_status");
     if (filterEan) q = q.eq("ean", filterEan);
+    if (onlyUnlinked) q = q.is("shopify_product_id", null).eq("lifecycle_status", "active").not("ean", "like", "wc-%").not("ean", "is", null);
     const { data: pimProducts, error: pimErr } = await q;
     if (pimErr) throw pimErr;
 
