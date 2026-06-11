@@ -25,13 +25,15 @@ const FIELD_LABELS: Record<string, string> = {
   sale_price: "Tilbudspris",
   stock_quantity: "Lagerantal",
   stock_status: "Lagerstatus",
-  backorders_allowed: "Restordre",
+  backorders_allowed: "Restordre (legacy bool)",
+  backorder_policy: "Restordre-politik",
   purchase_price: "Indkøbspris",
   ean: "EAN",
   sku: "SKU",
   brand: "Brand",
   category: "Kategori",
-  weight: "Vægt",
+  weight: "Vægt (legacy)",
+  weight_kg: "Vægt (kg)",
   attributes: "Attributter",
 };
 
