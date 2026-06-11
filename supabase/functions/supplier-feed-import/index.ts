@@ -584,6 +584,23 @@ Deno.serve(async (req) => {
       console.log(`Logged ${changeLogs.length} changes`);
     }
 
+    // Backfill master_products.weight_kg ONLY when master is currently null, using cheapest supplier's weight
+    if (bestWeightByMaster.size > 0) {
+      const ids = Array.from(bestWeightByMaster.keys());
+      const { data: existingWeights } = await supabase
+        .from("master_products")
+        .select("id, weight_kg")
+        .in("id", ids);
+      const needBackfill = (existingWeights ?? []).filter((m) => m.weight_kg == null);
+      for (const m of needBackfill) {
+        const w = bestWeightByMaster.get(m.id)?.weight;
+        if (w != null) {
+          await supabase.rpc("set_change_source", { source: `supplier:${supplier.name}` });
+          await supabase.from("master_products").update({ weight_kg: w }).eq("id", m.id);
+        }
+      }
+    }
+
     // Recompute master stock for all products linked to this supplier (skip in targeted mode — trigger handles it)
     if (!targetEan) {
       const { error: recomputeErr } = await supabase.rpc("recompute_stock_for_supplier", {
