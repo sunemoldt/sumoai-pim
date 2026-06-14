@@ -233,6 +233,28 @@ Deno.serve(async (req) => {
         updatedFields.push("short_description");
       } else { skippedFields.push("short_description"); }
     }
+    // SEO: Page title + Meta description (Shopify-side: product.seo)
+    {
+      const seoObj: Record<string, unknown> = {};
+      if (meta_title !== undefined && meta_title !== null) {
+        if (canPush("meta_title")) {
+          seoObj.title = String(meta_title);
+          dbUpdate.meta_title = meta_title;
+          logChange("meta_title", product.meta_title, meta_title, "seo_update");
+          updatedFields.push("seo.title");
+        } else { skippedFields.push("meta_title"); }
+      }
+      if (meta_description !== undefined && meta_description !== null) {
+        if (canPush("meta_description")) {
+          seoObj.description = String(meta_description);
+          dbUpdate.meta_description = meta_description;
+          logChange("meta_description", product.meta_description, meta_description, "seo_update");
+          updatedFields.push("seo.description");
+        } else { skippedFields.push("meta_description"); }
+      }
+      if (Object.keys(seoObj).length > 0) {
+        productInput.seo = seoObj;
+      }
     if (status !== undefined && status !== null) {
       const s = String(status).toUpperCase();
       if (s === "ACTIVE" || s === "ARCHIVED" || s === "DRAFT") {
