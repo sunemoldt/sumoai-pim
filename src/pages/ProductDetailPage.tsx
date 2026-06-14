@@ -951,6 +951,9 @@ export default function ProductDetailPage() {
                               <td className="px-3 py-2.5 font-medium text-foreground">
                                 <div className="flex items-center gap-2">
                                   {sp.suppliers?.name ?? "Ukendt"}
+                                  {/^comtek\s*-?\s*eget lager/i.test(sp.suppliers?.name ?? "") && (
+                                    <Badge variant="outline" className="border-primary/40 text-primary text-xs">Eget lager</Badge>
+                                  )}
                                   {isCheapest && (
                                     <Badge className="bg-success/10 text-success border-0 text-xs">Billigst</Badge>
                                   )}
