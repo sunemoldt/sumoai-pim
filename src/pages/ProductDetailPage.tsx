@@ -66,6 +66,37 @@ export default function ProductDetailPage() {
   const [aiGenOpen, setAiGenOpen] = useState(false);
   const [togglingLifecycle, setTogglingLifecycle] = useState(false);
   const [rematchingSuppliers, setRematchingSuppliers] = useState(false);
+  const [siblingCount, setSiblingCount] = useState<number>(0);
+  const [seoPulling, setSeoPulling] = useState(false);
+
+  useEffect(() => {
+    if (!product?.shopify_product_id || !product?.id) { setSiblingCount(0); return; }
+    let active = true;
+    supabase
+      .from("master_products")
+      .select("id", { count: "exact", head: true })
+      .eq("shopify_product_id", product.shopify_product_id)
+      .neq("id", product.id)
+      .then(({ count }) => { if (active) setSiblingCount(count ?? 0); });
+    return () => { active = false; };
+  }, [product?.shopify_product_id, product?.id]);
+
+  const pullSeoFromShopify = async () => {
+    if (!product?.ean) return;
+    setSeoPulling(true);
+    const { data, error } = await supabase.functions.invoke("shopify-seo-backfill", {
+      body: { mode: "apply", eans: [product.ean], overwriteEmptyOnly: false, limit: 5 },
+    });
+    setSeoPulling(false);
+    if (error || (data as any)?.error) {
+      toast.error(`Hent fra Shopify fejlede: ${error?.message ?? (data as any)?.error}`);
+      return;
+    }
+    const applied = (data as any)?.summary?.applied ?? 0;
+    toast.success(applied > 0 ? `Hentede SEO fra Shopify (${applied} felt(er))` : "Ingen SEO-data fundet i Shopify");
+    queryClient.invalidateQueries({ queryKey: ["master_product", product.id] });
+  };
+
 
   useEffect(() => {
     const prev = document.title;
@@ -600,23 +631,33 @@ export default function ProductDetailPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base font-medium">SEO</CardTitle>
-                  <p className="text-xs text-muted-foreground">Data fra Rank Math SEO plugin</p>
+                  <p className="text-xs text-muted-foreground">PIM er master — ændringer pushes til Shopify (Page title / Meta description)</p>
                 </div>
-                {product.webshop_product_id && (
-                  <a
-                    href={`https://www.comtek.dk/?p=${product.webshop_product_id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    Se produkt i webshoppen
-                  </a>
-                )}
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" size="sm" onClick={pullSeoFromShopify} disabled={seoPulling || !product.shopify_product_id}>
+                    {seoPulling ? "Henter…" : "Hent fra Shopify"}
+                  </Button>
+                  {product.webshop_product_id && (
+                    <a
+                      href={`https://www.comtek.dk/?p=${product.webshop_product_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Se i webshop
+                    </a>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {siblingCount > 0 && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+                  Deles med {siblingCount} variant(er) på samme Shopify-produkt — ændringer gælder alle.
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Meta titel</Label>
                 <InlineEditField productId={product.id} field="meta_title" value={(product as any).meta_title} placeholder="Ingen meta titel" />

@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, backorder_policy, weight_kg, description, short_description, force, enqueue_on_throttle, queued, source, status, ean: eanInput } = body;
+    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, backorder_policy, weight_kg, description, short_description, meta_title, meta_description, force, enqueue_on_throttle, queued, source, status, ean: eanInput } = body;
     // Normalize backorder input: accept legacy 'backorders' ('yes'/'no'/'notify') or new 'backorder_policy'
     const backordersNorm: string | undefined = backorder_policy ?? backorders;
     if (!master_product_id) {
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: product, error: productError } = await supabase
       .from("master_products")
-      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, backorder_policy, weight_kg, shopify_product_id, shopify_variant_id, short_description, long_description, lifecycle_status")
+      .select("id, title, ean, webshop_price, sale_price, stock_quantity, stock_status, backorders_allowed, backorder_policy, weight_kg, shopify_product_id, shopify_variant_id, short_description, long_description, meta_title, meta_description, lifecycle_status")
       .eq("id", master_product_id)
       .single();
 
@@ -232,6 +232,29 @@ Deno.serve(async (req) => {
         logChange("short_description", product.short_description, short_description, "description_update");
         updatedFields.push("short_description");
       } else { skippedFields.push("short_description"); }
+    }
+    // SEO: Page title + Meta description (Shopify-side: product.seo)
+    {
+      const seoObj: Record<string, unknown> = {};
+      if (meta_title !== undefined && meta_title !== null) {
+        if (canPush("meta_title")) {
+          seoObj.title = String(meta_title);
+          dbUpdate.meta_title = meta_title;
+          logChange("meta_title", product.meta_title, meta_title, "seo_update");
+          updatedFields.push("seo.title");
+        } else { skippedFields.push("meta_title"); }
+      }
+      if (meta_description !== undefined && meta_description !== null) {
+        if (canPush("meta_description")) {
+          seoObj.description = String(meta_description);
+          dbUpdate.meta_description = meta_description;
+          logChange("meta_description", product.meta_description, meta_description, "seo_update");
+          updatedFields.push("seo.description");
+        } else { skippedFields.push("meta_description"); }
+      }
+      if (Object.keys(seoObj).length > 0) {
+        productInput.seo = seoObj;
+      }
     }
     if (status !== undefined && status !== null) {
       const s = String(status).toUpperCase();
