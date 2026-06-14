@@ -255,6 +255,7 @@ Deno.serve(async (req) => {
       if (Object.keys(seoObj).length > 0) {
         productInput.seo = seoObj;
       }
+    }
     if (status !== undefined && status !== null) {
       const s = String(status).toUpperCase();
       if (s === "ACTIVE" || s === "ARCHIVED" || s === "DRAFT") {
