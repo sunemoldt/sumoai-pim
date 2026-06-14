@@ -1,50 +1,47 @@
+## Mål
+Du kan tilføje/redigere antal på "COMTEK - Eget lager" via den eksisterende manuelle leverandør-dialog, og dette lager lægges sammen med andre leverandørers lager. Hvis alle andre er udsolgte men eget lager har 5 stk → produktet står som **på lager (5)**.
 
-## Problem
+## Hvad er problemet i dag
+1. "COMTEK - Eget lager" er oprettet med feed-type `csv` → den dukker **ikke** op i den manuelle leverandør-dialog (den filtrerer kun på `manual`).
+2. COMTEK er **ikke** i `stock_sync_supplier_ids` på dine produkter → selv hvis du tilføjer antal, indgår det ikke i "På lager"-beregningen.
+3. Nye produkter får heller ikke automatisk COMTEK med.
 
-87 aktive PIM-produkter har ingen `shopify_product_id` og bliver derfor sprunget over af både auto-kø-triggeren og `shopify-update-product`. Eksempel: `Ubiquiti UniFi 7 Pro` (EAN `0810084693650` — leading zero bryder match-reglen).
+## Løsning (3 trin)
 
-Fordeling:
-- 3 med leading-zero EAN
-- 63 med fallback `wc-` EAN (ikke ægte EAN — disse skal IKKE auto-matches)
-- ~21 med "rigtigt" EAN der burde matche
+### 1. Database-migration
+- Tilføj `analytics_settings.own_stock_supplier_id` = COMTEK's id (gør den til "den valgte eget-lager-leverandør", så vi ikke hardcoder uuid'er).
+- Opret trigger på `master_products INSERT`: appender automatisk COMTEK til `stock_sync_supplier_ids` på nye produkter og sætter `auto_stock_sync = true`.
 
-## Anbefalet løsning: Bulk EAN-rematch (option A skaleret op)
+### 2. Data-opdatering (engangs-backfill)
+- Sæt `suppliers.feed_type = 'manual'` på COMTEK, så den vises i den manuelle dialog.
+- For alle eksisterende `master_products`: append COMTEK's id til `stock_sync_supplier_ids` (hvis ikke allerede der) og sæt `auto_stock_sync = true`.
+- Kald `recompute_product_stock()` for berørte produkter, så lager-status genberegnes med det samme.
 
-Den bedste vej er at lave et batch-værktøj der gør det samme som det vi gjorde manuelt for G6 Bullet, men automatisk for alle 87 (med fallback-EAN'er ekskluderet).
+### 3. UI — minimal ændring
+- Den eksisterende `ManualSupplierPriceDialog` virker uændret efter feed_type-skiftet — COMTEK dukker op i dropdown'en automatisk.
+- I produkt-detaljens leverandør-liste: vis et lille **"Eget lager"-badge** ud for COMTEK-rækken, så den er nem at skelne fra eksterne leverandører.
+- I Indstillinger: tilføj et felt der viser hvilken leverandør der bruges som "eget lager" (kan ændres hvis du senere skifter navn).
 
-### Hvad bygges
+## Sådan virker lager-beregningen efter ændringen (additiv)
+Den eksisterende `recompute_product_stock()` summerer allerede stock fra alle leverandører i `stock_sync_supplier_ids` der opfylder margin-kravet. Eksempel:
 
-1. **Ny edge function `shopify-bulk-rematch`** (kalder eksisterende `shopify-match` logik):
-   - Henter alle `master_products` hvor `shopify_product_id IS NULL`, `lifecycle_status='active'`, EAN findes og ikke starter med `wc-`.
-   - For hvert produkt: normaliser EAN (strip leading zeros), søg Shopify via GraphQL `productVariants(query: "barcode:...")`.
-   - Ved præcis match → opdater `shopify_product_id`, `shopify_variant_id`, sæt `shopify_sync_enabled=true`.
-   - Returner rapport: matched / not_found / ambiguous (flere Shopify-varianter har samme EAN).
+```text
+Produkt X:
+  DCS:           in_stock=false, qty=0
+  Aurdel:        in_stock=false, qty=0
+  Eget lager:    in_stock=true,  qty=5
+  →  Total: 5, status: instock  ✅
+```
 
-2. **Dry-run mode** (`{ apply: false }` default): viser hvad der ville ske uden at skrive — så du kan reviewe før commit.
+Hvis Aurdel kommer på lager igen med 3 stk → Total: 8.
 
-3. **Ny UI-knap på `ShopifyPage.tsx`**: "Rematch ulinkede produkter" → kalder funktionen i dry-run, viser tabel med foreslåede matches, derefter "Bekræft og link" → kører `apply: true`.
+## Tekniske detaljer
+- **Trigger:** `BEFORE INSERT ON master_products` der læser `own_stock_supplier_id` fra `analytics_settings` og tilføjer til arrayet hvis ikke null og ikke allerede med.
+- **Margin-filter:** COMTEK med `purchase_price = 0` (eller tom) giver margin = 100% → består altid `min_sync_margin`-tjek. Hvis du senere udfylder en intern kostpris, gælder almindelig margin-logik.
+- **Shopify-sync:** Når lager-status ændres af recompute, fanger den eksisterende `auto_enqueue_shopify_update`-trigger ændringen og pusher nyt antal til Shopify automatisk.
+- **Ingen breaking changes** for eksisterende leverandører eller produkter uden eget-lager-antal.
 
-4. **EAN-normalisering ved import**: Tilføj `TRIM(LEADING '0' FROM ean)` i `wc-import`, `supplier-feed-import` og `shopify-pull` så fremtidige imports ikke genintroducerer problemet (matcher core memory-reglen "Strip leading zeros from EANs").
-
-### Hvorfor denne tilgang
-
-- **Skalerbart**: ét klik dækker alle nuværende og fremtidige unlinkede produkter.
-- **Sikker**: dry-run + manuel godkendelse før vi rører Shopify-ID'er.
-- **Selvhelende**: import-normaliseringen forhindrer at problemet kommer igen.
-- **Fallback-EAN'er ignoreres**: `wc-`-produkter har ikke et rigtigt EAN — de skal håndteres separat (manuel link eller send som ny kladde).
-
-### Hvad der IKKE er med (kan tilføjes senere)
-
-- Auto-oprettelse i Shopify for produkter uden match (kræver lifecycle=draft + bevidst beslutning per produkt — for risikabelt at bulk-køre).
-- Håndtering af `wc-`-fallback produkter (separat oprydningstask).
-
-### Filer der ændres
-
-- `supabase/functions/shopify-bulk-rematch/index.ts` (ny)
-- `supabase/functions/wc-import/index.ts` (EAN-strip ved insert)
-- `supabase/functions/supplier-feed-import/index.ts` (EAN-strip)
-- `supabase/functions/shopify-pull/index.ts` (EAN-strip ved write-back)
-- `src/pages/ShopifyPage.tsx` (ny rematch-card med dry-run preview)
-- Migration: engangs-UPDATE der stripper leading zeros fra eksisterende `master_products.ean` (3 rækker)
-
-Godkend, så bygger jeg.
+## Verifikation efter implementering
+1. Åbn et udsolgt produkt → klik "Tilføj manuel pris" → vælg "COMTEK - Eget lager" → indtast 5 stk → gem.
+2. Produktet skal nu vise "På lager (5)" og blive køet til Shopify-sync.
+3. Sæt antallet til 0 → produktet skal falde tilbage til ekstern lager-status.
