@@ -657,7 +657,17 @@ export default function ProductListPage() {
         ) : sorted.length === 0 ? (
           <div className="py-20 text-center text-muted-foreground">
             <Package className="mx-auto mb-2 h-8 w-8 opacity-40" />
-            Ingen produkter fundet
+            <div>Ingen produkter fundet</div>
+            {products.length > 0 && activeFilterCount > 0 && (
+              <div className="mt-3 space-y-2">
+                <div className="text-xs">
+                  {products.length} produkt{products.length !== 1 ? "er" : ""} matcher søgningen, men skjules af {activeFilterCount} aktivt filter{activeFilterCount !== 1 ? "e" : ""}.
+                </div>
+                <Button variant="outline" size="sm" onClick={clearFilters}>
+                  <X className="h-3 w-3 mr-1" /> Ryd filtre
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
