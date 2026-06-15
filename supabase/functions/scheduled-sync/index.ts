@@ -133,19 +133,19 @@ Deno.serve(async (req) => {
     const dow = now.getUTCDay();
 
     if (minute === 0) {
+      // Filter intervals server-side so we don't pull all auto-sync rows every tick.
+      const eligibleIntervals: string[] = ["hourly"];
+      if (hour === 6) eligibleIntervals.push("daily");
+      if (hour === 6 && dow === 1) eligibleIntervals.push("weekly");
+
       const { data: syncProducts } = await supabase
         .from("master_products")
-        .select("id, stock_sync_interval")
-        .eq("auto_stock_sync", true);
+        .select("id")
+        .eq("auto_stock_sync", true)
+        .in("stock_sync_interval", eligibleIntervals);
 
       if (syncProducts && syncProducts.length > 0) {
         for (const product of syncProducts) {
-          const interval = (product as any).stock_sync_interval ?? "daily";
-          if (interval === "manual") continue;
-          if (interval === "daily" && hour !== 6) continue;
-          if (interval === "weekly" && (hour !== 6 || dow !== 1)) continue;
-          // hourly = every minute 0 (= once per hour)
-
           const { error } = await supabase.rpc("recompute_product_stock", {
             p_master_product_id: product.id,
           });
