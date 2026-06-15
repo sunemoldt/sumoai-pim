@@ -304,24 +304,32 @@ async function handleToken(req: Request) {
     return jsonResponse({ error: "invalid_grant", error_description: "Invalid or expired code" }, 400);
   }
 
-  // PKCE verification
-  if (payload.code_challenge && body.code_verifier) {
+  // Reject if redirect_uri was somehow whitelisted at /authorize but not now
+  if (payload.redirect_uri && !isAllowedRedirectUri(payload.redirect_uri)) {
+    logEvent({ event: "oauth_token_error", reason: "redirect_uri_not_allowed" });
+    return jsonResponse({ error: "invalid_grant" }, 400);
+  }
+
+  // PKCE verification — mandatory (handleAuthorize requires code_challenge)
+  if (!payload.code_challenge) {
+    logEvent({ event: "oauth_token_error", reason: "pkce_required" });
+    return jsonResponse({ error: "invalid_grant", error_description: "PKCE required" }, 400);
+  }
+  if (!body.code_verifier) {
+    logEvent({ event: "oauth_token_error", reason: "missing_code_verifier" });
+    return jsonResponse({ error: "invalid_grant", error_description: "code_verifier required" }, 400);
+  }
+  {
     let computed: string;
     if (payload.code_challenge_method === "plain") {
       computed = body.code_verifier;
     } else {
       const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body.code_verifier));
       computed = btoa(String.fromCharCode(...new Uint8Array(hash)))
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=+$/, "");
+        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     }
     if (computed !== payload.code_challenge) {
-      logEvent({
-        event: "oauth_token_error",
-        reason: "pkce_failed",
-        codeChallengeMethod: payload.code_challenge_method || "S256",
-      });
+      logEvent({ event: "oauth_token_error", reason: "pkce_failed", codeChallengeMethod: payload.code_challenge_method || "S256" });
       return jsonResponse({ error: "invalid_grant", error_description: "PKCE failed" }, 400);
     }
   }
