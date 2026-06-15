@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.sync_meta_to_siblings() FROM PUBLIC, anon, authenticated;
