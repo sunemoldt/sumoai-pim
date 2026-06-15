@@ -202,6 +202,30 @@ async function handleRegister(req: Request) {
   }
 }
 
+// Allowlist of redirect_uri hosts permitted to complete the OAuth flow.
+// Defaults cover known MCP clients (Claude, ChatGPT) plus localhost for the inspector.
+// Override / extend via MCP_ALLOWED_REDIRECT_HOSTS (comma-separated host suffixes).
+const DEFAULT_ALLOWED_REDIRECT_HOSTS = [
+  "claude.ai", "claude.com", "anthropic.com",
+  "chatgpt.com", "openai.com",
+  "localhost", "127.0.0.1",
+];
+const ALLOWED_REDIRECT_HOSTS = (Deno.env.get("MCP_ALLOWED_REDIRECT_HOSTS") || "")
+  .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
+  .concat(DEFAULT_ALLOWED_REDIRECT_HOSTS);
+
+function isAllowedRedirectUri(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    const isLoopback = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    if (u.protocol !== "https:" && !(isLoopback && u.protocol === "http:")) return false;
+    const host = u.hostname.toLowerCase();
+    return ALLOWED_REDIRECT_HOSTS.some((a) => host === a || host.endsWith("." + a));
+  } catch {
+    return false;
+  }
+}
+
 async function handleAuthorize(url: URL) {
   const redirect_uri = url.searchParams.get("redirect_uri") || "";
   const state = url.searchParams.get("state") || "";
@@ -222,6 +246,18 @@ async function handleAuthorize(url: URL) {
 
   if (!redirect_uri) {
     return jsonResponse({ error: "invalid_request", error_description: "redirect_uri required" }, 400);
+  }
+  if (!isAllowedRedirectUri(redirect_uri)) {
+    logEvent({ event: "oauth_authorize_error", reason: "redirect_uri_not_allowed", redirectUriHost: safeUrlHost(redirect_uri) });
+    return jsonResponse({ error: "invalid_request", error_description: "redirect_uri not allowed" }, 400);
+  }
+  // Mandatory PKCE — prevents an attacker who obtains a code from exchanging it
+  if (!code_challenge) {
+    logEvent({ event: "oauth_authorize_error", reason: "pkce_required" });
+    return jsonResponse({ error: "invalid_request", error_description: "code_challenge required (PKCE)" }, 400);
+  }
+  if (code_challenge_method !== "S256" && code_challenge_method !== "plain") {
+    return jsonResponse({ error: "invalid_request", error_description: "unsupported code_challenge_method" }, 400);
   }
 
   const code = await createSignedCode({ client_id, redirect_uri, code_challenge, code_challenge_method });
@@ -268,24 +304,32 @@ async function handleToken(req: Request) {
     return jsonResponse({ error: "invalid_grant", error_description: "Invalid or expired code" }, 400);
   }
 
-  // PKCE verification
-  if (payload.code_challenge && body.code_verifier) {
+  // Reject if redirect_uri was somehow whitelisted at /authorize but not now
+  if (payload.redirect_uri && !isAllowedRedirectUri(payload.redirect_uri)) {
+    logEvent({ event: "oauth_token_error", reason: "redirect_uri_not_allowed" });
+    return jsonResponse({ error: "invalid_grant" }, 400);
+  }
+
+  // PKCE verification — mandatory (handleAuthorize requires code_challenge)
+  if (!payload.code_challenge) {
+    logEvent({ event: "oauth_token_error", reason: "pkce_required" });
+    return jsonResponse({ error: "invalid_grant", error_description: "PKCE required" }, 400);
+  }
+  if (!body.code_verifier) {
+    logEvent({ event: "oauth_token_error", reason: "missing_code_verifier" });
+    return jsonResponse({ error: "invalid_grant", error_description: "code_verifier required" }, 400);
+  }
+  {
     let computed: string;
     if (payload.code_challenge_method === "plain") {
       computed = body.code_verifier;
     } else {
       const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body.code_verifier));
       computed = btoa(String.fromCharCode(...new Uint8Array(hash)))
-        .replace(/\+/g, "-")
-        .replace(/\//g, "_")
-        .replace(/=+$/, "");
+        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     }
     if (computed !== payload.code_challenge) {
-      logEvent({
-        event: "oauth_token_error",
-        reason: "pkce_failed",
-        codeChallengeMethod: payload.code_challenge_method || "S256",
-      });
+      logEvent({ event: "oauth_token_error", reason: "pkce_failed", codeChallengeMethod: payload.code_challenge_method || "S256" });
       return jsonResponse({ error: "invalid_grant", error_description: "PKCE failed" }, 400);
     }
   }

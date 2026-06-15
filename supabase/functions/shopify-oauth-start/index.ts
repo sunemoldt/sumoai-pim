@@ -49,14 +49,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    if (req.method === "GET") {
-      const url = new URL(req.url);
-      const shopDomainOverride = url.searchParams.get("shop_domain") || undefined;
-      const { installUrl } = await createInstallUrl(shopDomainOverride);
-      return Response.redirect(installUrl, 302);
-    }
-
-    // Auth check
+    // Auth required for all methods — was previously only enforced on POST,
+    // letting any anonymous caller spam shopify_oauth_state and phish merchants.
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -72,6 +66,16 @@ Deno.serve(async (req) => {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    if (req.method === "GET") {
+      const url = new URL(req.url);
+      const shopDomainOverride = url.searchParams.get("shop_domain") || undefined;
+      const { installUrl } = await createInstallUrl(shopDomainOverride);
+      return Response.redirect(installUrl, 302);
+    }
+
+    // (Auth already validated above)
+
 
     // Allow caller to override domain (optional)
     let shopDomainOverride: string | undefined;
