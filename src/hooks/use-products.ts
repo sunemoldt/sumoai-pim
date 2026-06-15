@@ -44,7 +44,7 @@ const LIST_COLUMNS =
   "sync_tags,updated_at,created_at";
 
 const LIST_SUPPLIER_COLUMNS =
-  "id,supplier_id,master_product_id,purchase_price,stock_quantity,in_stock,sku,suppliers(id,name)";
+  "id,supplier_id,master_product_id,purchase_price,stock_quantity,in_stock,suppliers(id,name)";
 
 export function useMasterProducts(search?: string) {
   return useQuery({
