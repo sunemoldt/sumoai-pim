@@ -202,6 +202,30 @@ async function handleRegister(req: Request) {
   }
 }
 
+// Allowlist of redirect_uri hosts permitted to complete the OAuth flow.
+// Defaults cover known MCP clients (Claude, ChatGPT) plus localhost for the inspector.
+// Override / extend via MCP_ALLOWED_REDIRECT_HOSTS (comma-separated host suffixes).
+const DEFAULT_ALLOWED_REDIRECT_HOSTS = [
+  "claude.ai", "claude.com", "anthropic.com",
+  "chatgpt.com", "openai.com",
+  "localhost", "127.0.0.1",
+];
+const ALLOWED_REDIRECT_HOSTS = (Deno.env.get("MCP_ALLOWED_REDIRECT_HOSTS") || "")
+  .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
+  .concat(DEFAULT_ALLOWED_REDIRECT_HOSTS);
+
+function isAllowedRedirectUri(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    const isLoopback = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    if (u.protocol !== "https:" && !(isLoopback && u.protocol === "http:")) return false;
+    const host = u.hostname.toLowerCase();
+    return ALLOWED_REDIRECT_HOSTS.some((a) => host === a || host.endsWith("." + a));
+  } catch {
+    return false;
+  }
+}
+
 async function handleAuthorize(url: URL) {
   const redirect_uri = url.searchParams.get("redirect_uri") || "";
   const state = url.searchParams.get("state") || "";
@@ -222,6 +246,18 @@ async function handleAuthorize(url: URL) {
 
   if (!redirect_uri) {
     return jsonResponse({ error: "invalid_request", error_description: "redirect_uri required" }, 400);
+  }
+  if (!isAllowedRedirectUri(redirect_uri)) {
+    logEvent({ event: "oauth_authorize_error", reason: "redirect_uri_not_allowed", redirectUriHost: safeUrlHost(redirect_uri) });
+    return jsonResponse({ error: "invalid_request", error_description: "redirect_uri not allowed" }, 400);
+  }
+  // Mandatory PKCE — prevents an attacker who obtains a code from exchanging it
+  if (!code_challenge) {
+    logEvent({ event: "oauth_authorize_error", reason: "pkce_required" });
+    return jsonResponse({ error: "invalid_request", error_description: "code_challenge required (PKCE)" }, 400);
+  }
+  if (code_challenge_method !== "S256" && code_challenge_method !== "plain") {
+    return jsonResponse({ error: "invalid_request", error_description: "unsupported code_challenge_method" }, 400);
   }
 
   const code = await createSignedCode({ client_id, redirect_uri, code_challenge, code_challenge_method });
