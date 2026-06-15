@@ -188,6 +188,17 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
+    // Auth guard — allow only service-role / anon (pg_cron) or an authenticated user.
+    const authHeader = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const isInternal = !!authHeader && (authHeader === SUPABASE_SERVICE_ROLE_KEY || authHeader === SUPABASE_ANON_KEY);
+    if (!isInternal) {
+      if (!authHeader) return json({ error: "Unauthorized" }, 401);
+      const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: `Bearer ${authHeader}` } } });
+      const { data, error } = await anon.auth.getUser();
+      if (error || !data?.user) return json({ error: "Unauthorized" }, 401);
+    }
+
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY mangler");
     if (!GOOGLE_DRIVE_API_KEY) throw new Error("GOOGLE_DRIVE_API_KEY mangler — connect Google Drive først");
 
