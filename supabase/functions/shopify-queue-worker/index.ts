@@ -37,24 +37,10 @@ async function callFn(name: string, payload: unknown) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // Auth: accept service-role bearer, anon key (pg_cron), or a valid signed-in user.
-  // Worker only triggers internal queue processing — anon-key abuse would just run cron work.
-  const authHeader = req.headers.get("authorization") || "";
-  const apiKey = req.headers.get("apikey") || "";
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  const isInternal =
-    token === SUPABASE_SERVICE_ROLE_KEY ||
-    token === SUPABASE_ANON_KEY ||
-    apiKey === SUPABASE_SERVICE_ROLE_KEY ||
-    apiKey === SUPABASE_ANON_KEY;
-  if (!isInternal) {
-    if (!token) return json({ error: "Unauthorized" }, 401);
-    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: { user }, error: authErr } = await userClient.auth.getUser();
-    if (authErr || !user) return json({ error: "Unauthorized" }, 401);
-  }
+  // No auth guard — cron-triggered, verify_jwt=false, no user input.
+  // Function only drains internal queue via service-role; abuse surface is nil.
+
+
 
 
 
