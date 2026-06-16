@@ -1,45 +1,62 @@
-# Hvorfor køen står stille
+# Hvorfor DCS (og de andre planlagte feeds) ikke synker
 
-`shopify_update_queue` har **259 ventende opgaver** (ikke kun de 100 du ser i UI'en — listen viser bare top 100). Alle har `attempts = 0`, dvs. worker har aldrig nået dem.
+Jeg har gravet i pg_cron + pg_net logs. Problemet er ikke selve `scheduled-sync` — funktionen virker fint når den kaldes. Problemet er at **pg_cron's HTTP-kald til funktionen bliver afvist eller timer ud**:
 
-Årsag: Sikkerhedsfixet for nogle prompts siden tilføjede en auth-guard i `shopify-queue-worker`, `nightly-backup` og `scheduled-sync`. Guarden accepterer kun bearer-token der *præcis* matcher env-variablen `SUPABASE_ANON_KEY` eller `SUPABASE_SERVICE_ROLE_KEY`. Men:
+Sidste 12 timers `net._http_response` viser ét af to mønstre hver halve time:
 
-- `pg_cron`-jobbet sender den gamle hardcodede anon-JWT (i `cron.job.command`).
-- Inde i edge function'en peger `SUPABASE_ANON_KEY` nu på en **ny publishable key** (Supabase rullede nye nøgleformater ud — derfor findes både `SUPABASE_ANON_KEY` og `SUPABASE_PUBLISHABLE_KEY` i secrets).
-- Resultat: alle interne cron-kald får **401 Unauthorized**. Bekræftet via edge-logs og direkte curl.
+- `status_code: 401` (de fleste kald — gateway afviser før funktionen rammes)
+- `Timeout of 5000 ms reached` (pg_net's default 5 s timeout — funktionen bruger længere tid på at iterere supplier-feeds)
 
-Det rammer 3 funktioner:
-1. `shopify-queue-worker` — køen dræner aldrig.
-2. `scheduled-sync` — stock safety-net kører ikke.
-3. `nightly-backup` — backup kører ikke.
+Konsekvens:
+- DCS (`0 */4 * * *`) sidst synket **2026-06-15 12:47** — burde have kørt 16:00, 20:00, 00:00, 04:00 i dag.
+- Allenet + Aurdel (`0 6 * * *`) sidst synket **2026-06-14 06:54** — burde have kørt 06-15 og 06-16.
+- COMTEK / EET / SecPro / Solar er sat til `manual` — ikke ramt af problemet.
+- Shopify-køen og nightly-backup har samme 401-problem i pg_cron logs.
 
-# Plan (3 ændringer)
+Roden:
 
-## 1. Fjern auth-guard på `shopify-queue-worker`
-Funktionen tager ikke input fra brugeren — den læser kun køen og kalder `shopify-update-product` med service-role internt. Den er allerede `verify_jwt = false` i `config.toml`. Den ekstra in-function guard giver ingen reel sikkerhed (en angriber kan højst trigge tom kø-processering), men bryder cron-kaldet.
+1. **Forældet anon-nøgle i pg_cron-jobs.** Alle 4 cron-jobs sender en hardcoded JWT (`iat: 1774968853`). Efter security-rotationen tidligere på dagen er den nøgle ikke gyldig mere på gateway-niveauet — `verify_jwt = false` skipper kun in-function check, ikke platform-nøgletjek.
+2. **pg_net default timeout 5 s.** `scheduled-sync` kan tage 10-40 s når den loop'er supplier-feeds; pg_net giver op før funktionen er færdig, så hverken supplier-import eller stock-sync når at registrere noget.
 
-→ Fjern hele `isInternal`-blokken i `supabase/functions/shopify-queue-worker/index.ts`. Funktionen forbliver `verify_jwt = false`.
+## Hvad jeg foreslår
 
-## 2. Samme fix på `scheduled-sync` og `nightly-backup`
-Samme problem, samme løsning: fjern auth-guarden. De er heller ikke følsomme (sync læser/skriver via service-role, backup skriver til intern bucket). Begge er `verify_jwt = false` i config.
+### 1. Genopret de 4 cron-jobs med korrekt opsætning
+- Brug **aktuel anon-nøgle** fra `SUPABASE_ANON_KEY` secret i headers.
+- Send både `apikey` og `Authorization: Bearer` header (gateway accepterer begge formater).
+- Sæt `timeout_milliseconds := 55000` på `net.http_post` så lange runs ikke afbrydes.
+- Behold eksisterende schedules: `*/30 * * * *` (scheduled-sync), `*/15 * * * *` (shopify-queue-worker), `30 1 * * *` (nightly-backup), `15 3 * * *` (cleanup-product-change-log).
 
-Alternativt (mere paranoidt): match både `SUPABASE_ANON_KEY` *og* `SUPABASE_PUBLISHABLE_KEY` *og* `SUPABASE_SECRET_KEYS`. Men det er kun en lappeløsning indtil næste nøglerotation — jeg foretrækker option A.
+Sker via `supabase--insert` med `cron.unschedule(...)` + ny `cron.schedule(...)` for hver — ikke en migration, fordi nøglen er user-specific.
 
-## 3. Tøm den eksisterende kø én gang manuelt
-Når koden er deployet, kalder jeg `shopify-queue-worker` direkte 25 ad gangen indtil counten er <50, så vi kommer i gang nu i stedet for at vente på næste cron-tick (15 min).
+### 2. Kør DCS + Allenet + Aurdel manuelt én gang
+For at indhente det tabte og bekræfte at supplier-feed-import stadig virker som forventet (status, antal importerede rækker).
 
-# Sikkerhedsnotat
+### 3. Verificér efter fix
+- Tjek `net._http_response` 15-30 min efter — skal vise `200`, ingen 401, ingen 5000ms-timeouts.
+- Tjek `last_sync_at` på DCS/Allenet/Aurdel rykker frem ved næste matchende tick.
 
-Security-scanneren fandt oprindeligt disse 3 funktioner som "manglende auth". Det var en falsk positiv for cron-trigget funktioner uden brugerinput. Jeg opdaterer `@security-memory` så scanneren ikke flagger dem igen, med begrundelsen: `verify_jwt = false` + service-role-only DB-adgang + ingen bruger-payload = ingen angrebsflade.
+## Hvad jeg IKKE rører
+- `scheduled-sync/index.ts`, `shopify-queue-worker/index.ts`, `nightly-backup/index.ts` koden — de er fine, kun cron-opkaldet er brudt.
+- Supplier-konfigurationer (feed_url, feed_schedule, currency osv.).
+- `verify_jwt = false` settings i `config.toml`.
 
-# Verifikation
+## Teknisk detalje (kan springes over)
+```sql
+SELECT cron.unschedule('scheduled-sync-check');
+SELECT cron.schedule(
+  'scheduled-sync-check', '*/30 * * * *',
+  $$ SELECT net.http_post(
+       url := '.../scheduled-sync',
+       headers := jsonb_build_object(
+         'Content-Type','application/json',
+         'apikey', '<current anon>',
+         'Authorization','Bearer <current anon>'
+       ),
+       body := '{}'::jsonb,
+       timeout_milliseconds := 55000
+     ); $$
+);
+```
+Samme mønster for de tre andre jobs.
 
-1. Efter deploy: `supabase--curl_edge_functions POST /shopify-queue-worker` → 200 med `processed > 0`.
-2. Tjek `SELECT count(*) FROM shopify_update_queue WHERE status='pending'` falder.
-3. Tjek edge-logs for `shopify-queue-worker` viser 200 hver 15. min.
-4. Tjek `nightly-backup` kører kl 03 UTC i nat.
-
-# Hvad jeg IKKE rører
-- `mcp-server` (PKCE + redirect-allowlist beholder vi — den er offentligt eksponeret, modsat de 3 cron-funktioner).
-- `shopify-oauth-start` (kræver bruger-JWT for at undgå phishing-flow — beholder auth).
-- Selve køens forretningslogik, retry-backoff, eller Shopify-API-kald.
+Skal jeg gå i gang?
