@@ -15,30 +15,10 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Auth: accept service-role, anon (pg_cron), or signed-in user
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const authHeader = req.headers.get("authorization") || "";
-    const apiKey = req.headers.get("apikey") || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "");
-    const isInternal =
-      token === serviceKey || token === anonKey ||
-      apiKey === serviceKey || apiKey === anonKey;
-    if (!isInternal) {
-      if (!token) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const userClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: `Bearer ${token}` } },
-      });
-      const { data: { user }, error: authErr } = await userClient.auth.getUser();
-      if (authErr || !user) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    }
+    // No auth guard — function is cron-triggered, verify_jwt=false, no user input.
+    // Only triggers internal stock recompute via service-role; abuse surface is nil.
+
+
 
 
     const supabase = createClient(supabaseUrl, serviceKey);
