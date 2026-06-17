@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-type StockFilter = "all" | "instock" | "outofstock" | "backorder";
+type StockFilter = "all" | "instock" | "outofstock" | "backorder" | "instock_zero";
 type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
@@ -244,6 +244,7 @@ export default function ProductListPage() {
       if (stockFilter === "instock" && product.stock_status !== "instock") return false;
       if (stockFilter === "outofstock" && product.stock_status !== "outofstock") return false;
       if (stockFilter === "backorder" && !product.backorders_allowed) return false;
+      if (stockFilter === "instock_zero" && !(product.stock_status === "instock" && (product.stock_quantity ?? 0) === 0)) return false;
       if (brandFilter !== "all" && product.brand !== brandFilter) return false;
       if (categoryFilter !== "all" && !getProductCategories(product).includes(categoryFilter)) return false;
       if (priceFilter === "has_price" && !product.webshop_price) return false;
@@ -494,6 +495,7 @@ export default function ProductListPage() {
               <SelectItem value="instock">På lager</SelectItem>
               <SelectItem value="outofstock">Udsolgt</SelectItem>
               <SelectItem value="backorder">Restordre</SelectItem>
+              <SelectItem value="instock_zero">På lager med 0 antal</SelectItem>
             </SelectContent>
           </Select>
 
