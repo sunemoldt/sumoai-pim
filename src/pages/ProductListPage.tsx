@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-type StockFilter = "all" | "instock" | "outofstock" | "backorder";
+type StockFilter = "all" | "instock" | "outofstock" | "backorder" | "instock_zero";
 type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
