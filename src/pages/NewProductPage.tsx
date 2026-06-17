@@ -1,16 +1,18 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Package, Sparkles, Upload } from "lucide-react";
+import { ArrowLeft, Copy, Loader2, Package, Sparkles, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 export default function NewProductPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const duplicateFrom = (location.state as any)?.duplicateFrom ?? null;
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [pushing, setPushing] = useState(false);
