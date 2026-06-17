@@ -141,8 +141,20 @@ export default function NewProductPage() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4 mr-1" /> Tilbage</Button>
-        <h1 className="text-2xl font-semibold flex items-center gap-2"><Package className="h-6 w-6" /> Opret nyt produkt</h1>
+        <h1 className="text-2xl font-semibold flex items-center gap-2"><Package className="h-6 w-6" /> {duplicateFrom ? "Dupliker produkt" : "Opret nyt produkt"}</h1>
       </div>
+
+      {duplicateFrom && (
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardContent className="py-3 flex items-start gap-2 text-sm">
+            <Copy className="h-4 w-4 mt-0.5 text-amber-600 shrink-0" />
+            <div>
+              <div><strong>Duplikat af:</strong> {duplicateFrom.title}</div>
+              <div className="text-muted-foreground text-xs mt-0.5">Felter er forudfyldt. Udfyld EAN og SKU (de er bevidst tomme — EAN skal være unikt).</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-primary/40 bg-primary/5">
         <CardHeader>
