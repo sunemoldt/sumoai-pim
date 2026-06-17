@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2, LayoutGrid, List, Download, Plus } from "lucide-react";
+import { Search, Package, Filter, X, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, Lightbulb, TrendingUp, RefreshCw, CheckSquare, Loader2, LayoutGrid, List, Download, Plus, Copy } from "lucide-react";
 import { downloadDineroCsv } from "@/lib/dinero-export";
 import ProductCard from "@/components/ProductCard";
 import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
@@ -839,6 +839,18 @@ export default function ProductListPage() {
                             supplierIds={product.supplier_products.map((sp) => sp.supplier_id)}
                             variant="icon"
                           />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate("/products/new", { state: { duplicateFrom: product } });
+                            }}
+                            title="Dupliker produkt"
+                          >
+                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"

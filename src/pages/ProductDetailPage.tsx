@@ -27,7 +27,7 @@ import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
 import MergeProductDialog from "@/components/MergeProductDialog";
 import AiGenerateAllDialog from "@/components/AiGenerateAllDialog";
 import ProductLowMarginGuardCard from "@/components/ProductLowMarginGuardCard";
-import { Archive, ArchiveRestore, GitMerge, Sparkles } from "lucide-react";
+import { Archive, ArchiveRestore, Copy, GitMerge, Sparkles } from "lucide-react";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
@@ -472,7 +472,16 @@ export default function ProductDetailPage() {
                 )}
               </div>
             </div>
-            <div className="shrink-0">
+            <div className="shrink-0 flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/products/new", { state: { duplicateFrom: product } })}
+                title="Opret et nyt produkt baseret på dette"
+              >
+                <Copy className="h-4 w-4 mr-1.5" />
+                Dupliker
+              </Button>
               <LifecycleBadge status={(product as any).lifecycle_status ?? "active"} />
             </div>
           </div>

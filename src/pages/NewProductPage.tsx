@@ -1,37 +1,49 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Loader2, Package, Sparkles, Upload } from "lucide-react";
+import { ArrowLeft, Copy, Loader2, Package, Sparkles, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 export default function NewProductPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const duplicateFrom = (location.state as any)?.duplicateFrom ?? null;
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [aiBrief, setAiBrief] = useState("");
-  const [form, setForm] = useState({
-    title: "",
-    ean: "",
-    sku: "",
-    brand: "",
-    category: "",
-    short_description: "",
-    long_description: "",
-    meta_title: "",
-    meta_description: "",
-    webshop_price: "",
-    sale_price: "",
-    image_url: "",
-    weight_kg: "",
-    backorder_policy: "no",
+  const [form, setForm] = useState(() => {
+    const d = duplicateFrom;
+    const numStr = (v: any) => (v === null || v === undefined || v === "" ? "" : String(v));
+    return {
+      title: d?.title ? `${d.title} (kopi)` : "",
+      ean: "",
+      sku: "",
+      brand: d?.brand ?? "",
+      category: d?.category ?? "",
+      short_description: d?.short_description ?? "",
+      long_description: d?.long_description ?? "",
+      meta_title: d?.meta_title ?? "",
+      meta_description: d?.meta_description ?? "",
+      webshop_price: numStr(d?.webshop_price),
+      sale_price: numStr(d?.sale_price),
+      image_url: d?.image_url ?? "",
+      weight_kg: numStr(d?.weight_kg),
+      backorder_policy: d?.backorder_policy ?? "no",
+    };
   });
+  // Carry over extra fields that aren't in the form UI
+  const [extras] = useState(() => ({
+    categories: (duplicateFrom?.categories as string[] | null) ?? null,
+    attributes: (duplicateFrom?.attributes as Record<string, any> | null) ?? null,
+    custom_markup_percentage: duplicateFrom?.custom_markup_percentage ?? null,
+  }));
 
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -86,7 +98,11 @@ export default function NewProductPage() {
       sku: form.sku.trim() || null,
       brand: form.brand.trim() || null,
       category: form.category.trim() || null,
-      categories: form.category.trim() ? [form.category.trim()] : [],
+      categories: extras.categories && extras.categories.length > 0
+        ? extras.categories
+        : (form.category.trim() ? [form.category.trim()] : []),
+      attributes: extras.attributes ?? null,
+      custom_markup_percentage: extras.custom_markup_percentage ?? null,
       short_description: form.short_description || null,
       long_description: form.long_description || null,
       meta_title: form.meta_title.trim() || null,
@@ -125,8 +141,20 @@ export default function NewProductPage() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4 mr-1" /> Tilbage</Button>
-        <h1 className="text-2xl font-semibold flex items-center gap-2"><Package className="h-6 w-6" /> Opret nyt produkt</h1>
+        <h1 className="text-2xl font-semibold flex items-center gap-2"><Package className="h-6 w-6" /> {duplicateFrom ? "Dupliker produkt" : "Opret nyt produkt"}</h1>
       </div>
+
+      {duplicateFrom && (
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardContent className="py-3 flex items-start gap-2 text-sm">
+            <Copy className="h-4 w-4 mt-0.5 text-amber-600 shrink-0" />
+            <div>
+              <div><strong>Duplikat af:</strong> {duplicateFrom.title}</div>
+              <div className="text-muted-foreground text-xs mt-0.5">Felter er forudfyldt. Udfyld EAN og SKU (de er bevidst tomme — EAN skal være unikt).</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-primary/40 bg-primary/5">
         <CardHeader>
