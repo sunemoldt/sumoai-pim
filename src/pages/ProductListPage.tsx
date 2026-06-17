@@ -244,6 +244,7 @@ export default function ProductListPage() {
       if (stockFilter === "instock" && product.stock_status !== "instock") return false;
       if (stockFilter === "outofstock" && product.stock_status !== "outofstock") return false;
       if (stockFilter === "backorder" && !product.backorders_allowed) return false;
+      if (stockFilter === "instock_zero" && !(product.stock_status === "instock" && (product.stock_quantity ?? 0) === 0)) return false;
       if (brandFilter !== "all" && product.brand !== brandFilter) return false;
       if (categoryFilter !== "all" && !getProductCategories(product).includes(categoryFilter)) return false;
       if (priceFilter === "has_price" && !product.webshop_price) return false;
