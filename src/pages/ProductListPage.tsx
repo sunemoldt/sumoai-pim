@@ -495,6 +495,7 @@ export default function ProductListPage() {
               <SelectItem value="instock">På lager</SelectItem>
               <SelectItem value="outofstock">Udsolgt</SelectItem>
               <SelectItem value="backorder">Restordre</SelectItem>
+              <SelectItem value="instock_zero">På lager med 0 antal</SelectItem>
             </SelectContent>
           </Select>
 
