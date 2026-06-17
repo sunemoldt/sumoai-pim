@@ -98,7 +98,11 @@ export default function NewProductPage() {
       sku: form.sku.trim() || null,
       brand: form.brand.trim() || null,
       category: form.category.trim() || null,
-      categories: form.category.trim() ? [form.category.trim()] : [],
+      categories: extras.categories && extras.categories.length > 0
+        ? extras.categories
+        : (form.category.trim() ? [form.category.trim()] : []),
+      attributes: extras.attributes ?? null,
+      custom_markup_percentage: extras.custom_markup_percentage ?? null,
       short_description: form.short_description || null,
       long_description: form.long_description || null,
       meta_title: form.meta_title.trim() || null,
