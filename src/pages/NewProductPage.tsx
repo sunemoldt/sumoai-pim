@@ -18,22 +18,32 @@ export default function NewProductPage() {
   const [pushing, setPushing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [aiBrief, setAiBrief] = useState("");
-  const [form, setForm] = useState({
-    title: "",
-    ean: "",
-    sku: "",
-    brand: "",
-    category: "",
-    short_description: "",
-    long_description: "",
-    meta_title: "",
-    meta_description: "",
-    webshop_price: "",
-    sale_price: "",
-    image_url: "",
-    weight_kg: "",
-    backorder_policy: "no",
+  const [form, setForm] = useState(() => {
+    const d = duplicateFrom;
+    const numStr = (v: any) => (v === null || v === undefined || v === "" ? "" : String(v));
+    return {
+      title: d?.title ? `${d.title} (kopi)` : "",
+      ean: "",
+      sku: "",
+      brand: d?.brand ?? "",
+      category: d?.category ?? "",
+      short_description: d?.short_description ?? "",
+      long_description: d?.long_description ?? "",
+      meta_title: d?.meta_title ?? "",
+      meta_description: d?.meta_description ?? "",
+      webshop_price: numStr(d?.webshop_price),
+      sale_price: numStr(d?.sale_price),
+      image_url: d?.image_url ?? "",
+      weight_kg: numStr(d?.weight_kg),
+      backorder_policy: d?.backorder_policy ?? "no",
+    };
   });
+  // Carry over extra fields that aren't in the form UI
+  const [extras] = useState(() => ({
+    categories: (duplicateFrom?.categories as string[] | null) ?? null,
+    attributes: (duplicateFrom?.attributes as Record<string, any> | null) ?? null,
+    custom_markup_percentage: duplicateFrom?.custom_markup_percentage ?? null,
+  }));
 
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
