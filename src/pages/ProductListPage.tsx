@@ -845,6 +845,18 @@ export default function ProductListPage() {
                             className="h-7 w-7 rounded-full"
                             onClick={(e) => {
                               e.stopPropagation();
+                              navigate("/products/new", { state: { duplicateFrom: product } });
+                            }}
+                            title="Dupliker produkt"
+                          >
+                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
                               window.open(`/products/${product.id}`, "_blank");
                             }}
                             title="Åbn i nyt vindue"
