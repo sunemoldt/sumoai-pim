@@ -16,15 +16,19 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Auth check
+  // Auth check — accept service role, anon key (internal trigger / cron),
+  // or a valid user JWT. Function only writes whitelisted fields, single-tenant.
   const authHeader = req.headers.get("authorization");
+  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-  if (!authHeader.includes(SUPABASE_SERVICE_ROLE_KEY)) {
-    const anonClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+  const isService = authHeader.includes(SUPABASE_SERVICE_ROLE_KEY);
+  const isAnon = SUPABASE_ANON_KEY.length > 0 && authHeader.includes(SUPABASE_ANON_KEY);
+  if (!isService && !isAnon) {
+    const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error: authError } = await anonClient.auth.getUser();
