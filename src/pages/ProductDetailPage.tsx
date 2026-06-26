@@ -27,7 +27,7 @@ import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
 import MergeProductDialog from "@/components/MergeProductDialog";
 import AiGenerateAllDialog from "@/components/AiGenerateAllDialog";
 import ProductLowMarginGuardCard from "@/components/ProductLowMarginGuardCard";
-import { Archive, ArchiveRestore, Copy, GitMerge, Sparkles } from "lucide-react";
+import { Archive, ArchiveRestore, Copy, GitMerge, Sparkles, Rss } from "lucide-react";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
