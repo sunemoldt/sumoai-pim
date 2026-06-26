@@ -1,9 +1,11 @@
 // Public endpoint that streams the cached Partner-ads XML feed from Storage.
 // If the cache is missing, it triggers generation inline.
+// Optional: set FEED_API_KEY to require the X-Feed-Api-Key header (used by Cloudflare Worker proxy).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FEED_API_KEY = Deno.env.get("FEED_API_KEY");
 const BUCKET = "product-feeds";
 const FILE_PATH = "partner-ads.xml";
 
@@ -18,9 +20,16 @@ Deno.serve(async (req) => {
     return new Response("ok", {
       headers: {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-feed-api-key",
       },
     });
+  }
+
+  if (FEED_API_KEY && req.headers.get("X-Feed-Api-Key") !== FEED_API_KEY) {
+    return new Response(
+      `<?xml version="1.0" encoding="UTF-8"?><error>Unauthorized</error>`,
+      { status: 401, headers: baseHeaders },
+    );
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
