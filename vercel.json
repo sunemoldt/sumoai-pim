@@ -8,7 +8,10 @@
   "rewrites": [
     {
       "source": "/partner-ads.xml",
-      "has": [{ "type": "host", "value": "feed.sumoai.dk" }],
+      "destination": "https://qanxmacwntyxfhznxriz.supabase.co/functions/v1/partner-ads-feed"
+    },
+    {
+      "source": "/partnerads.xml",
       "destination": "https://qanxmacwntyxfhznxriz.supabase.co/functions/v1/partner-ads-feed"
     },
     {
