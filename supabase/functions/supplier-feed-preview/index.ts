@@ -183,6 +183,26 @@ Deno.serve(async (req) => {
       }
 
       const apiBaseUrl = supplier.feed_url || feed_url || "https://api.aurdel.com/Prices/getPrice";
+      // SSRF protection: validate scheme & block private/internal hosts
+      let parsedApi: URL;
+      try { parsedApi = new URL(apiBaseUrl); } catch {
+        return new Response(JSON.stringify({ error: "Invalid API feed URL" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!["http:", "https:"].includes(parsedApi.protocol)) {
+        return new Response(JSON.stringify({ error: "Only http/https URLs are allowed" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const apiHost = parsedApi.hostname.toLowerCase();
+      if (apiHost === "localhost" || apiHost === "127.0.0.1" || apiHost === "::1" ||
+          apiHost.startsWith("10.") || apiHost.startsWith("192.168.") || apiHost.startsWith("172.") ||
+          apiHost === "169.254.169.254" || apiHost.endsWith(".internal") || apiHost.endsWith(".local")) {
+        return new Response(JSON.stringify({ error: "Internal URLs are not allowed" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const apiUrl = `${apiBaseUrl}?${params.toString()}`;
 
       // Aurdel "item" database can be slow – allow up to 55 seconds

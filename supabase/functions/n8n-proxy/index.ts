@@ -66,6 +66,16 @@ Deno.serve(async (req) => {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const action = body.action ?? "test";
 
+    const ID_RE = /^[a-zA-Z0-9_-]+$/;
+    const requireValidId = (val: unknown): string | Response => {
+      if (typeof val !== "string" || !ID_RE.test(val) || val.length > 64) {
+        return new Response(JSON.stringify({ error: "Invalid id" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return val;
+    };
+
     switch (action) {
       case "test": {
         // Lightweight verification call
@@ -89,28 +99,43 @@ Deno.serve(async (req) => {
         });
       }
       case "get_workflow": {
-        const r = await n8nFetch(`/workflows/${body.id}`);
+        const id = requireValidId(body.id); if (id instanceof Response) return id;
+        const r = await n8nFetch(`/workflows/${id}`);
         return new Response(JSON.stringify(r.data), {
           status: r.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       case "activate_workflow": {
-        const r = await n8nFetch(`/workflows/${body.id}/activate`, { method: "POST" });
+        const id = requireValidId(body.id); if (id instanceof Response) return id;
+        const r = await n8nFetch(`/workflows/${id}/activate`, { method: "POST" });
         return new Response(JSON.stringify(r.data), {
           status: r.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       case "deactivate_workflow": {
-        const r = await n8nFetch(`/workflows/${body.id}/deactivate`, { method: "POST" });
+        const id = requireValidId(body.id); if (id instanceof Response) return id;
+        const r = await n8nFetch(`/workflows/${id}/deactivate`, { method: "POST" });
         return new Response(JSON.stringify(r.data), {
           status: r.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       case "list_executions": {
         const params = new URLSearchParams();
-        if (body.workflowId) params.set("workflowId", String(body.workflowId));
-        if (body.status) params.set("status", String(body.status));
-        params.set("limit", String(body.limit ?? 20));
+        if (body.workflowId !== undefined) {
+          const wid = requireValidId(body.workflowId); if (wid instanceof Response) return wid;
+          params.set("workflowId", wid);
+        }
+        if (body.status) {
+          const s = String(body.status);
+          if (!/^[a-zA-Z_]+$/.test(s) || s.length > 32) {
+            return new Response(JSON.stringify({ error: "Invalid status" }), {
+              status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          params.set("status", s);
+        }
+        const limit = Math.min(Math.max(parseInt(String(body.limit ?? 20), 10) || 20, 1), 250);
+        params.set("limit", String(limit));
         const r = await n8nFetch(`/executions?${params.toString()}`);
         return new Response(JSON.stringify(r.data), {
           status: r.status, headers: { ...corsHeaders, "Content-Type": "application/json" },

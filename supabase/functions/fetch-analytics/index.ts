@@ -246,7 +246,22 @@ serve(async (req) => {
       await supabase.from("product_recommendations").insert(recommendations);
 
       const { data: webhooks } = await supabase.from("webhook_configs").select("*").eq("is_active", true);
+      const isSafeWebhookUrl = (u: string): boolean => {
+        try {
+          const p = new URL(u);
+          if (!["http:", "https:"].includes(p.protocol)) return false;
+          const h = p.hostname.toLowerCase();
+          if (h === "localhost" || h === "127.0.0.1" || h === "::1" ||
+              h.startsWith("10.") || h.startsWith("192.168.") || h.startsWith("172.") ||
+              h === "169.254.169.254" || h.endsWith(".internal") || h.endsWith(".local")) return false;
+          return true;
+        } catch { return false; }
+      };
       for (const webhook of webhooks ?? []) {
+        if (!isSafeWebhookUrl(webhook.url)) {
+          console.warn(`Skipping unsafe webhook URL: ${webhook.url}`);
+          continue;
+        }
         const eventTypes = webhook.event_types ?? [];
         const matching = recommendations.filter((r) => eventTypes.includes((r as { recommendation_type: string }).recommendation_type));
         if (matching.length > 0) {
