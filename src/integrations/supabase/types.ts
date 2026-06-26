@@ -77,6 +77,42 @@ export type Database = {
         }
         Relationships: []
       }
+      feed_runs: {
+        Row: {
+          error: string | null
+          feed_key: string
+          file_path: string | null
+          file_size_bytes: number | null
+          finished_at: string | null
+          id: string
+          product_count: number | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          error?: string | null
+          feed_key: string
+          file_path?: string | null
+          file_size_bytes?: number | null
+          finished_at?: string | null
+          id?: string
+          product_count?: number | null
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          error?: string | null
+          feed_key?: string
+          file_path?: string | null
+          file_size_bytes?: number | null
+          finished_at?: string | null
+          id?: string
+          product_count?: number | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       field_sync_policy: {
         Row: {
           description: string | null
@@ -164,6 +200,7 @@ export type Database = {
           created_at: string
           custom_markup_percentage: number | null
           ean: string
+          exclude_from_feeds: boolean
           id: string
           image_url: string | null
           last_shopify_sync_at: string | null
@@ -206,6 +243,7 @@ export type Database = {
           created_at?: string
           custom_markup_percentage?: number | null
           ean: string
+          exclude_from_feeds?: boolean
           id?: string
           image_url?: string | null
           last_shopify_sync_at?: string | null
@@ -248,6 +286,7 @@ export type Database = {
           created_at?: string
           custom_markup_percentage?: number | null
           ean?: string
+          exclude_from_feeds?: boolean
           id?: string
           image_url?: string | null
           last_shopify_sync_at?: string | null
