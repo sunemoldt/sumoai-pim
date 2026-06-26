@@ -957,6 +957,30 @@ export default function ProductDetailPage() {
             initialThreshold={(product as any).low_margin_threshold ?? null}
             onSaved={() => queryClient.invalidateQueries({ queryKey: ["master_product", id] })}
           />
+
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <Rss className="h-4 w-4" /> Affiliate-feeds (Partner-ads m.fl.)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label className="text-sm">Ekskluder fra affiliate-feeds</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Når slået til kommer produktet ikke med i Partner-ads XML-feedet.
+                  </p>
+                </div>
+                <InlineEditField
+                  productId={product.id}
+                  field="exclude_from_feeds"
+                  value={(product as any).exclude_from_feeds ?? false}
+                  type="boolean"
+                />
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="comparison" className="space-y-4 mt-4">
