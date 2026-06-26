@@ -66,6 +66,16 @@ Deno.serve(async (req) => {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const action = body.action ?? "test";
 
+    const ID_RE = /^[a-zA-Z0-9_-]+$/;
+    const requireValidId = (val: unknown): string | Response => {
+      if (typeof val !== "string" || !ID_RE.test(val) || val.length > 64) {
+        return new Response(JSON.stringify({ error: "Invalid id" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return val;
+    };
+
     switch (action) {
       case "test": {
         // Lightweight verification call
