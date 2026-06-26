@@ -6,6 +6,16 @@
   "installCommand": "npm install",
   "devCommand": "vite",
   "rewrites": [
+    {
+      "source": "/partner-ads.xml",
+      "has": [{ "type": "host", "value": "feed.sumoai.dk" }],
+      "destination": "https://qanxmacwntyxfhznxriz.supabase.co/functions/v1/partner-ads-feed"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "feed.sumoai.dk" }],
+      "destination": "https://qanxmacwntyxfhznxriz.supabase.co/functions/v1/partner-ads-feed"
+    },
     { "source": "/((?!.*\\..*).*)", "destination": "/index.html" }
   ],
   "headers": [
