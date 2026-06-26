@@ -23,6 +23,7 @@ import WoocommerceToggleCard from "@/components/WoocommerceToggleCard";
 import WoocommerceForcePushCard from "@/components/WoocommerceForcePushCard";
 import ShopifyOrderSyncCard from "@/components/ShopifyOrderSyncCard";
 import { NightlyBackupCard } from "@/components/NightlyBackupCard";
+import { PartnerAdsFeedCard } from "@/components/PartnerAdsFeedCard";
 import LowMarginGuardCard from "@/components/LowMarginGuardCard";
 
 export default function SettingsPage() {
