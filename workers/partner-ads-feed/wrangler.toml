@@ -1,0 +1,10 @@
+name = "comtek-pim-partner-ads-feed"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+routes = [
+  { pattern = "pim.sumoai.dk/partner-ads.xml", custom_domain = false },
+  { pattern = "pim.sumoai.dk/partnerads.xml", custom_domain = false }
+]
+
+[vars]
+PARTNER_ADS_FEED_URL = "https://qanxmacwntyxfhznxriz.supabase.co/functions/v1/partner-ads-feed"
