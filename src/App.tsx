@@ -18,6 +18,7 @@ import N8nWorkflowsPage from "@/pages/N8nWorkflowsPage";
 import ShopifyPage from "@/pages/ShopifyPage";
 import QuoteListPage from "@/pages/QuoteListPage";
 import QuoteEditorPage from "@/pages/QuoteEditorPage";
+import FeedsPage from "@/pages/FeedsPage";
 import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import NotFound from "@/pages/NotFound";
@@ -67,6 +68,7 @@ function AuthenticatedApp() {
         <Route path="/quotes" element={<QuoteListPage />} />
         <Route path="/quotes/new" element={<QuoteEditorPage />} />
         <Route path="/quotes/:id" element={<QuoteEditorPage />} />
+        <Route path="/feeds" element={<FeedsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
