@@ -18,7 +18,7 @@ type FeedRun = {
   finished_at: string | null;
 };
 
-const FEED_URL = `https://qanxmacwntyxfhznxriz.supabase.co/functions/v1/feed`;
+const FEED_URL = `https://feed.sumoai.dk/partner-ads.xml`;
 
 export function PartnerAdsFeedCard() {
   const [running, setRunning] = useState(false);
