@@ -452,6 +452,9 @@ export default function SettingsPage() {
 
       <NightlyBackupCard />
 
+      <PartnerAdsFeedCard />
+
+
 
 
       <WoocommerceToggleCard />
