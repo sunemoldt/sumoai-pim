@@ -13,9 +13,9 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BUCKET = "product-feeds";
 
 const FEED_MAP: Record<string, { path: string; generator: string }> = {
-  "": { path: "partner-ads/latest.xml", generator: "generate-partner-ads-feed" },
-  "partnerads": { path: "partner-ads/latest.xml", generator: "generate-partner-ads-feed" },
-  "partner-ads": { path: "partner-ads/latest.xml", generator: "generate-partner-ads-feed" },
+  "": { path: "partner-ads.xml", generator: "generate-partner-ads-feed" },
+  "partnerads": { path: "partner-ads.xml", generator: "generate-partner-ads-feed" },
+  "partner-ads": { path: "partner-ads.xml", generator: "generate-partner-ads-feed" },
 };
 
 Deno.serve(async (req) => {
