@@ -45,6 +45,7 @@ const PRODUCT_QUERY = `#graphql
       status
       vendor
       productType
+      category { name fullName }
       descriptionHtml
       seo { title description }
       featuredImage { url }
@@ -147,7 +148,7 @@ Deno.serve(async (req) => {
         tryField("meta_description", sp.seo?.description);
         tryField("image_url", sp.featuredImage?.url);
         tryField("brand", sp.vendor);
-        tryField("category", sp.productType);
+        tryField("category", sp.category?.fullName || sp.category?.name || sp.productType);
 
         const firstVariant = sp.variants?.nodes?.[0];
         if (firstVariant) {
