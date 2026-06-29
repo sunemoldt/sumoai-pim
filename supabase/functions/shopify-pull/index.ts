@@ -109,10 +109,10 @@ Deno.serve(async (req) => {
       (policyRows ?? []).map((r) => [r.field_name, { master: r.master, direction: r.direction }])
     );
 
-    let targets: { id: string; shopify_product_id: string | null }[] = [];
+    let targets: { id: string; shopify_product_id: string | null; ean: string | null; sku: string | null }[] = [];
     if (master_product_id) {
       const { data } = await supabase.from("master_products")
-        .select("id, shopify_product_id").eq("id", master_product_id).single();
+        .select("id, shopify_product_id, ean, sku").eq("id", master_product_id).single();
       if (!data?.shopify_product_id) {
         return new Response(JSON.stringify({ error: "Produktet har ikke shopify_product_id" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
       targets = [data];
     } else if (all) {
       const { data } = await supabase.from("master_products")
-        .select("id, shopify_product_id")
+        .select("id, shopify_product_id, ean, sku")
         .not("shopify_product_id", "is", null);
       targets = (data ?? []) as typeof targets;
     } else {
@@ -129,6 +129,7 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     const results: { id: string; ok: boolean; updated?: string[]; variants?: number; error?: string }[] = [];
     let i = 0;
