@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
         tryField("short_description", sp.shortDescription?.value);
         tryField("meta_title", sp.seo?.title);
         tryField("meta_description", sp.seo?.description);
-        tryField("image_url", sp.featuredImage?.url);
+        // image_url is set below from the matched variant (falls back to featuredImage)
         tryField("brand", sp.vendor);
         tryField("category", sp.category?.fullName || sp.category?.name || sp.productType);
 
