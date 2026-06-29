@@ -153,13 +153,18 @@ Deno.serve(async (req) => {
         tryField("brand", sp.vendor);
         tryField("category", sp.category?.fullName || sp.category?.name || sp.productType);
 
-        // Pick the variant matching THIS PIM master (by barcode/EAN, then SKU); fall back to first.
+        // Pick the variant matching THIS PIM master.
+        // Priority: explicit link (t.shopify_variant_id) > EAN > SKU > first variant.
+        // Respecting the explicit link prevents overwriting a manual "Søg & link" when
+        // Shopify variants share the same SKU or have missing/duplicate barcodes.
         const variants = sp.variants?.nodes ?? [];
         const normEan = (s: string | null | undefined) =>
           s ? String(s).trim().replace(/^0+/, "") || String(s).trim() : "";
+        const targetVariantId = t.shopify_variant_id ? String(t.shopify_variant_id) : "";
         const targetEan = normEan(t.ean);
         const targetSku = (t.sku ?? "").trim();
         const matchedVariant =
+          (targetVariantId && variants.find((v: any) => (v.id?.split("/").pop() ?? "") === targetVariantId)) ||
           (targetEan && variants.find((v: any) => normEan(v.barcode) === targetEan)) ||
           (targetSku && variants.find((v: any) => (v.sku ?? "").trim() === targetSku)) ||
           variants[0];
