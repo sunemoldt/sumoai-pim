@@ -60,10 +60,12 @@ const PRODUCT_QUERY = `#graphql
           position
           inventoryQuantity
           inventoryPolicy
+          image { url }
           inventoryItem { id measurement { weight { value unit } } }
           selectedOptions { name value }
         }
       }
+
     }
   }`;
 
