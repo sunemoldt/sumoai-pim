@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     let targets: { id: string; shopify_product_id: string | null; ean: string | null; sku: string | null }[] = [];
     if (master_product_id) {
       const { data } = await supabase.from("master_products")
-        .select("id, shopify_product_id, ean, sku").eq("id", master_product_id).single();
+        .select("id, shopify_product_id, shopify_variant_id, ean, sku").eq("id", master_product_id).single();
       if (!data?.shopify_product_id) {
         return new Response(JSON.stringify({ error: "Produktet har ikke shopify_product_id" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
