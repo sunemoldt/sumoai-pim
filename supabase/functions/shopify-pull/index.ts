@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
       targets = [data];
     } else if (all) {
       const { data } = await supabase.from("master_products")
-        .select("id, shopify_product_id, ean, sku")
+        .select("id, shopify_product_id, shopify_variant_id, ean, sku")
         .not("shopify_product_id", "is", null);
       targets = (data ?? []) as typeof targets;
     } else {
