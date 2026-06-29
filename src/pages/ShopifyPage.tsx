@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { ShoppingBag, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, Copy, Trash2, Star } from "lucide-react";
 import { ShopifyRematchCard } from "@/components/ShopifyRematchCard";
+import { ShopifyUnmatchedCard } from "@/components/ShopifyUnmatchedCard";
 
 interface Status {
   shop_domain: string | null;
@@ -333,6 +334,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
         </Card>
       )}
       {status?.is_connected && <ShopifyRematchCard />}
+      {status?.is_connected && <ShopifyUnmatchedCard />}
 
 
       <Card>
