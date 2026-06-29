@@ -167,6 +167,12 @@ Deno.serve(async (req) => {
         // Image: prefer variant image, fall back to product featured image
         tryField("image_url", matchedVariant?.image?.url || sp.featuredImage?.url);
 
+        // Always keep master's shopify_variant_id in sync with the matched variant
+        if (matchedVariant?.id) {
+          update.shopify_variant_id = matchedVariant.id.split("/").pop();
+        }
+
+
         if (matchedVariant) {
           tryField("webshop_price", matchedVariant.price ? Number(matchedVariant.price) : null);
           tryField("sale_price", matchedVariant.compareAtPrice ? Number(matchedVariant.compareAtPrice) : null);
