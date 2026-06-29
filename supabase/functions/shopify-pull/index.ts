@@ -60,10 +60,12 @@ const PRODUCT_QUERY = `#graphql
           position
           inventoryQuantity
           inventoryPolicy
+          image { url }
           inventoryItem { id measurement { weight { value unit } } }
           selectedOptions { name value }
         }
       }
+
     }
   }`;
 
@@ -107,10 +109,10 @@ Deno.serve(async (req) => {
       (policyRows ?? []).map((r) => [r.field_name, { master: r.master, direction: r.direction }])
     );
 
-    let targets: { id: string; shopify_product_id: string | null }[] = [];
+    let targets: { id: string; shopify_product_id: string | null; ean: string | null; sku: string | null }[] = [];
     if (master_product_id) {
       const { data } = await supabase.from("master_products")
-        .select("id, shopify_product_id").eq("id", master_product_id).single();
+        .select("id, shopify_product_id, ean, sku").eq("id", master_product_id).single();
       if (!data?.shopify_product_id) {
         return new Response(JSON.stringify({ error: "Produktet har ikke shopify_product_id" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -119,7 +121,7 @@ Deno.serve(async (req) => {
       targets = [data];
     } else if (all) {
       const { data } = await supabase.from("master_products")
-        .select("id, shopify_product_id")
+        .select("id, shopify_product_id, ean, sku")
         .not("shopify_product_id", "is", null);
       targets = (data ?? []) as typeof targets;
     } else {
@@ -127,6 +129,7 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     const results: { id: string; ok: boolean; updated?: string[]; variants?: number; error?: string }[] = [];
     let i = 0;
@@ -146,20 +149,31 @@ Deno.serve(async (req) => {
         tryField("short_description", sp.shortDescription?.value);
         tryField("meta_title", sp.seo?.title);
         tryField("meta_description", sp.seo?.description);
-        tryField("image_url", sp.featuredImage?.url);
+        // image_url is set below from the matched variant (falls back to featuredImage)
         tryField("brand", sp.vendor);
         tryField("category", sp.category?.fullName || sp.category?.name || sp.productType);
 
-        const firstVariant = sp.variants?.nodes?.[0];
-        if (firstVariant) {
-          tryField("webshop_price", firstVariant.price ? Number(firstVariant.price) : null);
-          tryField("sale_price", firstVariant.compareAtPrice ? Number(firstVariant.compareAtPrice) : null);
-          tryField("stock_quantity", typeof firstVariant.inventoryQuantity === "number" ? firstVariant.inventoryQuantity : null);
-          tryField("backorders_allowed", firstVariant.inventoryPolicy === "CONTINUE");
-          // Mirror to backorder_policy (Shopify can't distinguish 'notify' from 'no', so map CONTINUE→yes, DENY→no)
-          tryField("backorder_policy", firstVariant.inventoryPolicy === "CONTINUE" ? "yes" : "no");
-          // Weight in kg from inventoryItem measurement
-          const wRaw = firstVariant.inventoryItem?.measurement?.weight;
+        // Pick the variant matching THIS PIM master (by barcode/EAN, then SKU); fall back to first.
+        const variants = sp.variants?.nodes ?? [];
+        const normEan = (s: string | null | undefined) =>
+          s ? String(s).trim().replace(/^0+/, "") || String(s).trim() : "";
+        const targetEan = normEan(t.ean);
+        const targetSku = (t.sku ?? "").trim();
+        const matchedVariant =
+          (targetEan && variants.find((v: any) => normEan(v.barcode) === targetEan)) ||
+          (targetSku && variants.find((v: any) => (v.sku ?? "").trim() === targetSku)) ||
+          variants[0];
+
+        // Image: prefer variant image, fall back to product featured image
+        tryField("image_url", matchedVariant?.image?.url || sp.featuredImage?.url);
+
+        if (matchedVariant) {
+          tryField("webshop_price", matchedVariant.price ? Number(matchedVariant.price) : null);
+          tryField("sale_price", matchedVariant.compareAtPrice ? Number(matchedVariant.compareAtPrice) : null);
+          tryField("stock_quantity", typeof matchedVariant.inventoryQuantity === "number" ? matchedVariant.inventoryQuantity : null);
+          tryField("backorders_allowed", matchedVariant.inventoryPolicy === "CONTINUE");
+          tryField("backorder_policy", matchedVariant.inventoryPolicy === "CONTINUE" ? "yes" : "no");
+          const wRaw = matchedVariant.inventoryItem?.measurement?.weight;
           if (wRaw?.value != null) {
             const wKg = wRaw.unit === "GRAMS" ? Number(wRaw.value) / 1000
               : wRaw.unit === "POUNDS" ? Number(wRaw.value) * 0.45359237
@@ -167,9 +181,10 @@ Deno.serve(async (req) => {
               : Number(wRaw.value);
             tryField("weight_kg", wKg);
           }
-          tryField("ean", firstVariant.barcode ? String(firstVariant.barcode).trim().replace(/^0+/, "") || String(firstVariant.barcode).trim() : firstVariant.barcode);
-          tryField("sku", firstVariant.sku);
+          tryField("ean", matchedVariant.barcode ? String(matchedVariant.barcode).trim().replace(/^0+/, "") || String(matchedVariant.barcode).trim() : matchedVariant.barcode);
+          tryField("sku", matchedVariant.sku);
         }
+
 
         // Lifecycle is always synced from Shopify status
         const lifecycle = sp.status === "ACTIVE" ? "active" : sp.status === "ARCHIVED" ? "archived" : "draft";
