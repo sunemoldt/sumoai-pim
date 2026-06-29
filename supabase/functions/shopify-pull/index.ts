@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     let targets: { id: string; shopify_product_id: string | null; ean: string | null; sku: string | null }[] = [];
     if (master_product_id) {
       const { data } = await supabase.from("master_products")
-        .select("id, shopify_product_id, ean, sku").eq("id", master_product_id).single();
+        .select("id, shopify_product_id, shopify_variant_id, ean, sku").eq("id", master_product_id).single();
       if (!data?.shopify_product_id) {
         return new Response(JSON.stringify({ error: "Produktet har ikke shopify_product_id" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
       targets = [data];
     } else if (all) {
       const { data } = await supabase.from("master_products")
-        .select("id, shopify_product_id, ean, sku")
+        .select("id, shopify_product_id, shopify_variant_id, ean, sku")
         .not("shopify_product_id", "is", null);
       targets = (data ?? []) as typeof targets;
     } else {
@@ -153,13 +153,18 @@ Deno.serve(async (req) => {
         tryField("brand", sp.vendor);
         tryField("category", sp.category?.fullName || sp.category?.name || sp.productType);
 
-        // Pick the variant matching THIS PIM master (by barcode/EAN, then SKU); fall back to first.
+        // Pick the variant matching THIS PIM master.
+        // Priority: explicit link (t.shopify_variant_id) > EAN > SKU > first variant.
+        // Respecting the explicit link prevents overwriting a manual "Søg & link" when
+        // Shopify variants share the same SKU or have missing/duplicate barcodes.
         const variants = sp.variants?.nodes ?? [];
         const normEan = (s: string | null | undefined) =>
           s ? String(s).trim().replace(/^0+/, "") || String(s).trim() : "";
+        const targetVariantId = t.shopify_variant_id ? String(t.shopify_variant_id) : "";
         const targetEan = normEan(t.ean);
         const targetSku = (t.sku ?? "").trim();
         const matchedVariant =
+          (targetVariantId && variants.find((v: any) => (v.id?.split("/").pop() ?? "") === targetVariantId)) ||
           (targetEan && variants.find((v: any) => normEan(v.barcode) === targetEan)) ||
           (targetSku && variants.find((v: any) => (v.sku ?? "").trim() === targetSku)) ||
           variants[0];
