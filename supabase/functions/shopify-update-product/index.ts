@@ -332,14 +332,25 @@ Deno.serve(async (req) => {
                 userErrors { field message }
               }
             }`;
-          const setData = await shopifyGraphql(conn.shop_domain, conn.access_token, setMutation, {
-            input: {
-              name: "available",
-              reason: "correction",
-              quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity), changeFromQuantity: Number(currentQty) }],
-            },
-          });
-          const errors = setData.inventorySetQuantities.userErrors;
+          const runSet = async (fromQty: number) => {
+            const setData = await shopifyGraphql(conn.shop_domain, conn.access_token, setMutation, {
+              input: {
+                name: "available",
+                reason: "correction",
+                quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity), changeFromQuantity: fromQty }],
+              },
+            });
+            return setData.inventorySetQuantities.userErrors as { field: string[]; message: string }[] | null;
+          };
+          let errors = await runSet(Number(currentQty));
+          // Retry once if quantity drifted between read and write
+          if (errors?.length && errors.some((e) => /changeFromQuantity|no longer matches/i.test(e.message))) {
+            const refetch = await shopifyGraphql(conn.shop_domain, conn.access_token, inventoryQuery, { id: variantGid });
+            const refLevels = refetch.productVariant?.inventoryItem?.inventoryLevels?.nodes ?? [];
+            const refLevel = refLevels.find((l: { location?: { id?: string } }) => l.location?.id === locationId) ?? refLevels[0];
+            const refQty = refLevel?.quantities?.find((q: { name: string }) => q.name === "available")?.quantity ?? 0;
+            errors = await runSet(Number(refQty));
+          }
           if (errors?.length) throw new Error(errors.map((e: { message: string }) => e.message).join(", "));
         }
         dbUpdate.stock_quantity = stock_quantity;
