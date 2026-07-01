@@ -31,6 +31,12 @@ async function shopifyGraphql(shopDomain: string, accessToken: string, query: st
     },
     body: JSON.stringify({ query, variables }),
   });
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+    const snippet = text.slice(0, 200).replace(/\s+/g, " ");
+    throw new Error(`Shopify API returned non-JSON [${response.status}]: ${snippet}`);
+  }
   const data = await response.json();
   if (!response.ok || data.errors) {
     throw new Error(`Shopify API error [${response.status}]: ${JSON.stringify(data.errors || data)}`);
