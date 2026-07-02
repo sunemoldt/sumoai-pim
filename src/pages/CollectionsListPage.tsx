@@ -28,6 +28,7 @@ interface Collection {
 
 export default function CollectionsListPage() {
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<"title_asc" | "title_desc" | "traffic_desc" | "traffic_asc">("title_asc");
   const [syncing, setSyncing] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const queryClient = useQueryClient();
@@ -44,9 +45,23 @@ export default function CollectionsListPage() {
     },
   });
 
-  const filtered = collections.filter((c) =>
-    !search || c.title.toLowerCase().includes(search.toLowerCase()) || c.handle?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = useMemo(() => {
+    const list = collections.filter((c) =>
+      !search || c.title.toLowerCase().includes(search.toLowerCase()) || c.handle?.toLowerCase().includes(search.toLowerCase())
+    );
+    switch (sort) {
+      case "title_asc":
+        return list.sort((a, b) => a.title.localeCompare(b.title, "da-DK"));
+      case "title_desc":
+        return list.sort((a, b) => b.title.localeCompare(a.title, "da-DK"));
+      case "traffic_desc":
+        return list.sort((a, b) => (b.views_30d ?? 0) - (a.views_30d ?? 0) || a.title.localeCompare(b.title, "da-DK"));
+      case "traffic_asc":
+        return list.sort((a, b) => (a.views_30d ?? 0) - (b.views_30d ?? 0) || a.title.localeCompare(b.title, "da-DK"));
+      default:
+        return list;
+    }
+  }, [collections, search, sort]);
 
   const handleSync = async () => {
     setSyncing(true);
