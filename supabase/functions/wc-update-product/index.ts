@@ -37,16 +37,12 @@ Deno.serve(async (req) => {
   if (authHeader.includes(SUPABASE_SERVICE_ROLE_KEY)) {
     isAuthorized = true;
   } else if (internalSecretHeader) {
-    const { data: secretRow } = await supabase
-      .schema("private")
-      .from("function_secrets")
-      .select("value")
-      .eq("key", "internal_invoke_secret")
-      .maybeSingle();
-    if (secretRow?.value && secretRow.value === internalSecretHeader) {
-      isAuthorized = true;
-    }
+    const { data: ok } = await supabase.rpc("verify_internal_invoke_secret", {
+      p_secret: internalSecretHeader,
+    });
+    if (ok === true) isAuthorized = true;
   }
+
   if (!isAuthorized && authHeader.toLowerCase().startsWith("bearer ")) {
     const token = authHeader.slice(7).trim();
     const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
