@@ -2,13 +2,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-secret",
 };
 
 const WC_STORE_URL = Deno.env.get("WC_STORE_URL");
 const WC_CONSUMER_KEY = Deno.env.get("WC_CONSUMER_KEY");
 const WC_CONSUMER_SECRET = Deno.env.get("WC_CONSUMER_SECRET");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 Deno.serve(async (req) => {
@@ -16,14 +17,8 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Auth — accept any non-empty Authorization header. Function only writes
-  // whitelisted fields to the user's own WooCommerce store (single-tenant).
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  const authHeader = req.headers.get("authorization") ?? "";
+  const internalSecretHeader = req.headers.get("x-internal-secret") ?? "";
 
   if (!WC_STORE_URL || !WC_CONSUMER_KEY || !WC_CONSUMER_SECRET) {
     return new Response(
@@ -33,6 +28,33 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  // Authenticate the caller:
+  //   1. Trusted service-role bearer (internal function-to-function calls)
+  //   2. Trusted internal secret header (DB triggers via pg_net)
+  //   3. Valid Supabase user JWT
+  let isAuthorized = false;
+  if (authHeader.includes(SUPABASE_SERVICE_ROLE_KEY)) {
+    isAuthorized = true;
+  } else if (internalSecretHeader) {
+    const { data: ok } = await supabase.rpc("verify_internal_invoke_secret", {
+      p_secret: internalSecretHeader,
+    });
+    if (ok === true) isAuthorized = true;
+  }
+
+  if (!isAuthorized && authHeader.toLowerCase().startsWith("bearer ")) {
+    const token = authHeader.slice(7).trim();
+    const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data, error } = await anonClient.auth.getUser(token);
+    if (!error && data?.user) isAuthorized = true;
+  }
+  if (!isAuthorized) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
 
   // Global kill-switch + scope: skip all WC calls if disabled in settings
   let wcScope: "full" | "prices_stock_only" = "prices_stock_only";

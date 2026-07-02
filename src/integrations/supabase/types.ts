@@ -1213,6 +1213,10 @@ export type Database = {
         Returns: undefined
       }
       set_change_source: { Args: { source: string }; Returns: undefined }
+      verify_internal_invoke_secret: {
+        Args: { p_secret: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
