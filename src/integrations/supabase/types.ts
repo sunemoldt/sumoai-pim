@@ -792,6 +792,7 @@ export type Database = {
       }
       shopify_collections: {
         Row: {
+          analytics_updated_at: string | null
           collection_type: string
           created_at: string
           description_html: string | null
@@ -802,12 +803,15 @@ export type Database = {
           meta_description: string | null
           meta_title: string | null
           products_count: number
+          sessions_30d: number
           shopify_collection_id: string
           sort_order: string | null
           title: string
           updated_at: string
+          views_30d: number
         }
         Insert: {
+          analytics_updated_at?: string | null
           collection_type?: string
           created_at?: string
           description_html?: string | null
@@ -818,12 +822,15 @@ export type Database = {
           meta_description?: string | null
           meta_title?: string | null
           products_count?: number
+          sessions_30d?: number
           shopify_collection_id: string
           sort_order?: string | null
           title: string
           updated_at?: string
+          views_30d?: number
         }
         Update: {
+          analytics_updated_at?: string | null
           collection_type?: string
           created_at?: string
           description_html?: string | null
@@ -834,10 +841,12 @@ export type Database = {
           meta_description?: string | null
           meta_title?: string | null
           products_count?: number
+          sessions_30d?: number
           shopify_collection_id?: string
           sort_order?: string | null
           title?: string
           updated_at?: string
+          views_30d?: number
         }
         Relationships: []
       }

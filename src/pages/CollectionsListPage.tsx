@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RefreshCw, Loader2, FolderTree } from "lucide-react";
+import { RefreshCw, Loader2, FolderTree, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Collection {
@@ -20,11 +20,15 @@ interface Collection {
   meta_title: string | null;
   meta_description: string | null;
   last_shopify_sync_at: string | null;
+  views_30d: number;
+  sessions_30d: number;
+  analytics_updated_at: string | null;
 }
 
 export default function CollectionsListPage() {
   const [search, setSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: collections = [], isLoading } = useQuery({
@@ -57,6 +61,20 @@ export default function CollectionsListPage() {
     }
   };
 
+  const handleFetchStats = async () => {
+    setLoadingStats(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("fetch-collection-analytics");
+      if (error) throw error;
+      toast.success(`Statistik opdateret på ${data?.collections_updated ?? 0} kategorier (${data?.collections_with_data ?? 0} med trafik)`);
+      queryClient.invalidateQueries({ queryKey: ["shopify_collections"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Hent statistik fejlede");
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
   return (
     <div className="p-6 lg:p-8 space-y-4">
       <div className="flex items-center justify-between">
@@ -69,10 +87,16 @@ export default function CollectionsListPage() {
             Shopify Collections. Shopify er master — hent data ind og rediger beskrivelse/SEO herfra.
           </p>
         </div>
-        <Button onClick={handleSync} disabled={syncing}>
-          {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-          Sync fra Shopify
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleFetchStats} disabled={loadingStats}>
+            {loadingStats ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <BarChart3 className="h-4 w-4 mr-2" />}
+            Hent statistik (30 dg)
+          </Button>
+          <Button onClick={handleSync} disabled={syncing}>
+            {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Sync fra Shopify
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -103,6 +127,8 @@ export default function CollectionsListPage() {
                   <TableHead>Handle</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead className="text-right">Produkter</TableHead>
+                  <TableHead className="text-right">Besøg 30d</TableHead>
+                  <TableHead className="text-right">Sessions 30d</TableHead>
                   <TableHead>SEO</TableHead>
                   <TableHead>Sidst synket</TableHead>
                 </TableRow>
@@ -122,6 +148,8 @@ export default function CollectionsListPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">{c.products_count}</TableCell>
+                    <TableCell className="text-right tabular-nums">{(c.views_30d ?? 0).toLocaleString("da-DK")}</TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">{(c.sessions_30d ?? 0).toLocaleString("da-DK")}</TableCell>
                     <TableCell>
                       {c.meta_title || c.meta_description ? (
                         <Badge variant="outline" className="text-green-600">Sat</Badge>
