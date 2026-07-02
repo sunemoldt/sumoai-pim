@@ -61,6 +61,20 @@ export default function CollectionsListPage() {
     }
   };
 
+  const handleFetchStats = async () => {
+    setLoadingStats(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("fetch-collection-analytics");
+      if (error) throw error;
+      toast.success(`Statistik opdateret på ${data?.collections_updated ?? 0} kategorier (${data?.collections_with_data ?? 0} med trafik)`);
+      queryClient.invalidateQueries({ queryKey: ["shopify_collections"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Hent statistik fejlede");
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
   return (
     <div className="p-6 lg:p-8 space-y-4">
       <div className="flex items-center justify-between">
@@ -73,10 +87,16 @@ export default function CollectionsListPage() {
             Shopify Collections. Shopify er master — hent data ind og rediger beskrivelse/SEO herfra.
           </p>
         </div>
-        <Button onClick={handleSync} disabled={syncing}>
-          {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-          Sync fra Shopify
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleFetchStats} disabled={loadingStats}>
+            {loadingStats ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <BarChart3 className="h-4 w-4 mr-2" />}
+            Hent statistik (30 dg)
+          </Button>
+          <Button onClick={handleSync} disabled={syncing}>
+            {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Sync fra Shopify
+          </Button>
+        </div>
       </div>
 
       <Card>
