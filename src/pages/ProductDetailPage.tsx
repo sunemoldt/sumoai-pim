@@ -27,7 +27,8 @@ import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
 import MergeProductDialog from "@/components/MergeProductDialog";
 import AiGenerateAllDialog from "@/components/AiGenerateAllDialog";
 import ProductLowMarginGuardCard from "@/components/ProductLowMarginGuardCard";
-import { Archive, ArchiveRestore, Copy, GitMerge, Sparkles, Rss } from "lucide-react";
+import ProductCollectionsTab from "@/components/ProductCollectionsTab";
+import { Archive, ArchiveRestore, Copy, GitMerge, Sparkles, Rss, FolderTree } from "lucide-react";
 
 export default function ProductDetailPage() {
   const [manualPriceOpen, setManualPriceOpen] = useState(false);
@@ -509,9 +510,17 @@ export default function ProductDetailPage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="seo">SEO</TabsTrigger>
+          <TabsTrigger value="collections"><FolderTree className="h-3.5 w-3.5 mr-1" />Kategorier</TabsTrigger>
           <TabsTrigger value="translations">Oversættelser</TabsTrigger>
           <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="collections" className="space-y-4 mt-4">
+          <ProductCollectionsTab
+            masterProductId={product.id}
+            shopifyLinked={!!product.shopify_product_id}
+          />
+        </TabsContent>
 
 
         <TabsContent value="details" className="space-y-4 mt-4">
