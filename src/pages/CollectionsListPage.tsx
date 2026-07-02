@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RefreshCw, Loader2, FolderTree, BarChart3 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RefreshCw, Loader2, FolderTree, BarChart3, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 
 interface Collection {
@@ -27,6 +28,7 @@ interface Collection {
 
 export default function CollectionsListPage() {
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<"title_asc" | "title_desc" | "traffic_desc" | "traffic_asc">("title_asc");
   const [syncing, setSyncing] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const queryClient = useQueryClient();
@@ -43,9 +45,23 @@ export default function CollectionsListPage() {
     },
   });
 
-  const filtered = collections.filter((c) =>
-    !search || c.title.toLowerCase().includes(search.toLowerCase()) || c.handle?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = useMemo(() => {
+    const list = collections.filter((c) =>
+      !search || c.title.toLowerCase().includes(search.toLowerCase()) || c.handle?.toLowerCase().includes(search.toLowerCase())
+    );
+    switch (sort) {
+      case "title_asc":
+        return list.sort((a, b) => a.title.localeCompare(b.title, "da-DK"));
+      case "title_desc":
+        return list.sort((a, b) => b.title.localeCompare(a.title, "da-DK"));
+      case "traffic_desc":
+        return list.sort((a, b) => (b.views_30d ?? 0) - (a.views_30d ?? 0) || a.title.localeCompare(b.title, "da-DK"));
+      case "traffic_asc":
+        return list.sort((a, b) => (a.views_30d ?? 0) - (b.views_30d ?? 0) || a.title.localeCompare(b.title, "da-DK"));
+      default:
+        return list;
+    }
+  }, [collections, search, sort]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -104,12 +120,26 @@ export default function CollectionsListPage() {
           <CardTitle className="text-base">Alle kategorier ({filtered.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <Input
-            placeholder="Søg efter titel eller handle…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="mb-4 max-w-md"
-          />
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <Input
+              placeholder="Søg efter titel eller handle…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-md"
+            />
+            <Select value={sort} onValueChange={(v) => setSort(v as typeof sort)}>
+              <SelectTrigger className="w-[220px]" aria-label="Sortér kategorier">
+                <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Sortér efter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="title_asc">Titel: A → Å</SelectItem>
+                <SelectItem value="title_desc">Titel: Å → A</SelectItem>
+                <SelectItem value="traffic_desc">Trafik: høj → lav</SelectItem>
+                <SelectItem value="traffic_asc">Trafik: lav → høj</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
