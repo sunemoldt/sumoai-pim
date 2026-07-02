@@ -28,6 +28,7 @@ interface Collection {
 export default function CollectionsListPage() {
   const [search, setSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: collections = [], isLoading } = useQuery({
