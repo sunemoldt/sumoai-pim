@@ -148,6 +148,8 @@ export default function CollectionsListPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">{c.products_count}</TableCell>
+                    <TableCell className="text-right tabular-nums">{(c.views_30d ?? 0).toLocaleString("da-DK")}</TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">{(c.sessions_30d ?? 0).toLocaleString("da-DK")}</TableCell>
                     <TableCell>
                       {c.meta_title || c.meta_description ? (
                         <Badge variant="outline" className="text-green-600">Sat</Badge>
