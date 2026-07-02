@@ -20,6 +20,9 @@ interface Collection {
   meta_title: string | null;
   meta_description: string | null;
   last_shopify_sync_at: string | null;
+  views_30d: number;
+  sessions_30d: number;
+  analytics_updated_at: string | null;
 }
 
 export default function CollectionsListPage() {
