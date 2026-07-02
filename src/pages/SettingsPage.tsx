@@ -455,8 +455,21 @@ export default function SettingsPage() {
 
 
 
-      <WoocommerceToggleCard />
-      <WoocommerceForcePushCard />
+      {/* Legacy — deaktiveret. Opsætning bevaret så det kan genaktiveres senere. */}
+      <details className="rounded-lg border bg-muted/30 p-4">
+        <summary className="cursor-pointer text-sm font-medium">
+          WooCommerce (legacy — deaktiveret)
+        </summary>
+        <p className="mt-2 text-xs text-muted-foreground">
+          WooCommerce-integrationen er slået fra. Al kode, DB-trigger og edge functions er bevaret,
+          men kill-switchen (<code>woocommerce_enabled=false</code>) og en deaktiveret DB-trigger
+          stopper alle push/pull-kald. Aktivér herunder for at genoptage sync.
+        </p>
+        <div className="mt-4 space-y-4">
+          <WoocommerceToggleCard />
+          <WoocommerceForcePushCard />
+        </div>
+      </details>
 
       <CleanupAuditCard />
 
