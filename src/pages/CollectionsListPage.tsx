@@ -127,6 +127,8 @@ export default function CollectionsListPage() {
                   <TableHead>Handle</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead className="text-right">Produkter</TableHead>
+                  <TableHead className="text-right">Besøg 30d</TableHead>
+                  <TableHead className="text-right">Sessions 30d</TableHead>
                   <TableHead>SEO</TableHead>
                   <TableHead>Sidst synket</TableHead>
                 </TableRow>
