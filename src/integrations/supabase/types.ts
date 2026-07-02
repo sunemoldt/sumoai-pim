@@ -188,6 +188,42 @@ export type Database = {
         }
         Relationships: []
       }
+      master_product_collections: {
+        Row: {
+          collection_id: string
+          created_at: string
+          id: string
+          master_product_id: string
+        }
+        Insert: {
+          collection_id: string
+          created_at?: string
+          id?: string
+          master_product_id: string
+        }
+        Update: {
+          collection_id?: string
+          created_at?: string
+          id?: string
+          master_product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "master_product_collections_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "master_product_collections_master_product_id_fkey"
+            columns: ["master_product_id"]
+            isOneToOne: false
+            referencedRelation: "master_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       master_products: {
         Row: {
           attributes: Json | null
@@ -751,6 +787,57 @@ export type Database = {
           total_purchase_price?: number
           updated_at?: string
           valid_days?: number
+        }
+        Relationships: []
+      }
+      shopify_collections: {
+        Row: {
+          collection_type: string
+          created_at: string
+          description_html: string | null
+          handle: string | null
+          id: string
+          image_url: string | null
+          last_shopify_sync_at: string | null
+          meta_description: string | null
+          meta_title: string | null
+          products_count: number
+          shopify_collection_id: string
+          sort_order: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          collection_type?: string
+          created_at?: string
+          description_html?: string | null
+          handle?: string | null
+          id?: string
+          image_url?: string | null
+          last_shopify_sync_at?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
+          products_count?: number
+          shopify_collection_id: string
+          sort_order?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          collection_type?: string
+          created_at?: string
+          description_html?: string | null
+          handle?: string | null
+          id?: string
+          image_url?: string | null
+          last_shopify_sync_at?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
+          products_count?: number
+          shopify_collection_id?: string
+          sort_order?: string | null
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
