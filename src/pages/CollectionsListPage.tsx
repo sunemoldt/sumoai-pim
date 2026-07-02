@@ -120,12 +120,26 @@ export default function CollectionsListPage() {
           <CardTitle className="text-base">Alle kategorier ({filtered.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <Input
-            placeholder="Søg efter titel eller handle…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="mb-4 max-w-md"
-          />
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <Input
+              placeholder="Søg efter titel eller handle…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-md"
+            />
+            <Select value={sort} onValueChange={(v) => setSort(v as typeof sort)}>
+              <SelectTrigger className="w-[220px]" aria-label="Sortér kategorier">
+                <ArrowUpDown className="h-4 w-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Sortér efter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="title_asc">Titel: A → Å</SelectItem>
+                <SelectItem value="title_desc">Titel: Å → A</SelectItem>
+                <SelectItem value="traffic_desc">Trafik: høj → lav</SelectItem>
+                <SelectItem value="traffic_asc">Trafik: lav → høj</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
