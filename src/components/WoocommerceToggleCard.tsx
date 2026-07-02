@@ -41,6 +41,10 @@ export default function WoocommerceToggleCard() {
         ],
         { onConflict: "setting_key" }
       );
+    if (!error) {
+      // Also flip the DB auto-push trigger so it matches the UI kill-switch.
+      await supabase.rpc("set_wc_trigger_enabled", { p_enabled: nextEnabled });
+    }
     setSaving(false);
     if (error) {
       toast({ title: "Fejl", description: error.message, variant: "destructive" });
