@@ -1213,6 +1213,10 @@ export type Database = {
         Returns: undefined
       }
       set_change_source: { Args: { source: string }; Returns: undefined }
+      set_wc_trigger_enabled: {
+        Args: { p_enabled: boolean }
+        Returns: undefined
+      }
       verify_internal_invoke_secret: {
         Args: { p_secret: string }
         Returns: boolean

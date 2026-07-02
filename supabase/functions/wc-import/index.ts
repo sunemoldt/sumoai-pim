@@ -44,6 +44,22 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+  // Global kill-switch: skip entirely if WooCommerce sync is disabled in settings.
+  // Setup is preserved so it can be re-enabled later via WoocommerceToggleCard.
+  {
+    const { data: killSwitch } = await supabase
+      .from("analytics_settings")
+      .select("setting_value")
+      .eq("setting_key", "woocommerce_enabled")
+      .maybeSingle();
+    if (killSwitch?.setting_value !== "true") {
+      return new Response(
+        JSON.stringify({ success: false, skipped: true, reason: "WooCommerce-sync er deaktiveret (legacy). Aktivér i indstillinger for at genoptage import." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+  }
+
   // Allow caller to force a full re-import (e.g. after schema change)
   let forceFull = false;
   try {

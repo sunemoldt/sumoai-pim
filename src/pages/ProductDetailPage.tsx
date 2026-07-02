@@ -338,7 +338,9 @@ export default function ProductDetailPage() {
 
       const targets: { fn: string; platform: "Shopify" | "WooCommerce" }[] = [];
       if (product.shopify_variant_id) targets.push({ fn: "shopify-update-product", platform: "Shopify" });
-      if (product.webshop_product_id && product.webshop_platform === "woocommerce") targets.push({ fn: "wc-update-product", platform: "WooCommerce" });
+      // WooCommerce is legacy — kept in code, but auto-target is disabled.
+      // Re-enable via Settings → "WooCommerce-sync" if needed.
+      // if (product.webshop_product_id && product.webshop_platform === "woocommerce") targets.push({ fn: "wc-update-product", platform: "WooCommerce" });
       if (targets.length === 0) throw new Error("Produktet er ikke koblet til hverken Shopify eller WooCommerce");
 
       const responses = await Promise.all(
