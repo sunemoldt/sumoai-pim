@@ -37,7 +37,7 @@ export function useSuppliers() {
 // like long_description, attributes, metadata that aren't shown in the list.
 const LIST_COLUMNS =
   "id,title,ean,sku,brand,category,categories,image_url,webshop_price,sale_price," +
-  "stock_quantity,stock_status,lifecycle_status,auto_stock_sync,shopify_sync_enabled," +
+  "stock_quantity,stock_status,lifecycle_status,auto_stock_sync,stock_sync_supplier_ids,shopify_sync_enabled," +
   "shopify_product_id,shopify_variant_id,custom_markup_percentage,min_sync_margin," +
   "low_margin_guard,low_margin_threshold,backorder_policy,backorders_allowed," +
   "webshop_platform,webshop_product_id,weight_kg,short_description,meta_title,meta_description," +
