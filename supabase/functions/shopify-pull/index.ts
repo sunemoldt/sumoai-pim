@@ -246,7 +246,6 @@ Deno.serve(async (req) => {
             .select("id", { count: "exact", head: true })
             .eq("master_product_id", t.id);
           if ((spCount ?? 0) === 0) {
-            // Fire-and-forget — runs in parallel against all active auto-feeds with target_ean filter
             fetch(`${SUPABASE_URL}/functions/v1/supplier-rematch-product`, {
               method: "POST",
               headers: {
@@ -259,7 +258,91 @@ Deno.serve(async (req) => {
           }
         }
 
-        results.push({ id: t.id, ok: true, updated: Object.keys(update), variants: variantRows.length });
+        // AUTO-SPLIT: For multi-variant Shopify products, ensure a PIM master exists per variant.
+        let splitCreated = 0;
+        if (variants.length > 1) {
+          const { data: siblings } = await supabase
+            .from("master_products")
+            .select("id, shopify_variant_id")
+            .eq("shopify_product_id", t.shopify_product_id);
+          const linkedIds = new Set<string>();
+          for (const s of siblings ?? []) {
+            if (s.shopify_variant_id) linkedIds.add(String(s.shopify_variant_id));
+          }
+          // include the variant we just linked to `t` in this run
+          if (update.shopify_variant_id) linkedIds.add(String(update.shopify_variant_id));
+
+          // fetch texts from parent master once, to copy to new siblings
+          const { data: parent } = await supabase
+            .from("master_products")
+            .select("brand, category, categories, short_description, long_description, meta_title, meta_description")
+            .eq("id", t.id).single();
+
+          for (const v of variants) {
+            const vid = v.id?.split("/").pop() ?? "";
+            if (!vid || linkedIds.has(vid)) continue;
+            const optSuffix = (v.selectedOptions ?? [])
+              .map((o: any) => o.value).filter((x: string) => x && x !== "Default Title").join(" / ");
+            const newTitle = optSuffix ? `${sp.title} - ${optSuffix}` : sp.title;
+            const wRaw = v.inventoryItem?.measurement?.weight;
+            let wKg: number | null = null;
+            if (wRaw?.value != null) {
+              wKg = wRaw.unit === "GRAMS" ? Number(wRaw.value) / 1000
+                : wRaw.unit === "POUNDS" ? Number(wRaw.value) * 0.45359237
+                : wRaw.unit === "OUNCES" ? Number(wRaw.value) * 0.0283495231
+                : Number(wRaw.value);
+            }
+            const vEan = v.barcode
+              ? (String(v.barcode).trim().replace(/^0+/, "") || String(v.barcode).trim())
+              : null;
+            const qty = typeof v.inventoryQuantity === "number" ? v.inventoryQuantity : 0;
+
+            await supabase.rpc("set_change_source", { source: "shopify-pull-split" });
+            const { data: ins, error: insErr } = await supabase
+              .from("master_products")
+              .insert({
+                title: newTitle,
+                ean: vEan,
+                sku: v.sku ?? null,
+                shopify_product_id: t.shopify_product_id,
+                shopify_variant_id: vid,
+                shopify_sync_enabled: true,
+                lifecycle_status: lifecycle,
+                webshop_price: v.price ? Number(v.price) : null,
+                sale_price: v.compareAtPrice ? Number(v.compareAtPrice) : null,
+                stock_quantity: qty,
+                stock_status: qty > 0 ? "instock" : "outofstock",
+                backorders_allowed: v.inventoryPolicy === "CONTINUE",
+                backorder_policy: v.inventoryPolicy === "CONTINUE" ? "yes" : "no",
+                weight_kg: wKg,
+                image_url: v.image?.url || sp.featuredImage?.url || null,
+                brand: parent?.brand ?? null,
+                category: parent?.category ?? null,
+                categories: parent?.categories ?? null,
+                short_description: parent?.short_description ?? null,
+                long_description: parent?.long_description ?? null,
+                meta_title: parent?.meta_title ?? null,
+                meta_description: parent?.meta_description ?? null,
+              })
+              .select("id").single();
+            if (insErr) { console.error("split insert failed:", insErr.message); continue; }
+            splitCreated++;
+            linkedIds.add(vid);
+            if (vEan) {
+              fetch(`${SUPABASE_URL}/functions/v1/supplier-rematch-product`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                  "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                },
+                body: JSON.stringify({ master_product_id: ins.id }),
+              }).catch(() => {});
+            }
+          }
+        }
+
+        results.push({ id: t.id, ok: true, updated: Object.keys(update), variants: variantRows.length, split_created: splitCreated });
       } catch (e) {
         results.push({ id: t.id, ok: false, error: e instanceof Error ? e.message : String(e) });
       }
