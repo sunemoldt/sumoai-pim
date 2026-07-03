@@ -1,12 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { Plus } from "lucide-react";
+import { Plus, Copy } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type QuoteRow = {
   id: string;
@@ -20,6 +22,7 @@ type QuoteRow = {
 
 export default function QuoteListPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: quotes = [], isLoading } = useQuery({
     queryKey: ["quotes-list"],
     queryFn: async () => {
@@ -34,6 +37,60 @@ export default function QuoteListPage() {
       })) as QuoteRow[];
     },
   });
+
+  const handleDuplicate = async (quoteId: string) => {
+    try {
+      const { data: original, error: qErr } = await supabase
+        .from("quotes" as any)
+        .select("customer_name, valid_days, dinero_contact_guid, note_customer, note_internal, total_excl_vat, total_purchase_price, package_price")
+        .eq("id", quoteId)
+        .single();
+      if (qErr) throw qErr;
+
+      const { data: lines, error: lErr } = await supabase
+        .from("quote_lines" as any)
+        .select("pim_product_id, product_name, quantity, purchase_price, list_price, quote_price, sort_order")
+        .eq("quote_id", quoteId);
+      if (lErr) throw lErr;
+
+      const { data: maxRow } = await supabase
+        .from("quotes" as any)
+        .select("quote_number")
+        .order("quote_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const nextNumber = ((maxRow as any)?.quote_number ?? 0) + 1;
+
+      const { data: inserted, error: iErr } = await supabase
+        .from("quotes" as any)
+        .insert({
+          ...(original as any),
+          quote_number: nextNumber,
+          quote_date: new Date().toISOString().slice(0, 10),
+          status: "draft",
+          dinero_voucher_guid: null,
+        })
+        .select("id")
+        .single();
+      if (iErr) throw iErr;
+
+      const newId = (inserted as any).id as string;
+
+      if (lines && lines.length > 0) {
+        const { error: lineErr } = await supabase
+          .from("quote_lines" as any)
+          .insert((lines as any[]).map((l) => ({ ...l, quote_id: newId })));
+        if (lineErr) throw lineErr;
+      }
+
+      toast.success("Tilbud kopieret");
+      queryClient.invalidateQueries({ queryKey: ["quotes-list"] });
+      navigate(`/quotes/${newId}`);
+    } catch (err: any) {
+      toast.error("Kunne ikke kopiere tilbud", { description: err?.message });
+    }
+  };
+
 
   return (
     <div className="space-y-6">
@@ -58,13 +115,14 @@ export default function QuoteListPage() {
                 <TableHead className="text-right">Linjer</TableHead>
                 <TableHead className="text-right">Total inkl. moms</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right w-20">Handling</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Indlæser…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Indlæser…</TableCell></TableRow>
               ) : quotes.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Ingen tilbud endnu</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Ingen tilbud endnu</TableCell></TableRow>
               ) : quotes.map((q) => (
                 <TableRow key={q.id} className="cursor-pointer" onClick={() => navigate(`/quotes/${q.id}`)}>
                   <TableCell className="font-medium">#{q.quote_number}</TableCell>
@@ -82,6 +140,22 @@ export default function QuoteListPage() {
                     ) : (
                       <Badge variant="secondary">Kladde</Badge>
                     )}
+                  </TableCell>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => { e.stopPropagation(); handleDuplicate(q.id); }}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Dupliker</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                 </TableRow>
               ))}
