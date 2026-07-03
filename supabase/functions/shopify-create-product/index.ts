@@ -87,6 +87,18 @@ Deno.serve(async (req) => {
       vendor: p.brand ?? undefined,
       productType: p.category ?? undefined,
     };
+    if (p.short_description) {
+      productInput.metafields = [{
+        namespace: "custom",
+        key: "short_description",
+        type: "multi_line_text_field",
+        value: String(p.short_description),
+      }];
+    }
+    const seoObj: Record<string, unknown> = {};
+    if (p.meta_title) seoObj.title = String(p.meta_title);
+    if (p.meta_description) seoObj.description = String(p.meta_description);
+    if (Object.keys(seoObj).length > 0) productInput.seo = seoObj;
     const created = await shopifyGraphql(conn.shop_domain, conn.access_token, productMutation, { input: productInput });
     const errs = created.productCreate.userErrors;
     if (errs?.length) throw new Error(errs.map((e: { message: string }) => e.message).join(", "));
