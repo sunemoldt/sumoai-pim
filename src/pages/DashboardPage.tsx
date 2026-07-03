@@ -40,9 +40,16 @@ export default function DashboardPage() {
 
   // Margin only counts when at least one supplier is attached — otherwise
   // the shop price is not derived from a supplier and "low margin" is meaningless.
+  // Margin is only meaningful for suppliers actually used for stock management.
+  // If a supplier is linked but deselected from stock-sync, its price shouldn't
+  // trigger "lav avance" — the webshop price isn't based on it.
   const getProductMargin = (p: typeof products[0]) => {
     if (!p.supplier_products || p.supplier_products.length === 0) return null;
-    const cheapest = getCheapestSupplierAny(p.supplier_products);
+    const syncIds = (p as { stock_sync_supplier_ids?: string[] | null }).stock_sync_supplier_ids ?? [];
+    if (!p.auto_stock_sync || syncIds.length === 0) return null;
+    const eligible = p.supplier_products.filter((sp) => syncIds.includes(sp.supplier_id));
+    if (eligible.length === 0) return null;
+    const cheapest = getCheapestSupplierAny(eligible);
     if (!cheapest || !p.webshop_price) return null;
     return getMarginPercent(exVat(p.webshop_price), cheapest.purchase_price);
   };
