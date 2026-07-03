@@ -809,7 +809,12 @@ export default function ProductListPage() {
                           </div>
                         )}
                       </td>
-                      <td className="max-w-[240px] px-2 py-1.5 align-middle font-medium text-foreground truncate">{product.title}</td>
+                      <td className="max-w-[240px] px-2 py-1.5 align-middle font-medium text-foreground truncate">
+                        {product.title}
+                        {product.shopify_product_id && variantProductIds.has(product.shopify_product_id) && (
+                          <Badge variant="outline" className="ml-2 text-[10px] py-0 px-1.5 border-primary/30 text-primary">Variant</Badge>
+                        )}
+                      </td>
                       <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono text-[11px]">{product.ean}</td>
                       <td className="px-2 py-1.5 align-middle text-muted-foreground hidden xl:table-cell">{product.brand ?? "—"}</td>
                       <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">{product.stock_quantity ?? "—"}</td>
