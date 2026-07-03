@@ -44,6 +44,93 @@ async function shopifyGraphql(shopDomain: string, accessToken: string, query: st
   return data.data;
 }
 
+// Convert HTML to Shopify rich_text_field JSON structure.
+// Supports: h1-h6, p, ul, ol, li, strong/b, em/i, br, a. Everything else -> plain text.
+function htmlToShopifyRichText(html: string): string {
+  const clean = String(html ?? "").trim();
+  if (!clean) return JSON.stringify({ type: "root", children: [] });
+
+  type Node = { type: string; children?: Node[]; value?: string; level?: number; url?: string; listType?: string; bold?: boolean; italic?: boolean };
+  const stripTags = (s: string) => s.replace(/<[^>]+>/g, "");
+  const decodeEntities = (s: string) => s
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+
+  // Parse inline content (strong/em/a/br) into text nodes
+  function parseInline(inner: string): Node[] {
+    const nodes: Node[] = [];
+    const re = /<(\/?)(strong|b|em|i|a|br)(\s[^>]*)?>/gi;
+    let last = 0;
+    const stack: { bold: boolean; italic: boolean; url?: string }[] = [{ bold: false, italic: false }];
+    const pushText = (raw: string) => {
+      if (!raw) return;
+      const top = stack[stack.length - 1];
+      const text = decodeEntities(raw);
+      if (!text) return;
+      const node: Node = { type: "text", value: text };
+      if (top.bold) node.bold = true;
+      if (top.italic) node.italic = true;
+      if (top.url) {
+        nodes.push({ type: "link", url: top.url, children: [node] });
+      } else {
+        nodes.push(node);
+      }
+    };
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(inner)) !== null) {
+      pushText(inner.slice(last, m.index));
+      const closing = m[1] === "/";
+      const tag = m[2].toLowerCase();
+      const attrs = m[3] ?? "";
+      if (tag === "br") {
+        // Rich text root doesn't have a break node; ignore or add space.
+      } else if (closing) {
+        if (stack.length > 1) stack.pop();
+      } else {
+        const top = { ...stack[stack.length - 1] };
+        if (tag === "strong" || tag === "b") top.bold = true;
+        if (tag === "em" || tag === "i") top.italic = true;
+        if (tag === "a") {
+          const hrefMatch = /href=["']([^"']+)["']/i.exec(attrs);
+          if (hrefMatch) top.url = hrefMatch[1];
+        }
+        stack.push(top);
+      }
+      last = m.index + m[0].length;
+    }
+    pushText(inner.slice(last));
+    return nodes.length ? nodes : [{ type: "text", value: decodeEntities(stripTags(inner)) }];
+  }
+
+  const children: Node[] = [];
+  const blockRe = /<(h[1-6]|p|ul|ol)(\s[^>]*)?>([\s\S]*?)<\/\1>/gi;
+  let m: RegExpExecArray | null;
+  let matched = false;
+  while ((m = blockRe.exec(clean)) !== null) {
+    matched = true;
+    const tag = m[1].toLowerCase();
+    const inner = m[3];
+    if (tag.startsWith("h")) {
+      children.push({ type: "heading", level: parseInt(tag.slice(1), 10), children: parseInline(inner) });
+    } else if (tag === "p") {
+      children.push({ type: "paragraph", children: parseInline(inner) });
+    } else {
+      const items: Node[] = [];
+      const liRe = /<li(\s[^>]*)?>([\s\S]*?)<\/li>/gi;
+      let li: RegExpExecArray | null;
+      while ((li = liRe.exec(inner)) !== null) {
+        items.push({ type: "list-item", children: parseInline(li[2]) });
+      }
+      children.push({ type: "list", listType: tag === "ol" ? "ordered" : "unordered", children: items });
+    }
+  }
+  if (!matched) {
+    children.push({ type: "paragraph", children: parseInline(clean) });
+  }
+  return JSON.stringify({ type: "root", children });
+}
+
+
 function toInventoryPolicy(backorders?: string) {
   if (!backorders) return undefined;
   // Only 'yes' allows backorders. 'notify' and 'no' both DENY purchases when out of stock.
@@ -256,9 +343,9 @@ Deno.serve(async (req) => {
       if (canPush("short_description")) {
         productInput.metafields = [{
           namespace: "custom",
-          key: "short_description",
-          type: "multi_line_text_field",
-          value: String(effectiveShortDescription),
+          key: "shortdescription",
+          type: "rich_text_field",
+          value: htmlToShopifyRichText(String(effectiveShortDescription)),
         }];
         dbUpdate.short_description = effectiveShortDescription;
         logChange("short_description", product.short_description, effectiveShortDescription, "description_update");

@@ -49,7 +49,7 @@ const PRODUCT_QUERY = `#graphql
       descriptionHtml
       seo { title description }
       featuredImage { url }
-      shortDescription: metafield(namespace: "custom", key: "short_description") { value }
+      shortDescription: metafield(namespace: "custom", key: "shortdescription") { value }
       variants(first: 100) {
         nodes {
           id
