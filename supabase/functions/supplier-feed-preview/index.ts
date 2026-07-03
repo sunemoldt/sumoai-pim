@@ -308,41 +308,59 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Validate URL scheme to prevent SSRF
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(feed_url);
-    } catch {
-      return new Response(JSON.stringify({ error: "Invalid URL" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-      return new Response(JSON.stringify({ error: "Only http/https URLs are allowed" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    // Block internal/private IP ranges
-    const hostname = parsedUrl.hostname.toLowerCase();
-    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.startsWith("10.") || hostname.startsWith("192.168.") || hostname.startsWith("172.") || hostname === "169.254.169.254" || hostname.endsWith(".internal") || hostname.endsWith(".local")) {
-      return new Response(JSON.stringify({ error: "Internal URLs are not allowed" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // If URL points to our own supplier-feeds bucket, download via service role
+    // client (bucket is private → public URLs return 400 when fetched).
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const storagePrefix = `${SUPABASE_URL}/storage/v1/object/public/supplier-feeds/`;
+    const signedPrefix = `${SUPABASE_URL}/storage/v1/object/sign/supplier-feeds/`;
+    let text: string;
 
-    const res = await fetch(feed_url);
-    const text = await res.text();
+    if (feed_url.startsWith(storagePrefix) || feed_url.startsWith(signedPrefix)) {
+      const raw = feed_url.startsWith(storagePrefix)
+        ? feed_url.slice(storagePrefix.length)
+        : feed_url.slice(signedPrefix.length).split("?")[0];
+      const objectPath = decodeURIComponent(raw);
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      const { data: blob, error: dlErr } = await sb.storage
+        .from("supplier-feeds").download(objectPath);
+      if (dlErr || !blob) throw new Error(`Failed to download uploaded file: ${dlErr?.message ?? "unknown"}`);
+      text = await blob.text();
+    } else {
+      // Validate URL scheme to prevent SSRF
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(feed_url);
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid URL" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        return new Response(JSON.stringify({ error: "Only http/https URLs are allowed" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const hostname = parsedUrl.hostname.toLowerCase();
+      if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.startsWith("10.") || hostname.startsWith("192.168.") || hostname.startsWith("172.") || hostname === "169.254.169.254" || hostname.endsWith(".internal") || hostname.endsWith(".local")) {
+        return new Response(JSON.stringify({ error: "Internal URLs are not allowed" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
-    if (!res.ok) {
-      const errorSnippet = text.trim().slice(0, 200);
-      throw new Error(
-        errorSnippet
-          ? `Failed to fetch feed: ${res.status} ${errorSnippet}`
-          : `Failed to fetch feed: ${res.status}`,
-      );
+      const res = await fetch(feed_url);
+      text = await res.text();
+      if (!res.ok) {
+        const errorSnippet = text.trim().slice(0, 200);
+        throw new Error(
+          errorSnippet
+            ? `Failed to fetch feed: ${res.status} ${errorSnippet}`
+            : `Failed to fetch feed: ${res.status}`,
+        );
+      }
     }
 
     let columns: string[] = [];
