@@ -1,39 +1,44 @@
-# Fejl: kort beskrivelse synkes ikke ved oprettelse i Shopify
+## Problem
 
-## Årsag
+Skærmbillederne viser to metafields på produktet i Shopify:
 
-`shopify-create-product` sender kun `title`, `descriptionHtml` (lang beskrivelse), `vendor` og `productType` til Shopify. Den skriver **ikke** kort beskrivelse (som lever i metafeltet `custom.short_description` i Shopify) og heller ikke SEO-felter (`seo.title` / `seo.description`).
+- `custom.shortdescription` (uden underscore) → indeholder den lange beskrivelse. **Det er dette felt dit tema faktisk renderer øverst på produktsiden.**
+- `custom.short_description` (med underscore) → er det felt vores PIM-sync skriver til. Dit tema ignorerer det.
 
-`shopify-update-product` håndterer det korrekt via metafield + `seo`-objekt, men auto-enqueue-triggeren fanger ikke situationen efter oprettelse: den kører kun når felter som `short_description` ændres — og ved en frisk oprettelse ændres de netop ikke bagefter, så der queues aldrig et update. Resultat: kort beskrivelse og SEO bliver i PIM men når aldrig frem til Shopify.
+Derfor "sker der ingenting": vores opdateringer lander i det rigtige felt teknisk set, men i det forkerte metafelt i forhold til hvad dit Shopify-tema læser. Storefront'en har derfor stadig den gamle (lange) tekst.
 
-Samme problem gælder alle produkter oprettet via "Gem og send til Shopify"-knappen.
+Samme problem ramte oprindeligt migreringen fra WooCommerce: WC's excerpt blev importeret ind i `custom.shortdescription`, men vores kode arbejder med `custom.short_description`.
 
 ## Løsning
 
-### 1. Ret `shopify-create-product` så den skubber alle relevante felter med samme
-Udvid `productCreate`-mutationen så den — i samme kald — sender:
-- `descriptionHtml` (allerede der)
-- `metafields: [{ namespace: "custom", key: "short_description", type: "multi_line_text_field", value: ... }]` når `short_description` findes
-- `seo: { title, description }` når `meta_title` / `meta_description` findes
+Ret metafield-nøglen i alle edge functions til `shortdescription` (det tema-læste felt), og kør en backfill der kopierer PIM's `short_description` ind i det korrekte metafelt for alle Shopify-synkede produkter. Det gamle `short_description`-metafelt lades urørt (ingen sletning — sikkert rollback muligt).
 
-Vælg samme feltnavne/typer som `shopify-update-product` bruger, så de to funktioner er konsistente.
+### Ændringer
 
-### 2. Backfill for allerede oprettede produkter
-Tilføj en engangs-knap i **Indstillinger → Shopify** ("Genskub kort beskrivelse + SEO til Shopify") som:
-- Finder produkter med `shopify_product_id IS NOT NULL` og `shopify_sync_enabled = true`, hvor `short_description IS NOT NULL` eller `meta_title/meta_description IS NOT NULL`
-- Indsætter en række i `shopify_update_queue` med payload der eksplicit angiver `short_description`, `meta_title`, `meta_description` og `changed_fields`, så `shopify-update-product` skubber dem
-- Kører via eksisterende køarbejder — ingen ny throttling-risiko
+1. **`supabase/functions/shopify-update-product/index.ts`**
+   - Metafield-mutation: `key: "short_description"` → `key: "shortdescription"` (namespace `custom` uændret).
 
-Alternativt (mere målrettet, hvis vi vil holde det snævert): kun produkter oprettet inden for de sidste 30 dage og oprettet af `shopify-create-product` (kan filtreres via `product_change_log` hvor `source = 'shopify-create-product'`).
+2. **`supabase/functions/shopify-create-product/index.ts`**
+   - Samme ændring i `productCreate`-metafields-blokken.
 
-### 3. Verifikation
-- Opret et testprodukt via "Gem og send til Shopify" med kort beskrivelse udfyldt → tjek Shopify-admin at metafeltet `custom.short_description` er sat straks
-- Kør backfill og bekræft at HP Thunderbolt 4 Ultra 180 W G6 får sin kort beskrivelse i Shopify
+3. **`supabase/functions/shopify-pull/index.ts`**
+   - GraphQL-query og mapping: læs fra `custom.shortdescription` i stedet for `custom.short_description`, så vi henter det tema-relevante felt ved pull/backfill.
 
-## Teknisk detalje
+4. **Backfill for eksisterende produkter**
+   - Genbrug den eksisterende "Genskub kort beskrivelse + SEO"-knap i `ShopifyPage.tsx` (ingen UI-ændring).
+   - Efter kode-ændringen kører den nu automatisk push til `custom.shortdescription` for alle ~571 Shopify-produkter.
 
-- Filer der ændres: `supabase/functions/shopify-create-product/index.ts` (udvid `productInput`), ny lille UI-komponent + evt. ny edge function `shopify-backfill-short-description` — eller genbrug direkte insert i `shopify_update_queue` fra klienten (kræver ingen ny funktion, RLS tillader det allerede for authenticated).
-- Ingen DB-migration nødvendig.
-- Ingen ændring af `auto_enqueue_shopify_update`-trigger — vi løser det ved kilden i stedet.
+5. **Verifikation**
+   - Kør backfill.
+   - Hent UCG-ULTRA direkte fra Shopify GraphQL og bekræft at `custom.shortdescription` nu matcher PIM's korte beskrivelse.
+   - Bed dig genindlæse produktsiden for at bekræfte visuelt.
 
-Sig til hvis du vil have backfill for **alle** eksisterende Shopify-produkter (bredere, men bruger flere Shopify API-kald) eller kun for de nyligt oprettede.
+### Ikke omfattet (bevidst)
+
+- Vi rører **ikke** ved det gamle `custom.short_description`-metafelt — det bliver liggende urørt som backup, kan slettes manuelt senere hvis ønsket.
+- Ingen tema-ændringer nødvendige.
+- Ingen ændringer i PIM-UI eller database-skema.
+
+### Teknisk note
+
+Både create og update bruger allerede `metafieldsSet`-mønstret (upsert), så eksisterende `custom.shortdescription`-værdier bliver overskrevet uden konflikter. Retry-logikken og `dbValueIfQueued`-helperen fra sidste tur er stadig aktive og påvirkes ikke.
