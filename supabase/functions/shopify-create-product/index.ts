@@ -139,6 +139,7 @@ Deno.serve(async (req) => {
     await supabase.from("master_products").update({
       shopify_product_id: numericProductId,
       shopify_variant_id: numericVariantId,
+      shopify_sync_enabled: true,
       lifecycle_status: "pending_activation",
       updated_at: new Date().toISOString(),
     }).eq("id", master_product_id);
