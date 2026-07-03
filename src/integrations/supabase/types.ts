@@ -1210,6 +1210,7 @@ export type Database = {
         }[]
       }
       get_db_stats: { Args: never; Returns: Json }
+      get_monitoring_overview: { Args: never; Returns: Json }
       merge_attribute_definitions: {
         Args: { p_source_id: string; p_target_id: string }
         Returns: Json
