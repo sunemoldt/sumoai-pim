@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 type Line = {
+  _key?: string;
   id?: string;
   pim_product_id: string | null;
   product_name: string;
