@@ -460,6 +460,7 @@ Deno.serve(async (req) => {
       for (const mp of masterProducts ?? []) {
         const normEan = mp.ean.replace(/^0+/, "") || mp.ean;
         eanToId.set(normEan, mp.id);
+      }
     }
 
     // Unmatched mode: return supplier feed rows whose EAN does NOT map to a master product
