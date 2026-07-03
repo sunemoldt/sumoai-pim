@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: p, error: pErr } = await supabase
       .from("master_products")
-      .select("id, title, ean, sku, brand, category, webshop_price, sale_price, stock_quantity, short_description, long_description, lifecycle_status, shopify_product_id, weight_kg, backorder_policy")
+      .select("id, title, ean, sku, brand, category, webshop_price, sale_price, stock_quantity, short_description, long_description, meta_title, meta_description, lifecycle_status, shopify_product_id, weight_kg, backorder_policy")
       .eq("id", master_product_id)
       .single();
     if (pErr || !p) {
@@ -87,6 +87,18 @@ Deno.serve(async (req) => {
       vendor: p.brand ?? undefined,
       productType: p.category ?? undefined,
     };
+    if (p.short_description) {
+      productInput.metafields = [{
+        namespace: "custom",
+        key: "short_description",
+        type: "multi_line_text_field",
+        value: String(p.short_description),
+      }];
+    }
+    const seoObj: Record<string, unknown> = {};
+    if (p.meta_title) seoObj.title = String(p.meta_title);
+    if (p.meta_description) seoObj.description = String(p.meta_description);
+    if (Object.keys(seoObj).length > 0) productInput.seo = seoObj;
     const created = await shopifyGraphql(conn.shop_domain, conn.access_token, productMutation, { input: productInput });
     const errs = created.productCreate.userErrors;
     if (errs?.length) throw new Error(errs.map((e: { message: string }) => e.message).join(", "));
