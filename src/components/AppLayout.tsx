@@ -20,9 +20,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {/* Mobile sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen} key={location.pathname}>
         <SheetContent side="left" className="w-64 p-0">
-          <VisuallyHidden>
-            <SheetTitle>Navigation</SheetTitle>
-          </VisuallyHidden>
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
           <AppSidebar onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
