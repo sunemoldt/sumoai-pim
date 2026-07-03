@@ -239,6 +239,17 @@ export default function ProductListPage() {
     return set;
   }, [products]);
 
+  // Shopify product IDs that map to more than one PIM master → variant siblings
+  const variantProductIds = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of products) {
+      if (p.shopify_product_id) counts.set(p.shopify_product_id, (counts.get(p.shopify_product_id) ?? 0) + 1);
+    }
+    const set = new Set<string>();
+    for (const [id, c] of counts) if (c > 1) set.add(id);
+    return set;
+  }, [products]);
+
   const filtered = useMemo(() => {
     return products.filter((product) => {
       if (stockFilter === "instock" && product.stock_status !== "instock") return false;
@@ -798,7 +809,12 @@ export default function ProductListPage() {
                           </div>
                         )}
                       </td>
-                      <td className="max-w-[240px] px-2 py-1.5 align-middle font-medium text-foreground truncate">{product.title}</td>
+                      <td className="max-w-[240px] px-2 py-1.5 align-middle font-medium text-foreground truncate">
+                        {product.title}
+                        {product.shopify_product_id && variantProductIds.has(product.shopify_product_id) && (
+                          <Badge variant="outline" className="ml-2 text-[10px] py-0 px-1.5 border-primary/30 text-primary">Variant</Badge>
+                        )}
+                      </td>
                       <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono text-[11px]">{product.ean}</td>
                       <td className="px-2 py-1.5 align-middle text-muted-foreground hidden xl:table-cell">{product.brand ?? "—"}</td>
                       <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">{product.stock_quantity ?? "—"}</td>
