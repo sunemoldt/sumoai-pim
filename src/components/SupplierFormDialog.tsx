@@ -95,6 +95,18 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
       if (error) throw error;
       const { data: urlData } = supabase.storage.from("supplier-feeds").getPublicUrl(path);
       setFeedUrl(urlData.publicUrl);
+
+      // Persist immediately when editing an existing supplier so the URL isn't lost
+      // if the user closes the dialog without pressing "Gem".
+      if (supplier) {
+        const { error: updErr } = await supabase
+          .from("suppliers")
+          .update({ feed_url: urlData.publicUrl })
+          .eq("id", supplier.id);
+        if (updErr) throw updErr;
+        queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      }
+
       toast.success("Fil uploadet");
     } catch (err: any) {
       toast.error(err?.message || "Upload fejlede");
