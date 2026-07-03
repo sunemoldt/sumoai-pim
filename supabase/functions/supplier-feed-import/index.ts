@@ -421,6 +421,7 @@ Deno.serve(async (req) => {
         if (supplier.feed_type === "xml") {
           feedRows = parseXml(text);
         } else {
+          // csv, txt (semikolon-separeret) og alt andet parses som CSV
           feedRows = parseCsv(text, delimiter);
         }
       }
