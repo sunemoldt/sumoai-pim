@@ -66,7 +66,7 @@ export function ShopifyShortDescBackfillCard() {
       let inserted = 0;
       for (let i = 0; i < rows.length; i += chunkSize) {
         const chunk = rows.slice(i, i + chunkSize);
-        const { error: insErr } = await supabase.from("shopify_update_queue").insert(chunk);
+        const { error: insErr } = await supabase.from("shopify_update_queue").insert(chunk as any);
         if (insErr) throw insErr;
         inserted += chunk.length;
       }
