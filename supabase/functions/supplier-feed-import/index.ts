@@ -271,13 +271,14 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    const { supplier_id, target_ean: rawTargetEan } = await req.json();
+    const { supplier_id, target_ean: rawTargetEan, mode: rawMode } = await req.json();
     if (!supplier_id) {
       return new Response(JSON.stringify({ error: "supplier_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const mode: "import" | "unmatched" = rawMode === "unmatched" ? "unmatched" : "import";
     // Optional: only process rows matching this normalized EAN (used by supplier-rematch-product)
     const targetEan: string | null = rawTargetEan
       ? (String(rawTargetEan).trim().replace(/^0+/, "") || String(rawTargetEan).trim())
