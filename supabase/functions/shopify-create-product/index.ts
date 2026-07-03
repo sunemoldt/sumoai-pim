@@ -91,8 +91,8 @@ Deno.serve(async (req) => {
       productInput.metafields = [{
         namespace: "custom",
         key: "shortdescription",
-        type: "multi_line_text_field",
-        value: String(p.short_description),
+        type: "rich_text_field",
+        value: htmlToShopifyRichText(String(p.short_description)),
       }];
     }
     const seoObj: Record<string, unknown> = {};

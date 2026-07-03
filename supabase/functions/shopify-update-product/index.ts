@@ -344,8 +344,8 @@ Deno.serve(async (req) => {
         productInput.metafields = [{
           namespace: "custom",
           key: "shortdescription",
-          type: "multi_line_text_field",
-          value: String(effectiveShortDescription),
+          type: "rich_text_field",
+          value: htmlToShopifyRichText(String(effectiveShortDescription)),
         }];
         dbUpdate.short_description = effectiveShortDescription;
         logChange("short_description", product.short_description, effectiveShortDescription, "description_update");
