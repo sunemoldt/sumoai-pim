@@ -307,7 +307,7 @@ export default function QuoteEditorPage() {
                 const marginPct = quoteEx > 0 ? ((quoteEx - l.purchase_price) / quoteEx) * 100 : 0;
                 const discountPct = l.list_price > 0 ? ((l.list_price - l.quote_price) / l.list_price) * 100 : 0;
                 return (
-                  <TableRow key={idx}>
+                  <TableRow key={l._key ?? l.id ?? idx}>
                     <TableCell>
                       <ProductPicker
                         value={l.product_name}
