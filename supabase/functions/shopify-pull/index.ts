@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
     }
 
 
-    const results: { id: string; ok: boolean; updated?: string[]; variants?: number; error?: string }[] = [];
+    const results: { id: string; ok: boolean; updated?: string[]; variants?: number; split_created?: number; error?: string }[] = [];
     let i = 0;
     for (const t of targets) {
       i++;
