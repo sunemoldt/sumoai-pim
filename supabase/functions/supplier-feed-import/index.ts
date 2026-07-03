@@ -406,7 +406,8 @@ Deno.serve(async (req) => {
           if (!rawEan) return;
           const ean = rawEan.replace(/^0+/, "") || rawEan;
           if (targetEan && ean !== targetEan) return;
-          if (!eanToIdEarlyOuter!.has(ean)) return;
+          const known = eanToIdEarlyOuter!.has(ean);
+          if (mode === "unmatched" ? known : !known) return;
           const row: Record<string, string> = {};
           headers.forEach((h, idx) => {
             row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
