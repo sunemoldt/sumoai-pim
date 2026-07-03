@@ -414,10 +414,26 @@ Deno.serve(async (req) => {
         });
         console.log(`Streamed CSV: kept ${feedRows.length} matching rows`);
       } else {
-        assertSafeFeedUrl(supplier.feed_url!);
-        const res = await fetch(supplier.feed_url!);
-        if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
-        text = await res.text();
+        // If URL points to our own supplier-feeds storage bucket, download via
+        // service role (bucket is private, so public fetch returns 400).
+        const storagePrefix = `${SUPABASE_URL}/storage/v1/object/public/supplier-feeds/`;
+        const signedPrefix = `${SUPABASE_URL}/storage/v1/object/sign/supplier-feeds/`;
+        const url = supplier.feed_url!;
+        if (url.startsWith(storagePrefix) || url.startsWith(signedPrefix)) {
+          const rawPath = url.startsWith(storagePrefix)
+            ? url.slice(storagePrefix.length)
+            : url.slice(signedPrefix.length).split("?")[0];
+          const objectPath = decodeURIComponent(rawPath);
+          const { data: blob, error: dlErr } = await supabase.storage
+            .from("supplier-feeds").download(objectPath);
+          if (dlErr || !blob) throw new Error(`Failed to download feed file: ${dlErr?.message ?? "unknown"}`);
+          text = await blob.text();
+        } else {
+          assertSafeFeedUrl(url);
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
+          text = await res.text();
+        }
         if (supplier.feed_type === "xml") {
           feedRows = parseXml(text);
         } else {
