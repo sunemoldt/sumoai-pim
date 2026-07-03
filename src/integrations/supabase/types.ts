@@ -1232,6 +1232,8 @@ export type Database = {
         Args: { p_enabled: boolean }
         Returns: undefined
       }
+      try_lock_shopify_queue_worker: { Args: never; Returns: boolean }
+      unlock_shopify_queue_worker: { Args: never; Returns: boolean }
       verify_internal_invoke_secret: {
         Args: { p_secret: string }
         Returns: boolean
