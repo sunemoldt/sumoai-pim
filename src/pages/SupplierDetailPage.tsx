@@ -31,7 +31,7 @@ type UnmatchedResult = {
 export default function SupplierDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<UnmatchedResult | null>(null);
   const [filter, setFilter] = useState("");
