@@ -23,6 +23,7 @@ export default function SupplierListPage() {
   const feedTypeLabels: Record<string, string> = {
     xml: "XML Feed",
     csv: "CSV Feed",
+    txt: "TXT Feed",
     api: "API",
     manual: "Manuel",
   };

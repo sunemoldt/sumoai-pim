@@ -194,6 +194,7 @@ export default function SupplierFormDialog({ open, onOpenChange, supplier }: Pro
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="csv">CSV</SelectItem>
+                <SelectItem value="txt">TXT (semikolon-separeret)</SelectItem>
                 <SelectItem value="xml">XML</SelectItem>
                 <SelectItem value="ftp">FTP (CSV/XML)</SelectItem>
                 <SelectItem value="api">API</SelectItem>
