@@ -70,86 +70,92 @@ Deno.serve(async (req) => {
 
 
   // Pick up due pending items
-  const { data: items, error } = await supabase
-    .from("shopify_update_queue")
-    .select("id, master_product_id, payload, attempts, max_attempts")
-    .eq("status", "pending")
-    .lte("next_attempt_at", new Date().toISOString())
-    .order("next_attempt_at", { ascending: true })
-    .limit(batchSize);
+    const { data: items, error } = await supabase
+      .from("shopify_update_queue")
+      .select("id, master_product_id, payload, attempts, max_attempts")
+      .eq("status", "pending")
+      .lte("next_attempt_at", new Date().toISOString())
+      .order("next_attempt_at", { ascending: true })
+      .limit(batchSize);
 
-  if (error) return json({ error: error.message }, 500);
-  if (!items || items.length === 0) return json({ processed: 0, message: "Ingen opgaver i kø" });
+    if (error) return json({ error: error.message }, 500);
+    if (!items || items.length === 0) return json({ processed: 0, message: "Ingen opgaver i kø" });
 
-  // Mark as processing to prevent overlap
-  const ids = items.map((i) => i.id);
-  await supabase.from("shopify_update_queue")
-    .update({ status: "processing" })
-    .in("id", ids);
+    // Mark as processing to prevent overlap
+    const ids = items.map((i) => i.id);
+    await supabase.from("shopify_update_queue")
+      .update({ status: "processing" })
+      .in("id", ids);
 
-  const results: Array<{ id: string; status: string; message?: string }> = [];
-  let processed = 0, succeeded = 0, requeued = 0, failed = 0;
+    const results: Array<{ id: string; status: string; message?: string }> = [];
+    let processed = 0, succeeded = 0, requeued = 0, failed = 0;
 
-  for (const item of items) {
-    processed++;
-    const attempts = (item.attempts ?? 0) + 1;
-    try {
-      const payload = {
-        ...(item.payload as Record<string, unknown>),
-        master_product_id: item.master_product_id,
-        queued: true, // prevents re-enqueue loop
-      };
-      const resp = await callFn("shopify-update-product", payload);
+    for (const item of items) {
+      processed++;
+      const attempts = (item.attempts ?? 0) + 1;
+      try {
+        const payload = {
+          ...(item.payload as Record<string, unknown>),
+          master_product_id: item.master_product_id,
+          queued: true, // prevents re-enqueue loop
+        };
+        const resp = await callFn("shopify-update-product", payload);
 
-      if (resp.ok && !(resp.data && (resp.data as { error?: string }).error)) {
-        await supabase.from("shopify_update_queue").update({
-          status: "done",
-          attempts,
-          last_error: null,
-          completed_at: new Date().toISOString(),
-        }).eq("id", item.id);
-        succeeded++;
-        results.push({ id: item.id, status: "done" });
-      } else {
-        const msg = String((resp.data as { error?: string } | null)?.error ?? resp.raw.slice(0, 300));
-        const isThrottle = /rate.?limit|throttl|429|too many requests|exceeded for trace/i.test(msg);
-        if (isThrottle && attempts < item.max_attempts) {
-          // Exponential backoff: 60s, 120s, 240s … capped at 30 min
-          const delaySec = Math.min(60 * Math.pow(2, attempts - 1), 1800);
+        if (resp.ok && !(resp.data && (resp.data as { error?: string }).error)) {
           await supabase.from("shopify_update_queue").update({
-            status: "pending",
+            status: "done",
             attempts,
-            last_error: msg,
-            next_attempt_at: new Date(Date.now() + delaySec * 1000).toISOString(),
+            last_error: null,
+            completed_at: new Date().toISOString(),
           }).eq("id", item.id);
-          requeued++;
-          results.push({ id: item.id, status: "requeued", message: `retry in ${delaySec}s` });
+          succeeded++;
+          results.push({ id: item.id, status: "done" });
         } else {
-          await supabase.from("shopify_update_queue").update({
-            status: attempts >= item.max_attempts ? "failed" : "pending",
-            attempts,
-            last_error: msg,
-            next_attempt_at: new Date(Date.now() + 300_000).toISOString(),
-          }).eq("id", item.id);
-          if (attempts >= item.max_attempts) failed++; else requeued++;
-          results.push({ id: item.id, status: attempts >= item.max_attempts ? "failed" : "requeued", message: msg });
+          const msg = String((resp.data as { error?: string } | null)?.error ?? resp.raw.slice(0, 300));
+          const isThrottle = /rate.?limit|throttl|429|too many requests|exceeded for trace/i.test(msg);
+          if (isThrottle && attempts < item.max_attempts) {
+            // Exponential backoff: 60s, 120s, 240s … capped at 30 min
+            const delaySec = Math.min(60 * Math.pow(2, attempts - 1), 1800);
+            await supabase.from("shopify_update_queue").update({
+              status: "pending",
+              attempts,
+              last_error: msg,
+              next_attempt_at: new Date(Date.now() + delaySec * 1000).toISOString(),
+            }).eq("id", item.id);
+            requeued++;
+            results.push({ id: item.id, status: "requeued", message: `retry in ${delaySec}s` });
+            // Back off aggressively for the rest of this batch too.
+            await sleep(3000);
+          } else {
+            await supabase.from("shopify_update_queue").update({
+              status: attempts >= item.max_attempts ? "failed" : "pending",
+              attempts,
+              last_error: msg,
+              next_attempt_at: new Date(Date.now() + 300_000).toISOString(),
+            }).eq("id", item.id);
+            if (attempts >= item.max_attempts) failed++; else requeued++;
+            results.push({ id: item.id, status: attempts >= item.max_attempts ? "failed" : "requeued", message: msg });
+          }
         }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        await supabase.from("shopify_update_queue").update({
+          status: attempts >= item.max_attempts ? "failed" : "pending",
+          attempts,
+          last_error: msg,
+          next_attempt_at: new Date(Date.now() + 300_000).toISOString(),
+        }).eq("id", item.id);
+        if (attempts >= item.max_attempts) failed++; else requeued++;
+        results.push({ id: item.id, status: "error", message: msg });
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      await supabase.from("shopify_update_queue").update({
-        status: attempts >= item.max_attempts ? "failed" : "pending",
-        attempts,
-        last_error: msg,
-        next_attempt_at: new Date(Date.now() + 300_000).toISOString(),
-      }).eq("id", item.id);
-      if (attempts >= item.max_attempts) failed++; else requeued++;
-      results.push({ id: item.id, status: "error", message: msg });
+
+      // Throttle worker itself to stay friendly to Shopify
+      await sleep(1200);
     }
 
-    // Throttle worker itself to stay friendly to Shopify
-    await sleep(800);
+    return json({ processed, succeeded, requeued, failed, results });
+  } finally {
+    await supabase.rpc("unlock_shopify_queue_worker").catch(() => {});
   }
-
-  return json({ processed, succeeded, requeued, failed, results });
 });
+
