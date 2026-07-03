@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { ShoppingBag, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, Copy, Trash2, Star } from "lucide-react";
 import { ShopifyRematchCard } from "@/components/ShopifyRematchCard";
+import { ShopifyShortDescBackfillCard } from "@/components/ShopifyShortDescBackfillCard";
 import { ShopifyUnmatchedCard } from "@/components/ShopifyUnmatchedCard";
 
 interface Status {
