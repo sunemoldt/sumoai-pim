@@ -104,6 +104,7 @@ export default function QuoteEditorPage() {
 
   const addLine = () => {
     setLines((prev) => [...prev, {
+      _key: crypto.randomUUID(),
       pim_product_id: null, product_name: "", quantity: 1,
       purchase_price: 0, list_price: 0, quote_price: 0, sort_order: prev.length,
     }]);
