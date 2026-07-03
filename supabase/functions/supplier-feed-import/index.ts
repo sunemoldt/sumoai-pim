@@ -461,9 +461,70 @@ Deno.serve(async (req) => {
         const normEan = mp.ean.replace(/^0+/, "") || mp.ean;
         eanToId.set(normEan, mp.id);
       }
+    // Unmatched mode: return supplier feed rows whose EAN does NOT map to a master product
+    if (mode === "unmatched") {
+      const eanCol = mapping.ean;
+      const priceCol = mapping.purchase_price;
+      const stockCol = mapping.stock_quantity;
+      const skuCol = mapping.sku;
+      const titleCol = (mapping as any).title || (mapping as any).name || (mapping as any).short_description;
+      const brandCol = (mapping as any).brand || (mapping as any).manufacturer;
+      const seen = new Set<string>();
+      const unmatched: Array<{
+        ean: string;
+        title: string | null;
+        supplier_sku: string | null;
+        brand: string | null;
+        purchase_price: number | null;
+        stock_quantity: number | null;
+        in_stock: boolean;
+      }> = [];
+      for (const row of feedRows) {
+        const rawEan = eanCol ? row[eanCol]?.trim() : "";
+        if (!rawEan) continue;
+        const ean = rawEan.replace(/^0+/, "") || rawEan;
+        if (eanToId.has(ean)) continue;
+        if (seen.has(ean)) continue;
+        seen.add(ean);
+        const priceStr = priceCol ? row[priceCol]?.trim().replace(",", ".") : "";
+        let price = priceStr ? parseFloat(priceStr) : NaN;
+        if (!isNaN(price) && (mapping as any)._currency === "EUR") {
+          const rate = parseFloat(((mapping as any)._eur_rate ?? "7.46").toString().replace(",", ".")) || 7.46;
+          price = Math.round(price * rate * 100) / 100;
+        }
+        const stockStr = stockCol ? row[stockCol]?.trim() : "";
+        const stockQty = stockStr ? parseInt(stockStr, 10) : NaN;
+        let inStock = true;
+        if (mapping.in_stock) {
+          const v = row[mapping.in_stock]?.trim().toLowerCase();
+          inStock = v === "1" || v === "yes" || v === "ja" || v === "true" || v === "in stock" || v === "på lager";
+        } else if (!isNaN(stockQty)) {
+          inStock = stockQty > 0;
+        }
+        unmatched.push({
+          ean,
+          title: titleCol ? (row[titleCol]?.trim() || null) : null,
+          supplier_sku: skuCol ? (row[skuCol]?.trim() || null) : null,
+          brand: brandCol ? (row[brandCol]?.trim() || null) : null,
+          purchase_price: isNaN(price) ? null : price,
+          stock_quantity: isNaN(stockQty) ? null : stockQty,
+          in_stock: inStock,
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          success: true,
+          supplier_id: supplier.id,
+          supplier_name: supplier.name,
+          total_rows: feedRows.length,
+          unmatched_count: unmatched.length,
+          unmatched,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
-    // Process feed rows - only those matching existing EANs
+
     let imported = 0;
     let skipped = 0;
     const errors: string[] = [];
