@@ -1,106 +1,38 @@
-# Redesign af Monitoring — "Hvad sker der lige nu?"
+## Ændringer
 
-Den nuværende side viser DB-størrelse og et 14-dages søjlediagram, men ikke **hvad systemet reelt laver**. Ny side prioriterer live-aktivitet, sync-sundhed og fejl — det man har brug for daglig drift.
+### 1. Responsivt design (mobil)
+- `AppLayout` + `AppSidebar`: gør sidebar til en `Sheet`/off-canvas på mobil (<768px) med hamburger-trigger i en top-header. På desktop bevares nuværende faste sidebar.
+- Gennemgå de mest brugte sider (`DashboardPage`, `ProductListPage`, `SupplierListPage`, `MonitoringPage`, `ProductDetailPage`) og justér grid/tabeller: `grid-cols-*` med sm/md breakpoints, tabeller får horisontal scroll wrapper, statistik-kort stables på mobil.
+- Padding i `AppLayout` reduceres på mobil (`p-4 lg:p-8`).
 
-## Ny layout (top → bund)
+### 2. AI-indsigter som egen menu
+- Fjern `AiInsightsWidget` fra `DashboardPage`.
+- Ny rute `/ai-insights` + `src/pages/AiInsightsPage.tsx` der viser widget'et i fuld bredde.
+- Nyt menupunkt i `AppSidebar` ("AI-indsigter", Sparkles-ikon) placeret over Monitoring.
 
-### 1. Status-stribe (4 kort)
-- **Shopify-kø**: pending / processing / failed antal + ældste pending-alder ("2m gammel"). Rødt hvis failed > 0 eller ældste pending > 10 min.
-- **Ændringer sidste time**: antal `product_change_log`-rækker + delta vs. forrige time.
-- **Aktive leverandører**: X af Y kørt inden for planlagt interval; rødt hvis en er forsinket.
-- **Fejl sidste 24t**: import-fejl + failed queue-jobs samlet. Klik → scroller til fejl-panel.
+### 3. Omdøb "WC Import" → "WooCommerce"
+- `AppSidebar` label ændres. Rute `/import` bevares (ingen breaking changes).
 
-### 2. Live aktivitetsfeed (venstre, 2/3 bredde)
-Seneste 40 `product_change_log` entries — realtime via Supabase-subscription på `product_change_log`. Hver linje:
-- Tidsstempel (relativ: "3s siden")
-- Produkt-titel (link til `/products/:id`)
-- Felt der ændrede sig (`webshop_price`, `stock_quantity`, …)
-- Gammel → ny værdi (trunkeret)
-- Kilde-badge farvekodet: `supplier:*` blå, `shopify-*` lilla, `stock-sync` grøn, `manual`/`auto-pim-edit` grå, `low-margin-guard` orange, `revert` rød.
+### 4. Åbn produkter i nyt vindue fra dashboard-lister
+- På Dashboard: "Produkter med lav avance", "Udsolgte produkter" og "Mest besøgte" — hver række/kort skal åbne `/products/:id` i ny fane (`window.open(..., "_blank")` eller `<a target="_blank">`) i stedet for at navigere i samme vindue.
 
-Filter-chips øverst: "Alle / Priser / Lager / Shopify / Leverandører / Manuelt".
+### 5. Lav avance kun for produkter med tilknyttet leverandør
+- Logikken der beregner lav-avance skal filtrere produkter fra hvor `supplier_products.length === 0` (dvs. ingen leverandør tilknyttet). Kun produkter hvor mindst én leverandør er tilknyttet — og hvor avancen mod billigste (in-stock, ellers any) leverandør er under tærsklen — skal vises.
+- Gælder både dashboard-listen og evt. tælleren i `StatCard`.
 
-### 3. Kilde-fordeling (højre, 1/3)
-Donut over sidste 24t change-log grupperet på source-familie (supplier / shopify / stock / manuel / guard / andet). Svarer på "hvem ændrer mest?".
+### 6. Ny oversigt: "Produkter hos leverandør men ikke tilknyttet"
+- På leverandør-detaljesiden (eller ny fane på `SupplierListPage` → klik på leverandør): vis alle rækker fra `supplier_products` for den valgte leverandør hvor `master_product_id` er null **eller** hvor EAN'et findes i leverandørens feed men ikke er koblet til et `master_products`-produkt.
+- Query: hent leverandørens rå feed-rækker (fra `supplier_products` eller seneste `feed_run` payload) og cross-reference med `master_products.ean`. Vis EAN, titel fra feed, pris, lager, samt knap "Opret produkt" / "Match til eksisterende".
+- Placering: ny tab "Ikke tilknyttet" på en leverandør-detaljeside (opret `SupplierDetailPage` hvis den ikke findes), tilgængelig via klik på leverandøren i listen.
 
-### 4. Shopify-kø detaljer
-- Sparkline: jobs behandlet pr. 10 min sidste 6 timer (fra `completed_at`).
-- Tabel: seneste 10 failed jobs — produkt, source, attempts, `last_error` (klik → udvidet).
-- Knap "Genstart worker" (invoker `shopify-queue-worker`).
+## Tekniske detaljer
 
-### 5. Leverandør-sync status
-Én række pr. leverandør:
-- Navn, feed_type, sidste kørsel (relativ), sidste resultat (imported/skipped/errors), næste planlagte kørsel, "Kør nu"-knap.
-- Rød indikator hvis `last_sync_at` > 2× planlagt interval eller sidste run havde fejl.
+- Ingen DB-migrationer nødvendige — al data findes allerede i `supplier_products` og `master_products`.
+- `useIsMobile` bruges til at skifte mellem Sheet-sidebar og fast sidebar.
+- Nye komponenter: `src/pages/AiInsightsPage.tsx`, `src/pages/SupplierDetailPage.tsx`, `src/components/MobileHeader.tsx`.
+- Rute-tilføjelser i `src/App.tsx`: `/ai-insights`, `/suppliers/:id`.
 
-### 6. Fejl-panel
-- Failed rows fra `shopify_update_queue` (status='failed').
-- Import-runs med `errors` array ikke-tom sidste 7d, med expandable error-liste.
+## Spørgsmål inden implementering
 
-### 7. Change-log volume (behold nuværende chart, men rykket ned)
-14-dages stacked bar — nu som "trend"-kontekst i bunden.
-
-### 8. DB-plads (behold som accordion i bunden)
-Foldbar; ikke primær info.
-
-## Data-hentning
-
-Én ny RPC: `get_monitoring_overview()` returnerer JSONB med alt i status-striben + donut-data + queue-buckets i ét kald, så siden loader hurtigt.
-
-```sql
-create or replace function public.get_monitoring_overview()
-returns jsonb language sql security definer set search_path = public as $$
-  select jsonb_build_object(
-    'queue', (select jsonb_build_object(
-      'pending', count(*) filter (where status='pending'),
-      'processing', count(*) filter (where status='processing'),
-      'failed', count(*) filter (where status='failed'),
-      'oldest_pending_seconds',
-        extract(epoch from now() - min(created_at)) filter (where status='pending')
-    ) from public.shopify_update_queue),
-    'changes_last_hour', (select count(*) from public.product_change_log where created_at > now() - interval '1 hour'),
-    'changes_prev_hour', (select count(*) from public.product_change_log where created_at > now() - interval '2 hours' and created_at <= now() - interval '1 hour'),
-    'errors_24h', (
-      (select count(*) from public.shopify_update_queue where status='failed' and updated_at > now() - interval '24 hours')
-      + (select count(*) from public.import_logs where status='failed' and started_at > now() - interval '24 hours')
-    ),
-    'source_breakdown_24h', (
-      select jsonb_object_agg(src, cnt)
-      from (
-        select coalesce(source,'unknown') as src, count(*) as cnt
-        from public.product_change_log
-        where created_at > now() - interval '24 hours'
-        group by 1 order by 2 desc
-      ) t
-    ),
-    'queue_throughput_6h', (
-      select jsonb_agg(jsonb_build_object('bucket', bucket, 'count', cnt) order by bucket)
-      from (
-        select date_trunc('minute', completed_at) - (extract(minute from completed_at)::int % 10) * interval '1 minute' as bucket,
-               count(*) as cnt
-        from public.shopify_update_queue
-        where completed_at > now() - interval '6 hours' and status='completed'
-        group by 1
-      ) t
-    )
-  );
-$$;
-grant execute on function public.get_monitoring_overview() to authenticated;
-```
-
-Realtime subscription på `product_change_log` INSERT for aktivitetsfeedet — kræver at tabellen er i `supabase_realtime` publikationen (migration tilføjer den hvis den mangler).
-
-Failed queue-jobs + seneste supplier-runs hentes med separate queries.
-
-## Filer
-
-- **Rewrite** `src/pages/MonitoringPage.tsx` — ny struktur med sections.
-- **Ny komponent** `src/components/monitoring/ActivityFeed.tsx` — realtime feed.
-- **Ny komponent** `src/components/monitoring/QueueHealthCard.tsx`.
-- **Ny komponent** `src/components/monitoring/SupplierStatusTable.tsx`.
-- **Ny komponent** `src/components/monitoring/SourceDonut.tsx` (Recharts PieChart).
-- **Migration** — `get_monitoring_overview()` RPC + realtime på `product_change_log`.
-
-## Ikke omfattet
-- Edge function logs (kræver analytics-DB adgang; separat feature).
-- Ingen ændringer i business-logik/sync-motor.
+1. På leverandør-oversigten "ikke tilknyttet": skal jeg matche på EAN alene, eller også vise leverandørens SKU/varenummer som fallback når EAN mangler?
+2. Skal AI-indsigter siden være helt tom udover widget'et, eller vil du have flere sektioner (fx historik, gemte anbefalinger)?

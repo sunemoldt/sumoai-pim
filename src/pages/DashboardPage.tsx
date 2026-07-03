@@ -1,10 +1,15 @@
 import { useMemo, useState } from "react";
-import { useMasterProducts, getCheapestSupplier, getMarginPercent, exVat, useAllProductAnalytics } from "@/hooks/use-products";
+import {
+  useMasterProducts,
+  getCheapestSupplierAny,
+  getMarginPercent,
+  exVat,
+  useAllProductAnalytics,
+} from "@/hooks/use-products";
 import { useSuppliers } from "@/hooks/use-products";
 import StatCard from "@/components/StatCard";
 import { Package, Truck, AlertTriangle, TrendingUp, TrendingDown, Eye } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import AiInsightsWidget from "@/components/AiInsightsWidget";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 
@@ -16,6 +21,10 @@ export default function DashboardPage() {
   const { data: analyticsMap } = useAllProductAnalytics();
   const navigate = useNavigate();
   const [view, setView] = useState<DashView>("overview");
+
+  const openProduct = (id: string) => {
+    window.open(`/products/${id}`, "_blank", "noopener,noreferrer");
+  };
 
   const topVisitedProducts = useMemo(() => {
     if (!analyticsMap) return [];
@@ -29,8 +38,11 @@ export default function DashboardPage() {
   const totalProducts = products.length;
   const activeSuppliers = suppliers.filter((s) => s.is_active).length;
 
+  // Margin only counts when at least one supplier is attached — otherwise
+  // the shop price is not derived from a supplier and "low margin" is meaningless.
   const getProductMargin = (p: typeof products[0]) => {
-    const cheapest = getCheapestSupplier(p.supplier_products);
+    if (!p.supplier_products || p.supplier_products.length === 0) return null;
+    const cheapest = getCheapestSupplierAny(p.supplier_products);
     if (!cheapest || !p.webshop_price) return null;
     return getMarginPercent(exVat(p.webshop_price), cheapest.purchase_price);
   };
@@ -55,20 +67,31 @@ export default function DashboardPage() {
     return new Intl.NumberFormat("da-DK", { style: "currency", currency: "DKK" }).format(price);
   };
 
-  const renderProductList = (list: typeof products, badgeRenderer: (p: typeof products[0]) => React.ReactNode) => (
+  const renderProductList = (
+    list: typeof products,
+    badgeRenderer: (p: typeof products[0]) => React.ReactNode,
+  ) => (
     <div className="space-y-2">
       {list.map((p) => (
-        <div
+        <a
           key={p.id}
+          href={`/products/${p.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => {
+            e.preventDefault();
+            openProduct(p.id);
+          }}
           className="flex items-center justify-between rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-accent transition-colors"
-          onClick={() => navigate(`/products/${p.id}`)}
         >
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-foreground truncate">{p.title}</p>
-            <p className="text-xs text-muted-foreground">EAN: {p.ean} {p.brand && `· ${p.brand}`}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              EAN: {p.ean} {p.brand && `· ${p.brand}`}
+            </p>
           </div>
           {badgeRenderer(p)}
-        </div>
+        </a>
       ))}
     </div>
   );
@@ -77,10 +100,12 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">Overblik over produkter, leverandører og priser</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Overblik over produkter, leverandører og priser
+        </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
         <StatCard title="Produkter" value={totalProducts} icon={<Package className="h-5 w-5" />} onClick={() => navigate("/products")} />
         <StatCard title="Aktive leverandører" value={activeSuppliers} icon={<Truck className="h-5 w-5" />} variant="success" onClick={() => navigate("/suppliers")} />
         <StatCard
@@ -124,7 +149,7 @@ export default function DashboardPage() {
               const m = getProductMargin(p);
               return (
                 <div className="flex items-center gap-2 ml-2 shrink-0">
-                  <span className="text-xs text-muted-foreground">{formatPrice(p.webshop_price)}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">{formatPrice(p.webshop_price)}</span>
                   <Badge variant="outline" className="text-warning border-warning/30">
                     {m?.toFixed(1)}%
                   </Badge>
@@ -168,7 +193,7 @@ export default function DashboardPage() {
               const m = getProductMargin(p);
               return (
                 <div className="flex items-center gap-2 ml-2 shrink-0">
-                  <span className="text-xs text-muted-foreground">{formatPrice(p.webshop_price)}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">{formatPrice(p.webshop_price)}</span>
                   <Badge variant="outline" className="text-success border-success/30">
                     {m?.toFixed(1)}%
                   </Badge>
@@ -180,68 +205,65 @@ export default function DashboardPage() {
       )}
 
       {view === "overview" && (
-        <>
-          <AiInsightsWidget />
-          <div className="grid gap-6 lg:grid-cols-3">
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-medium">Produkter med lav avance</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {lowMarginProducts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4">Ingen produkter med lav avance</p>
-                ) : renderProductList(lowMarginProducts.slice(0, 5), (p) => {
-                  const m = getProductMargin(p);
-                  return <Badge variant="outline" className="text-warning border-warning/30 ml-2 shrink-0">{m?.toFixed(1)}%</Badge>;
-                })}
-                {lowMarginProducts.length > 5 && (
-                  <button onClick={() => setView("low_margin")} className="text-sm text-primary mt-3 hover:underline">
-                    Vis alle {lowMarginProducts.length} →
-                  </button>
-                )}
-              </CardContent>
-            </Card>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium">Produkter med lav avance</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {lowMarginProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">Ingen produkter med lav avance</p>
+              ) : renderProductList(lowMarginProducts.slice(0, 5), (p) => {
+                const m = getProductMargin(p);
+                return <Badge variant="outline" className="text-warning border-warning/30 ml-2 shrink-0">{m?.toFixed(1)}%</Badge>;
+              })}
+              {lowMarginProducts.length > 5 && (
+                <button onClick={() => setView("low_margin")} className="text-sm text-primary mt-3 hover:underline">
+                  Vis alle {lowMarginProducts.length} →
+                </button>
+              )}
+            </CardContent>
+          </Card>
 
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-medium">Udsolgte produkter</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {outOfStockProducts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4">Alle produkter er på lager</p>
-                ) : renderProductList(outOfStockProducts.slice(0, 5), () => (
-                  <Badge variant="destructive" className="ml-2 shrink-0">Udsolgt</Badge>
-                ))}
-                {outOfStockProducts.length > 5 && (
-                  <button onClick={() => setView("out_of_stock")} className="text-sm text-primary mt-3 hover:underline">
-                    Vis alle {outOfStockProducts.length} →
-                  </button>
-                )}
-              </CardContent>
-            </Card>
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium">Udsolgte produkter</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {outOfStockProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">Alle produkter er på lager</p>
+              ) : renderProductList(outOfStockProducts.slice(0, 5), () => (
+                <Badge variant="destructive" className="ml-2 shrink-0">Udsolgt</Badge>
+              ))}
+              {outOfStockProducts.length > 5 && (
+                <button onClick={() => setView("out_of_stock")} className="text-sm text-primary mt-3 hover:underline">
+                  Vis alle {outOfStockProducts.length} →
+                </button>
+              )}
+            </CardContent>
+          </Card>
 
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-medium flex items-center gap-2">
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                  Mest besøgte (30 dage)
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {topVisitedProducts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4">Ingen besøgsdata endnu</p>
-                ) : renderProductList(topVisitedProducts, (p) => {
-                  const pv = (p as typeof topVisitedProducts[0]).pageViews;
-                  return (
-                    <Badge variant="outline" className="ml-2 shrink-0">
-                      {pv} besøg
-                    </Badge>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          </div>
-        </>
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <Eye className="h-4 w-4 text-muted-foreground" />
+                Mest besøgte (30 dage)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {topVisitedProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">Ingen besøgsdata endnu</p>
+              ) : renderProductList(topVisitedProducts, (p) => {
+                const pv = (p as typeof topVisitedProducts[0]).pageViews;
+                return (
+                  <Badge variant="outline" className="ml-2 shrink-0">
+                    {pv} besøg
+                  </Badge>
+                );
+              })}
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

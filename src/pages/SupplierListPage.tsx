@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useSuppliers } from "@/hooks/use-products";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -99,7 +100,11 @@ export default function SupplierListPage() {
               ) : (
                 suppliers.map((s) => (
                   <TableRow key={s.id}>
-                    <TableCell className="font-medium text-foreground">{s.name}</TableCell>
+                    <TableCell className="font-medium text-foreground">
+                      <Link to={`/suppliers/${s.id}`} className="hover:text-primary hover:underline">
+                        {s.name}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{feedTypeLabels[s.feed_type] ?? s.feed_type}</Badge>
                     </TableCell>
