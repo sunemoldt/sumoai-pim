@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
     if (p.short_description) {
       productInput.metafields = [{
         namespace: "custom",
-        key: "short_description",
+        key: "shortdescription",
         type: "multi_line_text_field",
         value: String(p.short_description),
       }];
