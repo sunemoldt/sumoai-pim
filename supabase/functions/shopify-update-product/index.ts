@@ -70,9 +70,8 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, backorder_policy, weight_kg, description, short_description, meta_title, meta_description, force, enqueue_on_throttle, queued, source, status, ean: eanInput } = body;
-    // Normalize backorder input: accept legacy 'backorders' ('yes'/'no'/'notify') or new 'backorder_policy'
-    const backordersNorm: string | undefined = backorder_policy ?? backorders;
+    const { master_product_id, regular_price, sale_price, stock_quantity, stock_status, backorders, backorder_policy, weight_kg, title: titleInput, description, short_description, meta_title, meta_description, force, enqueue_on_throttle, queued, source, status, ean: eanInput, changed_fields } = body;
+    const changedFields = Array.isArray(changed_fields) ? changed_fields.map((f) => String(f)) : [];
     if (!master_product_id) {
       return new Response(JSON.stringify({ error: "master_product_id is required" }), {
         status: 400,
@@ -150,21 +149,40 @@ Deno.serve(async (req) => {
 
     const variantGid = toGid("ProductVariant", product.shopify_variant_id);
     const productGid = toGid("Product", product.shopify_product_id);
+    const dbValueIfQueued = (field: string, explicitValue: unknown) => {
+      if (explicitValue !== undefined) return explicitValue;
+      if (queued === true && changedFields.includes(field)) return (product as Record<string, unknown>)[field];
+      return undefined;
+    };
+    const effectiveTitle = dbValueIfQueued("title", titleInput);
+    const effectiveRegularPrice = dbValueIfQueued("webshop_price", regular_price);
+    const effectiveSalePrice = dbValueIfQueued("sale_price", sale_price);
+    const effectiveStockQuantity = dbValueIfQueued("stock_quantity", stock_quantity);
+    const effectiveStockStatus = dbValueIfQueued("stock_status", stock_status);
+    const effectiveWeightKg = dbValueIfQueued("weight_kg", weight_kg);
+    const effectiveDescription = dbValueIfQueued("long_description", description);
+    const effectiveShortDescription = dbValueIfQueued("short_description", short_description);
+    const effectiveMetaTitle = dbValueIfQueued("meta_title", meta_title);
+    const effectiveMetaDescription = dbValueIfQueued("meta_description", meta_description);
+    const effectiveBackorderPolicy = dbValueIfQueued("backorder_policy", backorder_policy);
+    const effectiveEan = dbValueIfQueued("ean", eanInput);
+    // Normalize backorder input: accept legacy 'backorders' ('yes'/'no'/'notify') or new 'backorder_policy'
+    const backordersNorm: string | undefined = (effectiveBackorderPolicy ?? backorders) as string | undefined;
 
     const variantInput: Record<string, unknown> = { id: variantGid };
-    if (regular_price !== undefined && regular_price !== null) {
+    if (effectiveRegularPrice !== undefined && effectiveRegularPrice !== null) {
       if (canPush("webshop_price")) {
-        variantInput.price = String(regular_price);
-        dbUpdate.webshop_price = regular_price;
-        logChange("webshop_price", product.webshop_price, regular_price, "price_update");
+        variantInput.price = String(effectiveRegularPrice);
+        dbUpdate.webshop_price = effectiveRegularPrice;
+        logChange("webshop_price", product.webshop_price, effectiveRegularPrice, "price_update");
         updatedFields.push("price");
       } else { skippedFields.push("webshop_price"); }
     }
-    if (sale_price !== undefined) {
+    if (effectiveSalePrice !== undefined) {
       if (canPush("sale_price")) {
-        variantInput.compareAtPrice = sale_price !== null ? String(sale_price) : null;
-        dbUpdate.sale_price = sale_price;
-        logChange("sale_price", product.sale_price, sale_price, "price_update");
+        variantInput.compareAtPrice = effectiveSalePrice !== null ? String(effectiveSalePrice) : null;
+        dbUpdate.sale_price = effectiveSalePrice;
+        logChange("sale_price", product.sale_price, effectiveSalePrice, "price_update");
         updatedFields.push("compareAtPrice");
       } else { skippedFields.push("sale_price"); }
     }
@@ -184,8 +202,8 @@ Deno.serve(async (req) => {
 
     // Weight (kg) — send to Shopify via inventoryItem measurement. Defaults to 1 kg if no value set in PIM.
     {
-      const effectiveWeight = weight_kg !== undefined && weight_kg !== null
-        ? Number(weight_kg)
+      const effectiveWeight = effectiveWeightKg !== undefined && effectiveWeightKg !== null
+        ? Number(effectiveWeightKg)
         : (product.weight_kg != null ? Number(product.weight_kg) : 1);
       if (Number.isFinite(effectiveWeight) && effectiveWeight >= 0) {
         if (canPush("weight_kg")) {
@@ -193,9 +211,9 @@ Deno.serve(async (req) => {
             ...(variantInput.inventoryItem as Record<string, unknown> ?? {}),
             measurement: { weight: { value: effectiveWeight, unit: "KILOGRAMS" } },
           };
-          if (weight_kg !== undefined && weight_kg !== null) {
-            dbUpdate.weight_kg = weight_kg;
-            logChange("weight_kg", product.weight_kg, weight_kg, "weight_update");
+          if (effectiveWeightKg !== undefined && effectiveWeightKg !== null) {
+            dbUpdate.weight_kg = effectiveWeightKg;
+            logChange("weight_kg", product.weight_kg, effectiveWeightKg, "weight_update");
           }
           updatedFields.push("weight");
         } else { skippedFields.push("weight_kg"); }
@@ -203,11 +221,11 @@ Deno.serve(async (req) => {
     }
     // Barcode (EAN). Default to PIM's current ean unless caller overrode. Skip fallback 'wc-' EANs.
     {
-      const eanCandidate = eanInput !== undefined ? eanInput : product.ean;
+      const eanCandidate = effectiveEan !== undefined ? effectiveEan : product.ean;
       if (eanCandidate && typeof eanCandidate === "string" && !eanCandidate.startsWith("wc-")) {
         if (canPush("ean")) {
           // Only push if it actually differs from what we last knew, OR caller forced
-          if (force === true || eanInput !== undefined) {
+          if (force === true || effectiveEan !== undefined) {
             variantInput.barcode = String(eanCandidate);
             logChange("ean", product.ean, eanCandidate, "ean_update");
             updatedFields.push("barcode");
@@ -218,43 +236,51 @@ Deno.serve(async (req) => {
 
     // Product-level update (description / excerpt)
     const productInput: Record<string, unknown> = { id: productGid };
-    if (description !== undefined && description !== null) {
+    if (effectiveTitle !== undefined && effectiveTitle !== null) {
+      if (canPush("title")) {
+        productInput.title = String(effectiveTitle);
+        dbUpdate.title = effectiveTitle;
+        logChange("title", product.title, effectiveTitle, "title_update");
+        updatedFields.push("title");
+      } else { skippedFields.push("title"); }
+    }
+    if (effectiveDescription !== undefined && effectiveDescription !== null) {
       if (canPush("long_description")) {
-        productInput.descriptionHtml = String(description);
-        dbUpdate.long_description = description;
-        logChange("long_description", product.long_description, description, "description_update");
+        productInput.descriptionHtml = String(effectiveDescription);
+        dbUpdate.long_description = effectiveDescription;
+        logChange("long_description", product.long_description, effectiveDescription, "description_update");
         updatedFields.push("descriptionHtml");
       } else { skippedFields.push("long_description"); }
     }
-    if (short_description !== undefined && short_description !== null) {
+    if (effectiveShortDescription !== undefined && effectiveShortDescription !== null) {
       if (canPush("short_description")) {
         productInput.metafields = [{
           namespace: "custom",
           key: "short_description",
           type: "multi_line_text_field",
-          value: String(short_description),
+          value: String(effectiveShortDescription),
         }];
-        dbUpdate.short_description = short_description;
-        logChange("short_description", product.short_description, short_description, "description_update");
+        dbUpdate.short_description = effectiveShortDescription;
+        logChange("short_description", product.short_description, effectiveShortDescription, "description_update");
         updatedFields.push("short_description");
       } else { skippedFields.push("short_description"); }
     }
     // SEO: Page title + Meta description (Shopify-side: product.seo)
     {
       const seoObj: Record<string, unknown> = {};
-      if (meta_title !== undefined && meta_title !== null) {
+      if (effectiveMetaTitle !== undefined && effectiveMetaTitle !== null) {
         if (canPush("meta_title")) {
-          seoObj.title = String(meta_title);
-          dbUpdate.meta_title = meta_title;
-          logChange("meta_title", product.meta_title, meta_title, "seo_update");
+          seoObj.title = String(effectiveMetaTitle);
+          dbUpdate.meta_title = effectiveMetaTitle;
+          logChange("meta_title", product.meta_title, effectiveMetaTitle, "seo_update");
           updatedFields.push("seo.title");
         } else { skippedFields.push("meta_title"); }
       }
-      if (meta_description !== undefined && meta_description !== null) {
+      if (effectiveMetaDescription !== undefined && effectiveMetaDescription !== null) {
         if (canPush("meta_description")) {
-          seoObj.description = String(meta_description);
-          dbUpdate.meta_description = meta_description;
-          logChange("meta_description", product.meta_description, meta_description, "seo_update");
+          seoObj.description = String(effectiveMetaDescription);
+          dbUpdate.meta_description = effectiveMetaDescription;
+          logChange("meta_description", product.meta_description, effectiveMetaDescription, "seo_update");
           updatedFields.push("seo.description");
         } else { skippedFields.push("meta_description"); }
       }
@@ -299,7 +325,7 @@ Deno.serve(async (req) => {
       if (errors?.length) throw new Error(errors.map((e: { message: string }) => e.message).join(", "));
     }
 
-    if (stock_quantity !== undefined && stock_quantity !== null) {
+    if (effectiveStockQuantity !== undefined && effectiveStockQuantity !== null) {
       if (!canPush("stock_quantity")) {
         skippedFields.push("stock_quantity");
       } else {
@@ -337,7 +363,7 @@ Deno.serve(async (req) => {
               input: {
                 name: "available",
                 reason: "correction",
-                quantities: [{ inventoryItemId, locationId, quantity: Number(stock_quantity), changeFromQuantity: fromQty }],
+                quantities: [{ inventoryItemId, locationId, quantity: Number(effectiveStockQuantity), changeFromQuantity: fromQty }],
               },
             });
             return setData.inventorySetQuantities.userErrors as { field: string[]; message: string }[] | null;
@@ -353,16 +379,16 @@ Deno.serve(async (req) => {
           }
           if (errors?.length) throw new Error(errors.map((e: { message: string }) => e.message).join(", "));
         }
-        dbUpdate.stock_quantity = stock_quantity;
-        logChange("stock_quantity", product.stock_quantity, stock_quantity, "stock_update");
+        dbUpdate.stock_quantity = effectiveStockQuantity;
+        logChange("stock_quantity", product.stock_quantity, effectiveStockQuantity, "stock_update");
         updatedFields.push("stock_quantity");
       }
     }
 
-    if (stock_status) {
+    if (effectiveStockStatus) {
       if (canPush("stock_status")) {
-        dbUpdate.stock_status = stock_status;
-        logChange("stock_status", product.stock_status, stock_status, "stock_update");
+        dbUpdate.stock_status = effectiveStockStatus;
+        logChange("stock_status", product.stock_status, effectiveStockStatus, "stock_update");
         updatedFields.push("stock_status");
       } else { skippedFields.push("stock_status"); }
     }
