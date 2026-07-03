@@ -239,6 +239,17 @@ export default function ProductListPage() {
     return set;
   }, [products]);
 
+  // Shopify product IDs that map to more than one PIM master → variant siblings
+  const variantProductIds = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of products) {
+      if (p.shopify_product_id) counts.set(p.shopify_product_id, (counts.get(p.shopify_product_id) ?? 0) + 1);
+    }
+    const set = new Set<string>();
+    for (const [id, c] of counts) if (c > 1) set.add(id);
+    return set;
+  }, [products]);
+
   const filtered = useMemo(() => {
     return products.filter((product) => {
       if (stockFilter === "instock" && product.stock_status !== "instock") return false;
