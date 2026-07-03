@@ -155,7 +155,12 @@ Deno.serve(async (req) => {
 
     return json({ processed, succeeded, requeued, failed, results });
   } finally {
-    await supabase.rpc("unlock_shopify_queue_worker").catch(() => {});
+    try {
+      const { error: unlockErr } = await supabase.rpc("unlock_shopify_queue_worker");
+      if (unlockErr) console.error("unlock_shopify_queue_worker failed:", unlockErr.message);
+    } catch (unlockException) {
+      console.error("unlock_shopify_queue_worker exception:", unlockException);
+    }
   }
 });
 
