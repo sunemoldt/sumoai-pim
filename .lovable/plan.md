@@ -1,44 +1,56 @@
-## Problem
+## Mål
+Når et Shopify-produkt har flere varianter (fx UVC-G5-Turret-Ultra Hvid/Sort), skal PIM automatisk have **én master pr. variant** — hver med egen EAN, egen pris, eget lager og egen leverandør-match. Én master = én sælgende enhed. Alle varianter deler samme `shopify_product_id`, men har hver sit `shopify_variant_id`.
 
-Skærmbillederne viser to metafields på produktet i Shopify:
-
-- `custom.shortdescription` (uden underscore) → indeholder den lange beskrivelse. **Det er dette felt dit tema faktisk renderer øverst på produktsiden.**
-- `custom.short_description` (med underscore) → er det felt vores PIM-sync skriver til. Dit tema ignorerer det.
-
-Derfor "sker der ingenting": vores opdateringer lander i det rigtige felt teknisk set, men i det forkerte metafelt i forhold til hvad dit Shopify-tema læser. Storefront'en har derfor stadig den gamle (lange) tekst.
-
-Samme problem ramte oprindeligt migreringen fra WooCommerce: WC's excerpt blev importeret ind i `custom.shortdescription`, men vores kode arbejder med `custom.short_description`.
+## Nuværende problem på G5 Turret Ultra
+- Shopify: 2 varianter (Hvid EAN 810084693575, Sort EAN 810084696972).
+- PIM: 1 master med Hvid's EAN, men `shopify_variant_id` peger på Sort. Inkonsistent — sync overskriver felter forkert.
 
 ## Løsning
 
-Ret metafield-nøglen i alle edge functions til `shortdescription` (det tema-læste felt), og kør en backfill der kopierer PIM's `short_description` ind i det korrekte metafelt for alle Shopify-synkede produkter. Det gamle `short_description`-metafelt lades urørt (ingen sletning — sikkert rollback muligt).
+### 1. `shopify-pull` — auto-split ved multi-variant
+Når Shopify returnerer >1 variant for et produkt vi allerede har som master:
+- Behandl den nuværende master som "variant 1" (behold link til dens faktiske variant baseret på EAN-match, ellers første variant).
+- For hver ekstra variant: opret en ny master-række med
+  - `shopify_product_id` = fælles product-id
+  - `shopify_variant_id` = variantens id
+  - `title` = "{produkttitel} - {variant-optioner}" (fx "…Turret Ultra - Sort")
+  - `ean`, `sku`, `webshop_price`, `sale_price`, `stock_quantity`, `weight_kg`, `image_url` fra variant
+  - Kopier `brand`, `category`, `long_description`, `short_description`, `meta_*` fra hoved-master (så SEO/tekst deles).
+  - Sæt `shopify_sync_enabled = true`, `lifecycle_status` fra produktet.
+- Idempotent: skip variant hvis en master allerede har det `shopify_variant_id`.
+- Kør auto-supplier-rematch på nyoprettede masters (som allerede sker ved EAN-set).
 
-### Ændringer
+### 2. `shopify-update-product` (push) — pr.-variant push
+Når PIM opdaterer pris/lager/EAN/vægt/inventoryPolicy for en master med `shopify_variant_id`:
+- Push **kun** til dén variant via `productVariantsBulkUpdate` (allerede sådan idag).
+- Titel/beskrivelse/SEO/kategori/brand pushes stadig på produkt-niveau — så tekstredigering fra én af søskendevarianterne opdaterer det fælles produkt (uændret adfærd).
+- Metafield `custom.shortdescription` er produkt-scope, uændret.
 
-1. **`supabase/functions/shopify-update-product/index.ts`**
-   - Metafield-mutation: `key: "short_description"` → `key: "shortdescription"` (namespace `custom` uændret).
+### 3. Meta-sync mellem søskende
+Vi har allerede `sync_meta_to_siblings`-triggeren, der spejler `meta_title`/`meta_description` mellem masters med samme `shopify_product_id`. Udvid til også at spejle `short_description`, `long_description`, `brand`, `category` mellem søskende — så tekster ikke divergerer.
 
-2. **`supabase/functions/shopify-create-product/index.ts`**
-   - Samme ændring i `productCreate`-metafields-blokken.
+### 4. Manuel oprydning på UVC-G5-Turret-Ultra
+- Ret den eksisterende master (id `ec1997f3…`) til at være **Hvid**-varianten:
+  - `shopify_variant_id` = 54186121822547 (Hvid)
+  - `ean` = 810084693575, `sku` = `UVC-G5-Turret-Ultra-white`
+  - `webshop_price` = 999
+- Opret ny master for **Sort**:
+  - `shopify_variant_id` = 54186121855315, `ean` = 810084696972, `sku` = `UVC-G5-Turret-Ultra-b`
+  - `title` = "Ubiquiti UniFi Protect G5 Turret Ultra - Sort"
+- Kør `shopify-pull` for begge så alle felter fyldes fra Shopify.
 
-3. **`supabase/functions/shopify-pull/index.ts`**
-   - GraphQL-query og mapping: læs fra `custom.shortdescription` i stedet for `custom.short_description`, så vi henter det tema-relevante felt ved pull/backfill.
+### 5. UI-signal
+`ProductListPage` og `ProductDetailPage` viser allerede title; tilføj lille badge "Variant" ved siden af titlen hvis `shopify_product_id` deles med anden master (billig `count`-check i `useMasterProducts`). Ingen struktur-ændringer i UI'et.
 
-4. **Backfill for eksisterende produkter**
-   - Genbrug den eksisterende "Genskub kort beskrivelse + SEO"-knap i `ShopifyPage.tsx` (ingen UI-ændring).
-   - Efter kode-ændringen kører den nu automatisk push til `custom.shortdescription` for alle ~571 Shopify-produkter.
+## Teknisk
 
-5. **Verifikation**
-   - Kør backfill.
-   - Hent UCG-ULTRA direkte fra Shopify GraphQL og bekræft at `custom.shortdescription` nu matcher PIM's korte beskrivelse.
-   - Bed dig genindlæse produktsiden for at bekræfte visuelt.
+**Filer der ændres**
+- `supabase/functions/shopify-pull/index.ts` — auto-split logik i variant-løkken.
+- Migration — udvid `sync_meta_to_siblings` til `sync_shared_fields_to_siblings` (inkl. descriptions/brand/category, samme guard mod rekursion).
+- Data-fix (via `supabase--insert`) på det ene konkrete produkt.
+- `src/hooks/use-products.ts` + `src/pages/ProductListPage.tsx` — variant-badge.
 
-### Ikke omfattet (bevidst)
-
-- Vi rører **ikke** ved det gamle `custom.short_description`-metafelt — det bliver liggende urørt som backup, kan slettes manuelt senere hvis ønsket.
-- Ingen tema-ændringer nødvendige.
-- Ingen ændringer i PIM-UI eller database-skema.
-
-### Teknisk note
-
-Både create og update bruger allerede `metafieldsSet`-mønstret (upsert), så eksisterende `custom.shortdescription`-værdier bliver overskrevet uden konflikter. Retry-logikken og `dbValueIfQueued`-helperen fra sidste tur er stadig aktive og påvirkes ikke.
+**Ikke omfattet**
+- Ingen ændringer i `shopify-create-product` (opretter stadig enkelt-variant produkter fra PIM — hvis du vil oprette varianter, sker det direkte i Shopify og trækkes ind).
+- Ingen sletning af den eksisterende `product_variants`-tabel — den bruges fortsat som ren pull-cache, men er ikke længere den primære sælgende enhed.
+- Ingen ændringer i priser eller Shopify-side data — kun PIM-side spejling.
