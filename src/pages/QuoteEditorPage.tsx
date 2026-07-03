@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 type Line = {
+  _key?: string;
   id?: string;
   pim_product_id: string | null;
   product_name: string;
@@ -79,7 +80,7 @@ export default function QuoteEditorPage() {
         setPackagePrice(qq.package_price !== null && qq.package_price !== undefined ? Number(qq.package_price) : null);
       }
       const { data: ls } = await supabase.from("quote_lines" as any).select("*").eq("quote_id", id!).order("sort_order");
-      if (ls) setLines((ls as any[]).map((l) => ({ ...l, quantity: Number(l.quantity), purchase_price: Number(l.purchase_price), list_price: Number(l.list_price), quote_price: Number(l.quote_price) })));
+      if (ls) setLines((ls as any[]).map((l) => ({ ...l, _key: crypto.randomUUID(), quantity: Number(l.quantity), purchase_price: Number(l.purchase_price), list_price: Number(l.list_price), quote_price: Number(l.quote_price) })));
       setLoading(false);
     })();
   }, [id, isNew]);
@@ -103,6 +104,7 @@ export default function QuoteEditorPage() {
 
   const addLine = () => {
     setLines((prev) => [...prev, {
+      _key: crypto.randomUUID(),
       pim_product_id: null, product_name: "", quantity: 1,
       purchase_price: 0, list_price: 0, quote_price: 0, sort_order: prev.length,
     }]);
@@ -305,7 +307,7 @@ export default function QuoteEditorPage() {
                 const marginPct = quoteEx > 0 ? ((quoteEx - l.purchase_price) / quoteEx) * 100 : 0;
                 const discountPct = l.list_price > 0 ? ((l.list_price - l.quote_price) / l.list_price) * 100 : 0;
                 return (
-                  <TableRow key={idx}>
+                  <TableRow key={l._key ?? l.id ?? idx}>
                     <TableCell>
                       <ProductPicker
                         value={l.product_name}
