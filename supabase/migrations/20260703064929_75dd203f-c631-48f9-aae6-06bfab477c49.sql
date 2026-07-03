@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Authenticated can subscribe to realtime" ON realtime.messages;
