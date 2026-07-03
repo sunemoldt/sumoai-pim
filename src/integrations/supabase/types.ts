@@ -940,6 +940,21 @@ export type Database = {
         }
         Relationships: []
       }
+      shopify_queue_worker_state: {
+        Row: {
+          id: boolean
+          last_poked_at: string
+        }
+        Insert: {
+          id?: boolean
+          last_poked_at?: string
+        }
+        Update: {
+          id?: boolean
+          last_poked_at?: string
+        }
+        Relationships: []
+      }
       shopify_skipped_orders: {
         Row: {
           created_at: string
