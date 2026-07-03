@@ -22,6 +22,7 @@ type QuoteRow = {
 
 export default function QuoteListPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: quotes = [], isLoading } = useQuery({
     queryKey: ["quotes-list"],
     queryFn: async () => {
