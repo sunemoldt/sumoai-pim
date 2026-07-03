@@ -38,6 +38,60 @@ export default function QuoteListPage() {
     },
   });
 
+  const handleDuplicate = async (quoteId: string) => {
+    try {
+      const { data: original, error: qErr } = await supabase
+        .from("quotes" as any)
+        .select("customer_name, valid_days, dinero_contact_guid, note_customer, note_internal, total_excl_vat, total_purchase_price, package_price")
+        .eq("id", quoteId)
+        .single();
+      if (qErr) throw qErr;
+
+      const { data: lines, error: lErr } = await supabase
+        .from("quote_lines" as any)
+        .select("pim_product_id, product_name, quantity, purchase_price, list_price, quote_price, sort_order")
+        .eq("quote_id", quoteId);
+      if (lErr) throw lErr;
+
+      const { data: maxRow } = await supabase
+        .from("quotes" as any)
+        .select("quote_number")
+        .order("quote_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const nextNumber = ((maxRow as any)?.quote_number ?? 0) + 1;
+
+      const { data: inserted, error: iErr } = await supabase
+        .from("quotes" as any)
+        .insert({
+          ...(original as any),
+          quote_number: nextNumber,
+          quote_date: new Date().toISOString().slice(0, 10),
+          status: "draft",
+          dinero_voucher_guid: null,
+        })
+        .select("id")
+        .single();
+      if (iErr) throw iErr;
+
+      const newId = (inserted as any).id as string;
+
+      if (lines && lines.length > 0) {
+        const { error: lineErr } = await supabase
+          .from("quote_lines" as any)
+          .insert((lines as any[]).map((l) => ({ ...l, quote_id: newId })));
+        if (lineErr) throw lineErr;
+      }
+
+      toast.success("Tilbud kopieret");
+      queryClient.invalidateQueries({ queryKey: ["quotes-list"] });
+      navigate(`/quotes/${newId}`);
+    } catch (err: any) {
+      toast.error("Kunne ikke kopiere tilbud", { description: err?.message });
+    }
+  };
+
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
