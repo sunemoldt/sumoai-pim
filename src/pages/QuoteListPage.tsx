@@ -115,13 +115,14 @@ export default function QuoteListPage() {
                 <TableHead className="text-right">Linjer</TableHead>
                 <TableHead className="text-right">Total inkl. moms</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right w-20">Handling</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Indlæser…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Indlæser…</TableCell></TableRow>
               ) : quotes.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Ingen tilbud endnu</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Ingen tilbud endnu</TableCell></TableRow>
               ) : quotes.map((q) => (
                 <TableRow key={q.id} className="cursor-pointer" onClick={() => navigate(`/quotes/${q.id}`)}>
                   <TableCell className="font-medium">#{q.quote_number}</TableCell>
@@ -139,6 +140,22 @@ export default function QuoteListPage() {
                     ) : (
                       <Badge variant="secondary">Kladde</Badge>
                     )}
+                  </TableCell>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => { e.stopPropagation(); handleDuplicate(q.id); }}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Dupliker</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                 </TableRow>
               ))}
