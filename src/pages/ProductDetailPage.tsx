@@ -1223,11 +1223,16 @@ export default function ProductDetailPage() {
                 </div>
                 {/* Stock recommendation from suppliers */}
                 {(() => {
-                  // Sum all in-stock supplier quantities
-                  const totalSupplierStock = product.supplier_products
+                  // Only consider suppliers selected as stock sources for this product.
+                  // If none are selected, fall back to all linked suppliers.
+                  const selectedIds = stockSyncSupplierIds ?? [];
+                  const relevantSuppliers = selectedIds.length > 0
+                    ? product.supplier_products.filter(sp => selectedIds.includes(sp.supplier_id))
+                    : product.supplier_products;
+                  const totalSupplierStock = relevantSuppliers
                     .filter(sp => sp.in_stock)
                     .reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
-                  const anyInStock = product.supplier_products.some(sp => sp.in_stock);
+                  const anyInStock = relevantSuppliers.some(sp => sp.in_stock);
                   const suggestedStatus = anyInStock ? "instock" : "outofstock";
                   const suggestedBackorder = backorderMode === "yes" ? "yes" : backorderMode === "notify" ? "notify" : "no";
                   
