@@ -25,6 +25,7 @@ import CollectionsListPage from "@/pages/CollectionsListPage";
 import CollectionDetailPage from "@/pages/CollectionDetailPage";
 import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import OAuthConsentPage from "@/pages/OAuthConsentPage";
 import NotFound from "@/pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -95,7 +96,9 @@ const App = forwardRef<HTMLDivElement>(function App(_props, ref) {
             <AuthProvider>
               <Routes>
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/.lovable/oauth/consent" element={<OAuthConsentPage />} />
                 <Route path="*" element={<AuthenticatedApp />} />
+
               </Routes>
             </AuthProvider>
           </BrowserRouter>

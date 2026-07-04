@@ -38,9 +38,16 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       toast({ title: "Login fejlede", description: error.message, variant: "destructive" });
+    } else {
+      const params = new URLSearchParams(window.location.search);
+      const next = params.get("next");
+      if (next && next.startsWith("/") && !next.startsWith("//")) {
+        window.location.href = next;
+      }
     }
     setLoading(false);
   };
+
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
