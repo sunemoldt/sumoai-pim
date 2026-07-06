@@ -24,6 +24,7 @@ type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
 type DuplicateFilter = "all" | "fallback_ean" | "shared_ean" | "same_title";
+type EanFilter = "all" | "has_ean" | "no_ean";
 type SortField = "title" | "ean" | "brand" | "stock_quantity" | "purchase_price" | "webshop_price" | "recommended" | "margin" | "page_views" | "conversion_rate" | "updated_at";
 type SortDir = "asc" | "desc";
 
@@ -41,6 +42,7 @@ export default function ProductListPage() {
   const statusFilter = (searchParams.get("status") ?? "all") as StatusFilter;
   const duplicateFilter = (searchParams.get("duplicate") ?? "all") as DuplicateFilter;
   const tagFilter = searchParams.get("tag") ?? "all";
+  const eanFilter = (searchParams.get("ean") ?? "all") as EanFilter;
   const sortField = (searchParams.get("sort") ?? "title") as SortField;
   const sortDir = (searchParams.get("dir") ?? "asc") as SortDir;
   const view = (searchParams.get("view") ?? "grid") as "grid" | "list";
@@ -73,6 +75,7 @@ export default function ProductListPage() {
   const setStatusFilter = (v: StatusFilter) => setParam("status", v);
   const setDuplicateFilter = (v: DuplicateFilter) => setParam("duplicate", v);
   const setTagFilter = (v: string) => setParam("tag", v);
+  const setEanFilter = (v: EanFilter) => setParam("ean", v);
 
   const { data: products = [], isLoading } = useMasterProducts(search || undefined);
   const { data: priceSettings = [] } = usePriceSettings();
@@ -301,9 +304,13 @@ export default function ProductListPage() {
         }
       }
 
+      // EAN filter
+      if (eanFilter === "has_ean" && !product.ean) return false;
+      if (eanFilter === "no_ean" && product.ean) return false;
+
       return true;
     });
-  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans, tagFilter, duplicateTitles]);
+  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans, tagFilter, eanFilter, duplicateTitles]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -370,7 +377,7 @@ export default function ProductListPage() {
     return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
-  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, tagFilter].filter((f) => f !== "all").length;
+  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, tagFilter, eanFilter].filter((f) => f !== "all").length;
 
   // All unique sync_tags across products (for filter dropdown)
   const allTags = useMemo(() => {
@@ -385,7 +392,7 @@ export default function ProductListPage() {
   const clearFilters = () => {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
-      ["stock", "brand", "category", "margin", "price", "supplier", "status", "duplicate", "tag"].forEach(k => next.delete(k));
+      ["stock", "brand", "category", "margin", "price", "supplier", "status", "duplicate", "tag", "ean"].forEach(k => next.delete(k));
       return next;
     }, { replace: true });
   };
@@ -592,6 +599,17 @@ export default function ProductListPage() {
               <SelectItem value="fallback_ean">Fallback-EAN (wc-)</SelectItem>
               <SelectItem value="shared_ean">Delt EAN</SelectItem>
               <SelectItem value="same_title">Samme titel</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={eanFilter} onValueChange={(v) => setEanFilter(v as EanFilter)}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue placeholder="EAN" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle EAN</SelectItem>
+              <SelectItem value="has_ean">Med EAN</SelectItem>
+              <SelectItem value="no_ean">Uden EAN</SelectItem>
             </SelectContent>
           </Select>
 
