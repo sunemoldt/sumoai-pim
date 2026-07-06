@@ -31,6 +31,25 @@ function useSuggestions() {
   });
 }
 
+type Diagnostic = {
+  total_invalid: number;
+  linked_variant_missing_barcode: number;
+  no_valid_barcode_anywhere: number;
+  blocked_by_other_product: number;
+  ready_to_suggest: number;
+};
+
+function useDiagnostic() {
+  return useQuery({
+    queryKey: ["ean-suggestions", "diagnostic"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("ean_suggestions_diagnostic");
+      if (error) throw error;
+      return data as unknown as Diagnostic;
+    },
+  });
+}
+
 export default function EanSuggestionsPage() {
   const qc = useQueryClient();
   const { data, isLoading, isFetching, refetch } = useSuggestions();
