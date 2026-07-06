@@ -1236,6 +1236,12 @@ export type Database = {
           updated_at: string
         }[]
       }
+      list_invalid_ean_product_ids: {
+        Args: never
+        Returns: {
+          id: string
+        }[]
+      }
       merge_attribute_definitions: {
         Args: { p_source_id: string; p_target_id: string }
         Returns: Json
