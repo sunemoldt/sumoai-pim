@@ -1215,6 +1215,7 @@ export type Database = {
         Args: { p_source_id: string; p_target_id: string }
         Returns: Json
       }
+      reapply_low_margin_guard_all: { Args: never; Returns: number }
       recompute_product_stock: {
         Args: { p_master_product_id: string }
         Returns: undefined

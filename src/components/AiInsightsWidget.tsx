@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Brain, RefreshCw, X, Sparkles, TrendingUp, Package, DollarSign, ShoppingCart, ExternalLink, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { applyRounding } from "@/lib/price-rounding";
 
 const typeIcons: Record<string, React.ReactNode> = {
   pricing: <DollarSign className="h-4 w-4" />,
@@ -33,18 +34,6 @@ const severityBadge: Record<string, string> = {
   info: "bg-primary/10 text-primary border-0",
 };
 
-function applyRounding(price: number, mode: string): number {
-  switch (mode) {
-    case "nearest_1": return Math.round(price);
-    case "nearest_5": return Math.round(price / 5) * 5;
-    case "nearest_10": return Math.round(price / 10) * 10;
-    case "nearest_25": return Math.round(price / 25) * 25;
-    case "nearest_49": return Math.floor(price / 10) * 10 + 9;
-    case "nearest_95": return Math.floor(price) - (Math.floor(price) % 5) + 4.95;
-    case "nearest_99": return Math.floor(price / 10) * 10 - 0.01;
-    default: return Math.round(price * 100) / 100;
-  }
-}
 
 export default function AiInsightsWidget() {
   const queryClient = useQueryClient();

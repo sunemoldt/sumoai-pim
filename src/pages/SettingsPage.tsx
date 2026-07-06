@@ -1,4 +1,4 @@
-import { usePriceSettings, useWebhookConfigs, WebhookConfig } from "@/hooks/use-products";
+import { useWebhookConfigs, WebhookConfig } from "@/hooks/use-products";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,11 +23,13 @@ import WoocommerceToggleCard from "@/components/WoocommerceToggleCard";
 import WoocommerceForcePushCard from "@/components/WoocommerceForcePushCard";
 import ShopifyOrderSyncCard from "@/components/ShopifyOrderSyncCard";
 import { NightlyBackupCard } from "@/components/NightlyBackupCard";
+import { ROUNDING_EXAMPLES } from "@/lib/price-rounding";
 
 import LowMarginGuardCard from "@/components/LowMarginGuardCard";
+import MarkupSettingsCard from "@/components/MarkupSettingsCard";
+import AnalysisThresholdsCard from "@/components/AnalysisThresholdsCard";
 
 export default function SettingsPage() {
-  const { data: priceSettings = [] } = usePriceSettings();
   const { data: webhooks = [] } = useWebhookConfigs();
   const [formOpen, setFormOpen] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<WebhookConfig | null>(null);
@@ -159,16 +161,7 @@ export default function SettingsPage() {
     }
   };
 
-  const roundingExamples: Record<string, string> = {
-    none: "741,57 → 741,57",
-    nearest_1: "741,57 → 742,00",
-    nearest_5: "741,57 → 745,00",
-    nearest_10: "741,57 → 740,00",
-    nearest_25: "741,57 → 750,00",
-    nearest_49: "741,57 → 749,00",
-    nearest_95: "741,57 → 745,00 (ender på ,95)",
-    nearest_99: "741,57 → 739,99",
-  };
+  const roundingExamples = ROUNDING_EXAMPLES;
 
   return (
     <div className="space-y-8">
@@ -206,36 +199,8 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Markup settings */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-medium">Avanceprocenter (Markup)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-secondary/50">
-                <TableHead>Niveau</TableHead>
-                <TableHead>Værdi</TableHead>
-                <TableHead className="text-right">Markup %</TableHead>
-                <TableHead className="text-right">Minimum avance %</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {priceSettings.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>
-                    <Badge variant="secondary">{scopeLabels[s.scope] ?? s.scope}</Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{s.scope_value ?? "Alle"}</TableCell>
-                  <TableCell className="text-right font-mono text-foreground">{s.markup_percentage}%</TableCell>
-                  <TableCell className="text-right font-mono text-foreground">{s.minimum_margin}%</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* Markup settings (editable) */}
+      <MarkupSettingsCard />
 
       {/* Price rounding rule */}
       <Card className="shadow-sm">
@@ -443,6 +408,8 @@ export default function SettingsPage() {
       <FieldSyncPolicyCard />
 
       <LowMarginGuardCard />
+
+      <AnalysisThresholdsCard />
 
       <ShopifyBulkPullCard />
 
