@@ -50,6 +50,31 @@ function useDiagnostic() {
   });
 }
 
+type DiagCategory = "invalid" | "missing_linked" | "no_valid_anywhere" | "blocked";
+type DiagProduct = {
+  master_product_id: string;
+  title: string | null;
+  sku: string | null;
+  image_url: string | null;
+  current_ean: string | null;
+  shopify_product_id: string | null;
+  note: string | null;
+};
+
+function useDiagProducts(cat: DiagCategory | null) {
+  return useQuery({
+    enabled: cat !== null,
+    queryKey: ["ean-suggestions", "diag-products", cat],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_ean_diagnostic_products", {
+        p_category: cat as string,
+      });
+      if (error) throw error;
+      return (data ?? []) as DiagProduct[];
+    },
+  });
+}
+
 export default function EanSuggestionsPage() {
   const qc = useQueryClient();
   const { data, isLoading, isFetching, refetch } = useSuggestions();
