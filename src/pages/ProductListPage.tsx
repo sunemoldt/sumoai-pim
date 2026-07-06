@@ -304,9 +304,13 @@ export default function ProductListPage() {
         }
       }
 
+      // EAN filter
+      if (eanFilter === "has_ean" && !product.ean) return false;
+      if (eanFilter === "no_ean" && product.ean) return false;
+
       return true;
     });
-  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans, tagFilter, duplicateTitles]);
+  }, [products, stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, duplicateEans, tagFilter, eanFilter, duplicateTitles]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -373,7 +377,7 @@ export default function ProductListPage() {
     return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
-  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, tagFilter].filter((f) => f !== "all").length;
+  const activeFilterCount = [stockFilter, brandFilter, categoryFilter, marginFilter, priceFilter, supplierFilter, statusFilter, duplicateFilter, tagFilter, eanFilter].filter((f) => f !== "all").length;
 
   // All unique sync_tags across products (for filter dropdown)
   const allTags = useMemo(() => {
@@ -388,7 +392,7 @@ export default function ProductListPage() {
   const clearFilters = () => {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
-      ["stock", "brand", "category", "margin", "price", "supplier", "status", "duplicate", "tag"].forEach(k => next.delete(k));
+      ["stock", "brand", "category", "margin", "price", "supplier", "status", "duplicate", "tag", "ean"].forEach(k => next.delete(k));
       return next;
     }, { replace: true });
   };
