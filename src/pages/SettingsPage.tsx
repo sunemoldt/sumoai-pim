@@ -409,6 +409,8 @@ export default function SettingsPage() {
 
       <LowMarginGuardCard />
 
+      <AnalysisThresholdsCard />
+
       <ShopifyBulkPullCard />
 
       <ShopifyQueueCard />
