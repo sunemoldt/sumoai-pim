@@ -116,15 +116,24 @@ export default function CleanupAuditCard() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5" />
-          Oprydnings-audit (PIM ↔ Shopify)
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Viser per-EAN status fra de seneste oprydningskørsler: om beskrivelsen er renset i PIM, om den er pushet til Shopify, og hvorfor noget evt. blev sprunget over eller fejlede.
-        </p>
-      </CardHeader>
+      <details className="group">
+        <summary className="list-none cursor-pointer">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Oprydnings-audit (PIM ↔ Shopify)
+                {logs.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">{logs.length}</Badge>
+                )}
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Viser per-EAN status fra de seneste oprydningskørsler: om beskrivelsen er renset i PIM, om den er pushet til Shopify, og hvorfor noget evt. blev sprunget over eller fejlede.
+              </p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0 transition-transform group-open:rotate-90" />
+          </CardHeader>
+        </summary>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap gap-2">
