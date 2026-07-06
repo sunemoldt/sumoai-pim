@@ -244,6 +244,7 @@ export default function CleanupAuditCard() {
           </>
         )}
       </CardContent>
+      </details>
     </Card>
   );
 }
