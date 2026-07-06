@@ -81,6 +81,8 @@ export default function EanSuggestionsPage() {
   const { data: diag, refetch: refetchDiag } = useDiagnostic();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [bulkPending, setBulkPending] = useState(false);
+  const [openCat, setOpenCat] = useState<DiagCategory | null>(null);
+  const { data: diagProducts, isFetching: diagLoading } = useDiagProducts(openCat);
   const [scanState, setScanState] = useState<{ running: boolean; done: number; total: number }>({
     running: false,
     done: 0,
