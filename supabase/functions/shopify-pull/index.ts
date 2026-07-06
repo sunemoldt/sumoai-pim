@@ -192,7 +192,16 @@ Deno.serve(async (req) => {
               : Number(wRaw.value);
             tryField("weight_kg", wKg);
           }
-          tryField("ean", matchedVariant.barcode ? String(matchedVariant.barcode).trim().replace(/^0+/, "") || String(matchedVariant.barcode).trim() : matchedVariant.barcode);
+          const normalizedBarcode = matchedVariant.barcode
+            ? (String(matchedVariant.barcode).trim().replace(/^0+/, "") || String(matchedVariant.barcode).trim())
+            : null;
+          tryField("ean", normalizedBarcode);
+          // Backfill EAN from Shopify even if policy says PIM is master,
+          // when the current PIM value is missing or a "wc-*" fallback placeholder.
+          const isFallbackEan = !t.ean || String(t.ean).startsWith("wc-");
+          if (isFallbackEan && normalizedBarcode && normalizedBarcode !== t.ean) {
+            update.ean = normalizedBarcode;
+          }
           tryField("sku", matchedVariant.sku);
         }
 
