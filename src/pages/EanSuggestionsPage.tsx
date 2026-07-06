@@ -53,6 +53,7 @@ function useDiagnostic() {
 export default function EanSuggestionsPage() {
   const qc = useQueryClient();
   const { data, isLoading, isFetching, refetch } = useSuggestions();
+  const { data: diag, refetch: refetchDiag } = useDiagnostic();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [bulkPending, setBulkPending] = useState(false);
   const [scanState, setScanState] = useState<{ running: boolean; done: number; total: number }>({
