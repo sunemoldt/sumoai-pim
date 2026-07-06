@@ -1,4 +1,4 @@
-import { usePriceSettings, useWebhookConfigs, WebhookConfig } from "@/hooks/use-products";
+import { useWebhookConfigs, WebhookConfig } from "@/hooks/use-products";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,8 +23,11 @@ import WoocommerceToggleCard from "@/components/WoocommerceToggleCard";
 import WoocommerceForcePushCard from "@/components/WoocommerceForcePushCard";
 import ShopifyOrderSyncCard from "@/components/ShopifyOrderSyncCard";
 import { NightlyBackupCard } from "@/components/NightlyBackupCard";
+import { ROUNDING_EXAMPLES } from "@/lib/price-rounding";
 
 import LowMarginGuardCard from "@/components/LowMarginGuardCard";
+import MarkupSettingsCard from "@/components/MarkupSettingsCard";
+import AnalysisThresholdsCard from "@/components/AnalysisThresholdsCard";
 
 export default function SettingsPage() {
   const { data: priceSettings = [] } = usePriceSettings();
