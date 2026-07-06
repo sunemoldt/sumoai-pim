@@ -201,12 +201,64 @@ export default function EanSuggestionsPage() {
         </div>
       </div>
 
-      {suggestions.length === 0 && !isLoading && !scanState.running && (
+      {diag && (
         <Card>
-          <CardContent className="py-6 text-sm text-muted-foreground">
-            Tip: Klik <strong>Scan Shopify for EAN'er</strong> for at kontakte Shopify og hente
-            barcodes for produkter med ugyldig eller manglende EAN. Placeholder-EAN'er (wc-*) bliver
-            auto-opdateret; øvrige forslag kommer frem her til godkendelse.
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Status</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm space-y-2">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div>
+                <div className="text-2xl font-semibold">{diag.total_invalid}</div>
+                <div className="text-xs text-muted-foreground">Ugyldig EAN i PIM</div>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold">{diag.ready_to_suggest}</div>
+                <div className="text-xs text-muted-foreground">Klar til godkendelse</div>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold text-muted-foreground">
+                  {diag.linked_variant_missing_barcode}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Shopify har ingen barcode på linket variant
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold text-muted-foreground">
+                  {diag.no_valid_barcode_anywhere}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Ingen gyldig barcode på nogen variant
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold text-amber-600">
+                  {diag.blocked_by_other_product}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Blokeret — EAN bruges af andet produkt
+                </div>
+              </div>
+            </div>
+            {suggestions.length === 0 && (
+              <p className="pt-3 text-muted-foreground border-t">
+                {diag.total_invalid === 0 ? (
+                  <>Alle produkter har gyldige EAN'er.</>
+                ) : diag.linked_variant_missing_barcode >= diag.total_invalid ? (
+                  <>
+                    Shopify har heller ikke barcodes på de linkede varianter — der er derfor intet
+                    at foreslå. Klik <strong>Scan Shopify for EAN'er</strong> for at hente
+                    barcodes igen, eller opdater dem manuelt i Shopify først.
+                  </>
+                ) : (
+                  <>
+                    Klik <strong>Scan Shopify for EAN'er</strong> for at hente friske barcodes.
+                    Placeholder-EAN'er (wc-*) bliver auto-opdateret; øvrige forslag vises her.
+                  </>
+                )}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
