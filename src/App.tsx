@@ -14,6 +14,7 @@ import SupplierListPage from "@/pages/SupplierListPage";
 import SupplierDetailPage from "@/pages/SupplierDetailPage";
 import SettingsPage from "@/pages/SettingsPage";
 import DuplicateEansPage from "@/pages/DuplicateEansPage";
+import EanSuggestionsPage from "@/pages/EanSuggestionsPage";
 import ImportPage from "@/pages/ImportPage";
 import MonitoringPage from "@/pages/MonitoringPage";
 import AiInsightsPage from "@/pages/AiInsightsPage";
