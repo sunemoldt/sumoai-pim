@@ -163,18 +163,6 @@ export default function ProductDetailPage() {
   const roundingMode = priceSettings.find(s => s.scope === "price_rounding")?.scope_value ?? "nearest_5";
   const backorderMode = priceSettings.find(s => s.scope === "default_backorder")?.scope_value ?? "notify";
 
-  function applyRounding(price: number, mode: string): number {
-    switch (mode) {
-      case "nearest_1": return Math.round(price);
-      case "nearest_5": return Math.round(price / 5) * 5;
-      case "nearest_10": return Math.round(price / 10) * 10;
-      case "nearest_25": return Math.round(price / 25) * 25;
-      case "nearest_49": return Math.floor(price / 10) * 10 + 9;
-      case "nearest_95": return Math.floor(price) - (Math.floor(price) % 5) + 4.95;
-      case "nearest_99": return Math.floor(price / 10) * 10 - 0.01;
-      default: return Math.round(price * 100) / 100;
-    }
-  }
 
   const applyRecPrice = async (rec: any) => {
     setApplyingRec(rec.id + "_price");
