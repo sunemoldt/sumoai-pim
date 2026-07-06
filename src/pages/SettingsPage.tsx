@@ -161,16 +161,7 @@ export default function SettingsPage() {
     }
   };
 
-  const roundingExamples: Record<string, string> = {
-    none: "741,57 → 741,57",
-    nearest_1: "741,57 → 742,00",
-    nearest_5: "741,57 → 745,00",
-    nearest_10: "741,57 → 740,00",
-    nearest_25: "741,57 → 750,00",
-    nearest_49: "741,57 → 749,00",
-    nearest_95: "741,57 → 745,00 (ender på ,95)",
-    nearest_99: "741,57 → 739,99",
-  };
+  const roundingExamples = ROUNDING_EXAMPLES;
 
   return (
     <div className="space-y-8">
