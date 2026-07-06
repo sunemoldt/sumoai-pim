@@ -1223,6 +1223,18 @@ export type Database = {
           products: Json
         }[]
       }
+      list_ean_diagnostic_products: {
+        Args: { p_category: string }
+        Returns: {
+          current_ean: string
+          image_url: string
+          master_product_id: string
+          note: string
+          shopify_product_id: string
+          sku: string
+          title: string
+        }[]
+      }
       list_ean_suggestions: {
         Args: never
         Returns: {
