@@ -196,10 +196,22 @@ Deno.serve(async (req) => {
             ? (String(matchedVariant.barcode).trim().replace(/^0+/, "") || String(matchedVariant.barcode).trim())
             : null;
           tryField("ean", normalizedBarcode);
-          // Backfill EAN from Shopify even if policy says PIM is master,
-          // when the current PIM value is missing or a "wc-*" fallback placeholder.
+          // Backfill EAN from Shopify even if policy says PIM is master when:
+          //  - the current PIM value is missing / a "wc-*" fallback placeholder, OR
+          //  - the master is explicitly linked to this variant (shopify_variant_id match)
+          //    and Shopify has a valid EAN barcode (12/13 digits) — Shopify wins for
+          //    explicitly linked variants so a stale supplier EAN cannot mask the real one.
           const isFallbackEan = !t.ean || String(t.ean).startsWith("wc-");
-          if (isFallbackEan && normalizedBarcode && normalizedBarcode !== t.ean) {
+          const isExplicitLink =
+            !!targetVariantId &&
+            !!matchedVariant?.id &&
+            (matchedVariant.id.split("/").pop() ?? "") === targetVariantId;
+          const isValidBarcode = !!normalizedBarcode && /^\d{12}$|^\d{13}$/.test(normalizedBarcode);
+          if (
+            normalizedBarcode &&
+            normalizedBarcode !== t.ean &&
+            (isFallbackEan || (isExplicitLink && isValidBarcode))
+          ) {
             update.ean = normalizedBarcode;
           }
           tryField("sku", matchedVariant.sku);
