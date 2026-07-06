@@ -80,6 +80,7 @@ function AuthenticatedApp() {
         <Route path="/collections" element={<CollectionsListPage />} />
         <Route path="/collections/:id" element={<CollectionDetailPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/duplicate-eans" element={<DuplicateEansPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AppLayout>
