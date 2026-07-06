@@ -148,10 +148,25 @@ export default function EanSuggestionsPage() {
             variant="outline"
             size="sm"
             onClick={() => refetch()}
-            disabled={isFetching}
+            disabled={isFetching || scanState.running}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} />
             Opdater
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={scanShopify}
+            disabled={scanState.running}
+          >
+            {scanState.running ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            {scanState.running
+              ? `Scanner ${scanState.done}/${scanState.total}…`
+              : "Scan Shopify for EAN'er"}
           </Button>
           {suggestions.length > 0 && (
             <Button size="sm" disabled={bulkPending} onClick={approveAll}>
@@ -165,6 +180,16 @@ export default function EanSuggestionsPage() {
           )}
         </div>
       </div>
+
+      {suggestions.length === 0 && !isLoading && !scanState.running && (
+        <Card>
+          <CardContent className="py-6 text-sm text-muted-foreground">
+            Tip: Klik <strong>Scan Shopify for EAN'er</strong> for at kontakte Shopify og hente
+            barcodes for produkter med ugyldig eller manglende EAN. Placeholder-EAN'er (wc-*) bliver
+            auto-opdateret; øvrige forslag kommer frem her til godkendelse.
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
