@@ -46,16 +46,27 @@ export default function LowMarginGuardCard() {
         ],
         { onConflict: "setting_key" }
       );
-    setSaving(false);
     if (error) {
+      setSaving(false);
       toast({ title: "Fejl", description: error.message, variant: "destructive" });
       return;
     }
+    // Re-apply guard across all products so the new tærskel virker med det samme.
+    const { error: rpcErr } = await supabase.rpc("reapply_low_margin_guard_all" as any);
+    setSaving(false);
+    if (rpcErr) {
+      toast({
+        title: "Gemt, men revurdering fejlede",
+        description: rpcErr.message,
+        variant: "destructive",
+      });
+      return;
+    }
     toast({
-      title: "Gemt",
+      title: "Gemt og genberegnet",
       description: enabled
-        ? `Lagerstatus tvinges til 0 når avancen er under ${num}%.`
-        : "Lavmargin-beskyttelse er slået fra globalt.",
+        ? `Lagerstatus tvinges til 0 når avancen er under ${num}%. Alle produkter er revurderet.`
+        : "Lavmargin-beskyttelse er slået fra globalt. Alle produkter er revurderet.",
     });
   };
 
