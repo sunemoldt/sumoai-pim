@@ -82,6 +82,7 @@ function AuthenticatedApp() {
         <Route path="/collections/:id" element={<CollectionDetailPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/duplicate-eans" element={<DuplicateEansPage />} />
+        <Route path="/settings/ean-suggestions" element={<EanSuggestionsPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AppLayout>
