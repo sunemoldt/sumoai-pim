@@ -444,6 +444,8 @@ export default function SettingsPage() {
 
       <DuplicateEansCard />
 
+      <EanSuggestionsCard />
+
       <AttributeDefinitionsCard />
 
       <WebhookFormDialog
