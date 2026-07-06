@@ -257,21 +257,42 @@ Deno.serve(async (req) => {
     const backordersNorm: string | undefined = (effectiveBackorderPolicy ?? backorders) as string | undefined;
 
     const variantInput: Record<string, unknown> = { id: variantGid };
-    if (effectiveRegularPrice !== undefined && effectiveRegularPrice !== null) {
-      if (canPush("webshop_price")) {
-        variantInput.price = String(effectiveRegularPrice);
-        dbUpdate.webshop_price = effectiveRegularPrice;
-        logChange("webshop_price", product.webshop_price, effectiveRegularPrice, "price_update");
-        updatedFields.push("price");
-      } else { skippedFields.push("webshop_price"); }
-    }
-    if (effectiveSalePrice !== undefined) {
-      if (canPush("sale_price")) {
-        variantInput.compareAtPrice = effectiveSalePrice !== null ? String(effectiveSalePrice) : null;
-        dbUpdate.sale_price = effectiveSalePrice;
-        logChange("sale_price", product.sale_price, effectiveSalePrice, "price_update");
-        updatedFields.push("compareAtPrice");
-      } else { skippedFields.push("sale_price"); }
+    // Shopify semantics: variant.price = current selling price, compareAtPrice = "was" price (strikethrough).
+    // PIM semantics: webshop_price = normal price, sale_price = discounted price when on sale.
+    // Mapping: if sale_price is set (and < webshop_price) => price = sale_price, compareAtPrice = webshop_price.
+    //         else => price = webshop_price, compareAtPrice = null.
+    const pricingTouched = effectiveRegularPrice !== undefined || effectiveSalePrice !== undefined;
+    if (pricingTouched) {
+      const newRegular = effectiveRegularPrice !== undefined && effectiveRegularPrice !== null
+        ? Number(effectiveRegularPrice)
+        : (product.webshop_price != null ? Number(product.webshop_price) : null);
+      const newSaleRaw = effectiveSalePrice !== undefined ? effectiveSalePrice : product.sale_price;
+      const newSale = newSaleRaw !== null && newSaleRaw !== undefined ? Number(newSaleRaw) : null;
+      const onSale = newSale !== null && newRegular !== null && newSale < newRegular && newSale > 0;
+
+      if (effectiveRegularPrice !== undefined && effectiveRegularPrice !== null) {
+        if (canPush("webshop_price")) {
+          dbUpdate.webshop_price = effectiveRegularPrice;
+          logChange("webshop_price", product.webshop_price, effectiveRegularPrice, "price_update");
+        } else { skippedFields.push("webshop_price"); }
+      }
+      if (effectiveSalePrice !== undefined) {
+        if (canPush("sale_price")) {
+          dbUpdate.sale_price = effectiveSalePrice;
+          logChange("sale_price", product.sale_price, effectiveSalePrice, "price_update");
+        } else { skippedFields.push("sale_price"); }
+      }
+
+      if (canPush("webshop_price") || canPush("sale_price")) {
+        if (onSale) {
+          variantInput.price = String(newSale);
+          variantInput.compareAtPrice = String(newRegular);
+        } else if (newRegular !== null) {
+          variantInput.price = String(newRegular);
+          variantInput.compareAtPrice = null;
+        }
+        updatedFields.push("price", "compareAtPrice");
+      }
     }
     const inventoryPolicy = toInventoryPolicy(backordersNorm);
     if (inventoryPolicy) {
