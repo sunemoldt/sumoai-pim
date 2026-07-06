@@ -36,7 +36,48 @@ export default function EanSuggestionsPage() {
   const { data, isLoading, isFetching, refetch } = useSuggestions();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [bulkPending, setBulkPending] = useState(false);
+  const [scanState, setScanState] = useState<{ running: boolean; done: number; total: number }>({
+    running: false,
+    done: 0,
+    total: 0,
+  });
   const { toast } = useToast();
+
+  async function scanShopify() {
+    const { data: ids, error } = await supabase.rpc("list_invalid_ean_product_ids");
+    if (error || !ids?.length) {
+      toast({
+        title: error ? "Kunne ikke hente liste" : "Intet at scanne",
+        description: error?.message,
+        variant: error ? "destructive" : "default",
+      });
+      return;
+    }
+    setScanState({ running: true, done: 0, total: ids.length });
+    let done = 0;
+    // Small parallelism to avoid rate-limiting Shopify
+    const concurrency = 4;
+    const queue = [...ids] as { id: string }[];
+    async function worker() {
+      while (queue.length > 0) {
+        const item = queue.shift();
+        if (!item) return;
+        await supabase.functions
+          .invoke("shopify-pull", { body: { master_product_id: item.id } })
+          .catch(() => null);
+        done += 1;
+        setScanState({ running: true, done, total: ids.length });
+      }
+    }
+    await Promise.all(Array.from({ length: concurrency }, worker));
+    setScanState({ running: false, done: ids.length, total: ids.length });
+    toast({
+      title: "Shopify-scan færdig",
+      description: `${ids.length} produkter blev tjekket. Placeholder-EAN'er (wc-*) er auto-opdateret. Øvrige forslag vises nedenfor.`,
+    });
+    qc.invalidateQueries({ queryKey: ["ean-suggestions"] });
+    qc.invalidateQueries({ queryKey: ["products"] });
+  }
 
   async function approve(id: string, ean: string) {
     setPendingId(id);
