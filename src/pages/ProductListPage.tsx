@@ -311,8 +311,8 @@ export default function ProductListPage() {
       }
 
       // EAN filter
-      if (eanFilter === "has_ean" && !product.ean) return false;
-      if (eanFilter === "no_ean" && product.ean) return false;
+      if (eanFilter === "has_ean" && !isValidEan(product.ean)) return false;
+      if (eanFilter === "no_ean" && isValidEan(product.ean)) return false;
 
       return true;
     });
