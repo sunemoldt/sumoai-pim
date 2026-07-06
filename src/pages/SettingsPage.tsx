@@ -441,6 +441,8 @@ export default function SettingsPage() {
 
       <CleanupAuditCard />
 
+      <DuplicateEansCard />
+
       <AttributeDefinitionsCard />
 
       <WebhookFormDialog
