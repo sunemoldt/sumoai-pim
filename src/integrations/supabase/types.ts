@@ -1205,6 +1205,7 @@ export type Database = {
         Args: { p_master_product_id: string; p_qty: number }
         Returns: Json
       }
+      ean_suggestions_diagnostic: { Args: never; Returns: Json }
       get_change_log_daily: {
         Args: { days?: number }
         Returns: {
