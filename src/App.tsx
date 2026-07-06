@@ -14,6 +14,7 @@ import SupplierListPage from "@/pages/SupplierListPage";
 import SupplierDetailPage from "@/pages/SupplierDetailPage";
 import SettingsPage from "@/pages/SettingsPage";
 import DuplicateEansPage from "@/pages/DuplicateEansPage";
+import EanSuggestionsPage from "@/pages/EanSuggestionsPage";
 import ImportPage from "@/pages/ImportPage";
 import MonitoringPage from "@/pages/MonitoringPage";
 import AiInsightsPage from "@/pages/AiInsightsPage";
@@ -81,6 +82,7 @@ function AuthenticatedApp() {
         <Route path="/collections/:id" element={<CollectionDetailPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/duplicate-eans" element={<DuplicateEansPage />} />
+        <Route path="/settings/ean-suggestions" element={<EanSuggestionsPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </AppLayout>
