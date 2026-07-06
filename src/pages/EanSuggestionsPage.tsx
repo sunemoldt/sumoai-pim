@@ -95,7 +95,7 @@ export default function EanSuggestionsPage() {
       title: "Shopify-scan færdig",
       description: `${ids.length} produkter blev tjekket. Placeholder-EAN'er (wc-*) er auto-opdateret. Øvrige forslag vises nedenfor.`,
     });
-    qc.invalidateQueries({ queryKey: ["ean-suggestions"] });
+    qc.invalidateQueries({ queryKey: ["ean-suggestions"] }); refetchDiag();
     qc.invalidateQueries({ queryKey: ["products"] });
   }
 
@@ -108,7 +108,7 @@ export default function EanSuggestionsPage() {
       });
       if (error) throw error;
       toast({ title: "EAN godkendt", description: ean });
-      qc.invalidateQueries({ queryKey: ["ean-suggestions"] });
+      qc.invalidateQueries({ queryKey: ["ean-suggestions"] }); refetchDiag();
       qc.invalidateQueries({ queryKey: ["products"] });
     } catch (err) {
       toast({
@@ -140,7 +140,7 @@ export default function EanSuggestionsPage() {
       variant: fail ? "destructive" : "default",
     });
     setBulkPending(false);
-    qc.invalidateQueries({ queryKey: ["ean-suggestions"] });
+    qc.invalidateQueries({ queryKey: ["ean-suggestions"] }); refetchDiag();
     qc.invalidateQueries({ queryKey: ["products"] });
   }
 
