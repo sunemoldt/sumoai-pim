@@ -29,7 +29,7 @@ type EanFilter = "all" | "has_ean" | "no_ean";
 const isValidEan = (ean: string | null | undefined): boolean => {
   if (!ean) return false;
   const digits = ean.trim();
-  return /^\d{8}$|^\d{13}$/.test(digits);
+  return /^\d{12}$|^\d{13}$/.test(digits);
 };
 type SortField = "title" | "ean" | "brand" | "stock_quantity" | "purchase_price" | "webshop_price" | "recommended" | "margin" | "page_views" | "conversion_rate" | "updated_at";
 type SortDir = "asc" | "desc";
