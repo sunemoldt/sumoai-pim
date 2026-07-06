@@ -24,6 +24,7 @@ type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
 type DuplicateFilter = "all" | "fallback_ean" | "shared_ean" | "same_title";
+type EanFilter = "all" | "has_ean" | "no_ean";
 type SortField = "title" | "ean" | "brand" | "stock_quantity" | "purchase_price" | "webshop_price" | "recommended" | "margin" | "page_views" | "conversion_rate" | "updated_at";
 type SortDir = "asc" | "desc";
 
@@ -41,6 +42,7 @@ export default function ProductListPage() {
   const statusFilter = (searchParams.get("status") ?? "all") as StatusFilter;
   const duplicateFilter = (searchParams.get("duplicate") ?? "all") as DuplicateFilter;
   const tagFilter = searchParams.get("tag") ?? "all";
+  const eanFilter = (searchParams.get("ean") ?? "all") as EanFilter;
   const sortField = (searchParams.get("sort") ?? "title") as SortField;
   const sortDir = (searchParams.get("dir") ?? "asc") as SortDir;
   const view = (searchParams.get("view") ?? "grid") as "grid" | "list";
@@ -73,6 +75,7 @@ export default function ProductListPage() {
   const setStatusFilter = (v: StatusFilter) => setParam("status", v);
   const setDuplicateFilter = (v: DuplicateFilter) => setParam("duplicate", v);
   const setTagFilter = (v: string) => setParam("tag", v);
+  const setEanFilter = (v: EanFilter) => setParam("ean", v);
 
   const { data: products = [], isLoading } = useMasterProducts(search || undefined);
   const { data: priceSettings = [] } = usePriceSettings();
