@@ -30,7 +30,6 @@ import MarkupSettingsCard from "@/components/MarkupSettingsCard";
 import AnalysisThresholdsCard from "@/components/AnalysisThresholdsCard";
 
 export default function SettingsPage() {
-  const { data: priceSettings = [] } = usePriceSettings();
   const { data: webhooks = [] } = useWebhookConfigs();
   const [formOpen, setFormOpen] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<WebhookConfig | null>(null);
