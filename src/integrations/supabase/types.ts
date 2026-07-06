@@ -1197,6 +1197,10 @@ export type Database = {
         Args: { p_master_product_id: string }
         Returns: undefined
       }
+      approve_ean_suggestion: {
+        Args: { p_ean: string; p_master_id: string }
+        Returns: Json
+      }
       decrement_stock_from_shopify_order: {
         Args: { p_master_product_id: string; p_qty: number }
         Returns: Json
@@ -1216,6 +1220,20 @@ export type Database = {
         Returns: {
           ean: string
           products: Json
+        }[]
+      }
+      list_ean_suggestions: {
+        Args: never
+        Returns: {
+          current_ean: string
+          image_url: string
+          master_product_id: string
+          shopify_product_id: string
+          shopify_variant_id: string
+          sku: string
+          suggested_ean: string
+          title: string
+          updated_at: string
         }[]
       }
       merge_attribute_definitions: {
