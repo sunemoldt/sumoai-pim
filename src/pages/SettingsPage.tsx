@@ -18,6 +18,7 @@ import FieldSyncPolicyCard from "@/components/FieldSyncPolicyCard";
 import AttributeDefinitionsCard from "@/components/AttributeDefinitionsCard";
 import ShopifyBulkPullCard from "@/components/ShopifyBulkPullCard";
 import CleanupAuditCard from "@/components/CleanupAuditCard";
+import DuplicateEansCard from "@/components/DuplicateEansCard";
 import ShopifyQueueCard from "@/components/ShopifyQueueCard";
 import WoocommerceToggleCard from "@/components/WoocommerceToggleCard";
 import WoocommerceForcePushCard from "@/components/WoocommerceForcePushCard";
