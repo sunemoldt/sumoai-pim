@@ -602,6 +602,17 @@ export default function ProductListPage() {
             </SelectContent>
           </Select>
 
+          <Select value={eanFilter} onValueChange={(v) => setEanFilter(v as EanFilter)}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue placeholder="EAN" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle EAN</SelectItem>
+              <SelectItem value="has_ean">Med EAN</SelectItem>
+              <SelectItem value="no_ean">Uden EAN</SelectItem>
+            </SelectContent>
+          </Select>
+
           {activeFilterCount > 0 && (
             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 gap-1 text-xs">
               <X className="h-3 w-3" />
