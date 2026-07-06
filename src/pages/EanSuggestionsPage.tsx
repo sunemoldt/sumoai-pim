@@ -50,12 +50,39 @@ function useDiagnostic() {
   });
 }
 
+type DiagCategory = "invalid" | "missing_linked" | "no_valid_anywhere" | "blocked";
+type DiagProduct = {
+  master_product_id: string;
+  title: string | null;
+  sku: string | null;
+  image_url: string | null;
+  current_ean: string | null;
+  shopify_product_id: string | null;
+  note: string | null;
+};
+
+function useDiagProducts(cat: DiagCategory | null) {
+  return useQuery({
+    enabled: cat !== null,
+    queryKey: ["ean-suggestions", "diag-products", cat],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("list_ean_diagnostic_products", {
+        p_category: cat as string,
+      });
+      if (error) throw error;
+      return (data ?? []) as DiagProduct[];
+    },
+  });
+}
+
 export default function EanSuggestionsPage() {
   const qc = useQueryClient();
   const { data, isLoading, isFetching, refetch } = useSuggestions();
   const { data: diag, refetch: refetchDiag } = useDiagnostic();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [bulkPending, setBulkPending] = useState(false);
+  const [openCat, setOpenCat] = useState<DiagCategory | null>(null);
+  const { data: diagProducts, isFetching: diagLoading } = useDiagProducts(openCat);
   const [scanState, setScanState] = useState<{ running: boolean; done: number; total: number }>({
     running: false,
     done: 0,
@@ -208,40 +235,76 @@ export default function EanSuggestionsPage() {
           </CardHeader>
           <CardContent className="text-sm space-y-2">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <div>
-                <div className="text-2xl font-semibold">{diag.total_invalid}</div>
-                <div className="text-xs text-muted-foreground">Ugyldig EAN i PIM</div>
-              </div>
-              <div>
-                <div className="text-2xl font-semibold">{diag.ready_to_suggest}</div>
-                <div className="text-xs text-muted-foreground">Klar til godkendelse</div>
-              </div>
-              <div>
-                <div className="text-2xl font-semibold text-muted-foreground">
-                  {diag.linked_variant_missing_barcode}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Shopify har ingen barcode på linket variant
-                </div>
-              </div>
-              <div>
-                <div className="text-2xl font-semibold text-muted-foreground">
-                  {diag.no_valid_barcode_anywhere}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Ingen gyldig barcode på nogen variant
-                </div>
-              </div>
-              <div>
-                <div className="text-2xl font-semibold text-amber-600">
-                  {diag.blocked_by_other_product}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Blokeret — EAN bruges af andet produkt
-                </div>
-              </div>
+              {(
+                [
+                  { cat: "invalid" as const, n: diag.total_invalid, label: "Ugyldig EAN i PIM", tone: "" },
+                  { cat: null, n: diag.ready_to_suggest, label: "Klar til godkendelse", tone: "" },
+                  { cat: "missing_linked" as const, n: diag.linked_variant_missing_barcode, label: "Shopify har ingen barcode på linket variant", tone: "text-muted-foreground" },
+                  { cat: "no_valid_anywhere" as const, n: diag.no_valid_barcode_anywhere, label: "Ingen gyldig barcode på nogen variant", tone: "text-muted-foreground" },
+                  { cat: "blocked" as const, n: diag.blocked_by_other_product, label: "Blokeret — EAN bruges af andet produkt", tone: "text-amber-600" },
+                ] as const
+              ).map((tile, i) => {
+                const clickable = tile.cat !== null && tile.n > 0;
+                const active = openCat === tile.cat;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    disabled={!clickable}
+                    onClick={() => clickable && setOpenCat(active ? null : tile.cat!)}
+                    className={`text-left rounded-md p-2 -m-2 transition-colors ${
+                      clickable ? "hover:bg-muted cursor-pointer" : "cursor-default"
+                    } ${active ? "bg-muted ring-1 ring-border" : ""}`}
+                  >
+                    <div className={`text-2xl font-semibold ${tile.tone}`}>{tile.n}</div>
+                    <div className="text-xs text-muted-foreground">{tile.label}</div>
+                  </button>
+                );
+              })}
             </div>
-            {suggestions.length === 0 && (
+            {openCat && (
+              <div className="pt-3 border-t space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    Produkter i denne kategori{diagProducts ? ` (${diagProducts.length})` : ""}
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setOpenCat(null)}>
+                    Luk
+                  </Button>
+                </div>
+                {diagLoading && !diagProducts ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (diagProducts ?? []).length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4">Ingen produkter.</div>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto divide-y rounded border">
+                    {diagProducts!.map((p) => (
+                      <Link
+                        key={p.master_product_id}
+                        to={`/products/${p.master_product_id}`}
+                        className="flex items-center gap-3 px-3 py-2 hover:bg-muted"
+                      >
+                        {p.image_url ? (
+                          <img src={p.image_url} alt="" className="h-8 w-8 rounded object-cover bg-muted" />
+                        ) : (
+                          <div className="h-8 w-8 rounded bg-muted" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm truncate">{p.title || "(uden titel)"}</div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {p.sku ? `SKU: ${p.sku} · ` : ""}EAN: {p.current_ean || "(mangler)"}
+                            {p.note ? ` · ${p.note}` : ""}
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {suggestions.length === 0 && !openCat && (
               <p className="pt-3 text-muted-foreground border-t">
                 {diag.total_invalid === 0 ? (
                   <>Alle produkter har gyldige EAN'er.</>
@@ -249,12 +312,14 @@ export default function EanSuggestionsPage() {
                   <>
                     Shopify har heller ikke barcodes på de linkede varianter — der er derfor intet
                     at foreslå. Klik <strong>Scan Shopify for EAN'er</strong> for at hente
-                    barcodes igen, eller opdater dem manuelt i Shopify først.
+                    barcodes igen, eller opdater dem manuelt i Shopify først. Klik på tallene
+                    ovenfor for at se hvilke produkter det drejer sig om.
                   </>
                 ) : (
                   <>
                     Klik <strong>Scan Shopify for EAN'er</strong> for at hente friske barcodes.
                     Placeholder-EAN'er (wc-*) bliver auto-opdateret; øvrige forslag vises her.
+                    Klik på tallene ovenfor for at se de påvirkede produkter.
                   </>
                 )}
               </p>
