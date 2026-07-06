@@ -1211,6 +1211,13 @@ export type Database = {
       }
       get_db_stats: { Args: never; Returns: Json }
       get_monitoring_overview: { Args: never; Returns: Json }
+      list_duplicate_eans: {
+        Args: never
+        Returns: {
+          ean: string
+          products: Json
+        }[]
+      }
       merge_attribute_definitions: {
         Args: { p_source_id: string; p_target_id: string }
         Returns: Json
@@ -1223,6 +1230,10 @@ export type Database = {
       recompute_stock_for_supplier: {
         Args: { p_supplier_id: string }
         Returns: number
+      }
+      resolve_duplicate_ean: {
+        Args: { p_ean: string; p_keep_id: string }
+        Returns: Json
       }
       revert_change_log_entry: { Args: { p_log_id: string }; Returns: Json }
       set_bulk_supplier_import: {
