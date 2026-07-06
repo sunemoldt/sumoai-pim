@@ -25,6 +25,12 @@ type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
 type DuplicateFilter = "all" | "fallback_ean" | "shared_ean" | "same_title";
 type EanFilter = "all" | "has_ean" | "no_ean";
+
+const isValidEan = (ean: string | null | undefined): boolean => {
+  if (!ean) return false;
+  const digits = ean.trim();
+  return /^\d{8}$|^\d{13}$/.test(digits);
+};
 type SortField = "title" | "ean" | "brand" | "stock_quantity" | "purchase_price" | "webshop_price" | "recommended" | "margin" | "page_views" | "conversion_rate" | "updated_at";
 type SortDir = "asc" | "desc";
 
@@ -305,8 +311,8 @@ export default function ProductListPage() {
       }
 
       // EAN filter
-      if (eanFilter === "has_ean" && !product.ean) return false;
-      if (eanFilter === "no_ean" && product.ean) return false;
+      if (eanFilter === "has_ean" && !isValidEan(product.ean)) return false;
+      if (eanFilter === "no_ean" && isValidEan(product.ean)) return false;
 
       return true;
     });
