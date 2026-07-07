@@ -84,7 +84,10 @@ export default function CampaignProductPicker({ selectedIds, selectedMap, onAdd,
   });
 
   const addAll = () => {
-    const toAdd = filtered.filter((p) => !selectedIds.has(p.id)).map(toSelected);
+    const toAdd = filtered
+      .filter((p) => !selectedIds.has(p.id))
+      .filter((p) => !isBelowPurchase(calcSale(p.webshop_price), getCheapestPurchase(p)))
+      .map(toSelected);
     if (toAdd.length === 0) return;
     onAddMany(toAdd);
   };
