@@ -790,6 +790,105 @@ export type Database = {
         }
         Relationships: []
       }
+      sale_campaign_products: {
+        Row: {
+          applied_at: string | null
+          applied_sale_price: number | null
+          campaign_id: string
+          created_at: string
+          id: string
+          master_product_id: string
+          original_sale_price: number | null
+          reverted_at: string | null
+          skipped_reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_sale_price?: number | null
+          campaign_id: string
+          created_at?: string
+          id?: string
+          master_product_id: string
+          original_sale_price?: number | null
+          reverted_at?: string | null
+          skipped_reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          applied_at?: string | null
+          applied_sale_price?: number | null
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          master_product_id?: string
+          original_sale_price?: number | null
+          reverted_at?: string | null
+          skipped_reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_campaign_products_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "sale_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_campaign_products_master_product_id_fkey"
+            columns: ["master_product_id"]
+            isOneToOne: false
+            referencedRelation: "master_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sale_campaigns: {
+        Row: {
+          activated_at: string | null
+          created_at: string
+          deactivated_at: string | null
+          discount_percent: number
+          ends_at: string
+          id: string
+          name: string
+          notes: string | null
+          overwrite_existing_sale: boolean
+          starts_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          created_at?: string
+          deactivated_at?: string | null
+          discount_percent: number
+          ends_at: string
+          id?: string
+          name: string
+          notes?: string | null
+          overwrite_existing_sale?: boolean
+          starts_at: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          created_at?: string
+          deactivated_at?: string | null
+          discount_percent?: number
+          ends_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          overwrite_existing_sale?: boolean
+          starts_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shopify_collections: {
         Row: {
           analytics_updated_at: string | null
