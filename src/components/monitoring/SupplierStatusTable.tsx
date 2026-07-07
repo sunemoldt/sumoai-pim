@@ -53,11 +53,11 @@ export function SupplierStatusTable() {
   const runNow = async (id: string, name: string) => {
     setSyncing(id);
     try {
-      const { data, error } = await supabase.functions.invoke("supplier-feed-import", { body: { supplier_id: id } });
+      const { data, error } = await supabase.functions.invoke("supplier-feed-import", { body: { supplier_id: id, async: true } });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(`${name}: ${data.imported ?? 0} produkter opdateret`);
-      load();
+      toast.success(`${name}: synk startet i baggrunden`);
+      setTimeout(load, 5000);
     } catch (e: any) {
       toast.error(`${name}: ${e.message}`);
     } finally {
