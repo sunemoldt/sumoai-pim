@@ -1,35 +1,27 @@
-## Formål
+# Fix supplier import/rematch 504 timeouts
 
-Når flere master-produkter (eller variants) har samme EAN, skal du kunne se konflikterne og vælge hvilket produkt der beholder EAN'et. De andre får en `wc-*` placeholder, så unique-constraint holder og Shopify-pull automatisk kan hente den korrekte barcode ved næste sync.
+## Problem
+- `supplier-feed-import`: 11× 504 in 24h. Also 65 runtime errors "No rows found in feed" at index.ts line 448 (unrelated parsing issue on some feeds).
+- `supplier-rematch-product`: 10× 504 in 24h. It fans out to all active auto-feed suppliers in parallel and waits for each `supplier-feed-import` call to finish — inherits the largest feed's runtime, hitting the edge wall-clock limit.
 
-## Hvor det bor
+## Approach: async jobs with status polling
+1. Add table `public.supplier_import_jobs` (id, supplier_id, target_ean, status: pending|running|done|failed, started_at, finished_at, imported, error, source). RLS + GRANTs.
+2. Refactor `supplier-feed-import`:
+   - Accept optional `job_id`. If missing, create one, return `202 { job_id }` immediately, and run the existing pipeline inside `EdgeRuntime.waitUntil(...)`, updating the job row on completion/failure.
+   - Keep a `sync=true` flag for internal cron callers that want the old blocking behavior.
+3. Refactor `supplier-rematch-product`:
+   - Create one parent job, spawn child `supplier-feed-import` calls with `waitUntil`, return `202 { job_id }` immediately.
+4. Frontend (`QuickSupplierSyncButton`, `SupplierStatusTable`, rematch caller): after invoke, poll `supplier_import_jobs` by `job_id` (or realtime subscribe) and show progress; toast on final status.
+5. Investigate the "No rows found in feed" errors at `supplier-feed-import/index.ts:448` — likely a parser edge case for certain CSV/XML shapes; add defensive logging of feed shape before throwing.
 
-Ny side: **Indstillinger → Data → Dublet-EAN'er** (`/settings/duplicate-eans`), plus et lille badge på Settings-forsiden når der findes konflikter.
+## Files
+- new migration: `supplier_import_jobs` table + policies + GRANTs
+- `supabase/functions/supplier-feed-import/index.ts`
+- `supabase/functions/supplier-rematch-product/index.ts`
+- `src/components/QuickSupplierSyncButton.tsx`
+- `src/components/monitoring/SupplierStatusTable.tsx`
+- any other callers of the two functions
 
-## Flow
-
-1. Siden loader alle EAN'er som optræder på >1 master_product (ignorerer `wc-*` placeholders og NULL).
-2. Hver konflikt vises som en gruppe med:
-   - EAN
-   - Liste af kandidater: titel, SKU, Shopify-link (hvis synket), lifecycle status, sidste Shopify-pull, thumbnail
-   - Radio-knap: "Behold på dette produkt"
-   - Knap: "Ryd EAN på alle" (til hvis ingen er korrekt)
-3. Ved "Gem": det valgte produkt beholder EAN, de øvrige får `wc-dup-<slug>` placeholder. Ændringen logges med source `duplicate-ean-resolve`.
-4. Efter gem: option "Kør Shopify-pull nu" for de nulstillede produkter, så de får korrekt barcode fra Shopify.
-
-## Teknisk
-
-- Ny SQL-funktion `public.list_duplicate_eans()` (SECURITY DEFINER, `SET search_path = public`) returnerer `ean, product_ids[], products jsonb` — filtrerer `ean NOT LIKE 'wc-%'` og `count(*) > 1`.
-- Ny SQL-funktion `public.resolve_duplicate_ean(p_ean text, p_keep_id uuid)`:
-  - Sætter `app.change_source = 'duplicate-ean-resolve'`
-  - For hvert andet produkt med samme EAN: sæt `ean = 'wc-dup-' || substr(id::text,1,8)`
-  - Returnerer antal opdaterede.
-- Ny SQL-funktion `public.clear_duplicate_ean(p_ean text)` — samme men på alle.
-- Frontend: `src/pages/DuplicateEansPage.tsx` med react-query, kalder RPC'erne, viser groupering via `Card` + `RadioGroup` fra shadcn. Efter resolve trigger `supabase.functions.invoke('shopify-pull', { body: { master_product_id } })` for hver ryddet, hvis den har `shopify_product_id`.
-- Route tilføjes i `src/App.tsx`, link i `src/pages/SettingsPage.tsx` (kort med badge der viser antal konflikter — bruger `list_duplicate_eans` count).
-
-## Uden for scope
-
-- Variant-niveau dubletter (kun master_products i denne omgang).
-- Auto-fusion af produkter.
-- Bulk-import af EAN-korrektioner via CSV.
+## Risks
+- Cron path (`scheduled-sync`) currently reads the response body — must pass `sync=true` or switch to polling.
+- Concurrent rematch on the same supplier could duplicate work — dedupe on `(supplier_id, status in (pending,running))`.

@@ -65,8 +65,10 @@ Deno.serve(async (req) => {
       ["api", "csv", "xml", "ftp"].includes(s.feed_type ?? "")
     );
 
-    const results: Array<{ supplier: string; ok: boolean; imported?: number; error?: string }> = [];
-    // Fire in parallel; each call has target_ean so it's cheap
+    const results: Array<{ supplier: string; ok: boolean; started?: boolean; error?: string }> = [];
+    // Kick off each supplier import in async mode: the import function returns 202 immediately
+    // and does the heavy work in EdgeRuntime.waitUntil, so a slow supplier can't cause a 504
+    // for this rematch call. Callers should re-fetch supplier_products shortly after.
     await Promise.all(targets.map(async (s) => {
       try {
         const r = await fetch(`${SUPABASE_URL}/functions/v1/supplier-feed-import`, {
@@ -76,17 +78,16 @@ Deno.serve(async (req) => {
             "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             "apikey": SUPABASE_SERVICE_ROLE_KEY,
           },
-          body: JSON.stringify({ supplier_id: s.id, target_ean: product.ean }),
+          body: JSON.stringify({ supplier_id: s.id, target_ean: product.ean, async: true }),
         });
         const j = await r.json().catch(() => ({}));
-        results.push({ supplier: s.name, ok: r.ok && j.success !== false, imported: j.imported, error: j.error });
+        results.push({ supplier: s.name, ok: r.ok && j.success !== false, started: j.started === true, error: j.error });
       } catch (e) {
         results.push({ supplier: s.name, ok: false, error: e instanceof Error ? e.message : String(e) });
       }
     }));
 
-    const totalImported = results.reduce((a, r) => a + (r.imported ?? 0), 0);
-    return new Response(JSON.stringify({ success: true, ean: product.ean, total_imported: totalImported, results }), {
+    return new Response(JSON.stringify({ success: true, ean: product.ean, started: results.filter(r => r.started).length, results }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

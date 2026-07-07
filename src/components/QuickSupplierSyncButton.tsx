@@ -28,19 +28,22 @@ export default function QuickSupplierSyncButton({ productId, supplierIds, varian
     setSyncing(true);
     const results = await Promise.allSettled(
       uniqueIds.map((supplier_id) =>
-        supabase.functions.invoke("supplier-feed-import", { body: { supplier_id } })
+        supabase.functions.invoke("supplier-feed-import", { body: { supplier_id, async: true } })
       )
     );
     setSyncing(false);
     const ok = results.filter((r) => r.status === "fulfilled" && !(r.value as any)?.error).length;
     const failed = results.length - ok;
     toast({
-      title: failed === 0 ? "Synk fuldført" : "Synk delvist gennemført",
-      description: `${ok}/${results.length} leverandør-feeds opdateret${failed > 0 ? `, ${failed} fejlede` : ""}.`,
+      title: failed === 0 ? "Synk startet" : "Synk delvist startet",
+      description: `${ok}/${results.length} leverandør-feed(s) sat i gang i baggrunden. Data opdateres om lidt.`,
       variant: failed === 0 ? "default" : "destructive",
     });
-    qc.invalidateQueries({ queryKey: ["master_products"] });
-    qc.invalidateQueries({ queryKey: ["master_product", productId] });
+    // Give the background jobs a moment before invalidating, so refetch sees new rows
+    setTimeout(() => {
+      qc.invalidateQueries({ queryKey: ["master_products"] });
+      qc.invalidateQueries({ queryKey: ["master_product", productId] });
+    }, 4000);
   };
 
   if (variant === "icon") {
