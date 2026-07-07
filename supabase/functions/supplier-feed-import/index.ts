@@ -270,8 +270,10 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+  let asyncMode = false;
   try {
-    const { supplier_id, target_ean: rawTargetEan, mode: rawMode } = await req.json();
+    const body = await req.json();
+    const { supplier_id, target_ean: rawTargetEan, mode: rawMode, async: rawAsync } = body;
     if (!supplier_id) {
       return new Response(JSON.stringify({ error: "supplier_id is required" }), {
         status: 400,
@@ -279,10 +281,40 @@ Deno.serve(async (req) => {
       });
     }
     const mode: "import" | "unmatched" = rawMode === "unmatched" ? "unmatched" : "import";
+    asyncMode = rawAsync === true && mode === "import";
     // Optional: only process rows matching this normalized EAN (used by supplier-rematch-product)
     const targetEan: string | null = rawTargetEan
       ? (String(rawTargetEan).trim().replace(/^0+/, "") || String(rawTargetEan).trim())
       : null;
+
+    // Async mode: kick off the work in the background and respond immediately so the
+    // caller (and the API gateway) doesn't hit the 60s wall-clock timeout on large feeds.
+    if (asyncMode) {
+      const work = (async () => {
+        try {
+          const r = await fetch(`${SUPABASE_URL}/functions/v1/supplier-feed-import`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            },
+            body: JSON.stringify({ supplier_id, target_ean: rawTargetEan, mode: rawMode }),
+          });
+          const j = await r.json().catch(() => ({}));
+          console.log(`[async import ${supplier_id}]`, r.status, JSON.stringify(j).slice(0, 200));
+        } catch (e) {
+          console.error(`[async import ${supplier_id}] failed`, e);
+        }
+      })();
+      // @ts-ignore EdgeRuntime is provided by Supabase Edge Runtime
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(work);
+      return new Response(JSON.stringify({ success: true, async: true, started: true }), {
+        status: 202,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
 
     // Get supplier
     const { data: supplier, error: supErr } = await supabase
