@@ -74,6 +74,15 @@ export default function CampaignEditorPage() {
     if (locked) return;
     setSelectedMap((prev) => new Map(prev).set(p.id, p));
   };
+  const addManyProducts = (ps: SelectedProduct[]) => {
+    if (locked) return;
+    setSelectedMap((prev) => {
+      const m = new Map(prev);
+      ps.forEach((p) => m.set(p.id, p));
+      return m;
+    });
+  };
+
   const removeProduct = (id: string) => {
     if (locked) return;
     setSelectedMap((prev) => { const m = new Map(prev); m.delete(id); return m; });
@@ -270,6 +279,7 @@ export default function CampaignEditorPage() {
           selectedIds={selectedIds}
           selectedMap={selectedMap}
           onAdd={addProduct}
+          onAddMany={addManyProducts}
           onRemove={removeProduct}
           discountPercent={discountNum}
         />
