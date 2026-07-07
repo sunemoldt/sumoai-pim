@@ -88,6 +88,7 @@ function AuthenticatedApp() {
         <Route path="/campaigns/new" element={<CampaignEditorPage />} />
         <Route path="/campaigns/:id" element={<CampaignEditorPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/price-alerts" element={<PriceAlertsPage />} />
 
         <Route path="/settings/duplicate-eans" element={<DuplicateEansPage />} />
         <Route path="/settings/ean-suggestions" element={<EanSuggestionsPage />} />
