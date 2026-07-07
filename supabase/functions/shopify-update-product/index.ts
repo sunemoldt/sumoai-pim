@@ -283,15 +283,32 @@ Deno.serve(async (req) => {
         } else { skippedFields.push("sale_price"); }
       }
 
-      if (canPush("webshop_price") || canPush("sale_price")) {
-        if (onSale) {
+      // Gate price/compareAtPrice independently by field sync policy so a blocked
+      // field is never overwritten by a push on the other field.
+      // - variant.price reflects the current selling price:
+      //     on sale -> comes from sale_price (gate on "sale_price")
+      //     not on sale -> comes from webshop_price (gate on "webshop_price")
+      // - variant.compareAtPrice reflects the "was" strikethrough price:
+      //     on sale -> the regular price (gate on "webshop_price")
+      //     not on sale -> cleared to null (gate on "sale_price", since this ends a sale)
+      if (onSale) {
+        if (canPush("sale_price")) {
           variantInput.price = String(newSale);
-          variantInput.compareAtPrice = String(newRegular);
-        } else if (newRegular !== null) {
-          variantInput.price = String(newRegular);
-          variantInput.compareAtPrice = null;
+          updatedFields.push("price");
         }
-        updatedFields.push("price", "compareAtPrice");
+        if (canPush("webshop_price")) {
+          variantInput.compareAtPrice = String(newRegular);
+          updatedFields.push("compareAtPrice");
+        }
+      } else if (newRegular !== null) {
+        if (canPush("webshop_price")) {
+          variantInput.price = String(newRegular);
+          updatedFields.push("price");
+        }
+        if (canPush("sale_price")) {
+          variantInput.compareAtPrice = null;
+          updatedFields.push("compareAtPrice");
+        }
       }
     }
     const inventoryPolicy = toInventoryPolicy(backordersNorm);
