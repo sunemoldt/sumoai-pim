@@ -279,6 +279,7 @@ export default function CampaignEditorPage() {
           selectedIds={selectedIds}
           selectedMap={selectedMap}
           onAdd={addProduct}
+          onAddMany={addManyProducts}
           onRemove={removeProduct}
           discountPercent={discountNum}
         />
