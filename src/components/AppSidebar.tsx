@@ -13,7 +13,9 @@ import {
   Rss,
   FolderTree,
   Sparkles,
+  Tag,
 } from "lucide-react";
+
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
@@ -21,7 +23,9 @@ const navItems = [
   { to: "/products", icon: Package, label: "Produkter" },
   { to: "/collections", icon: FolderTree, label: "Kategorier" },
   { to: "/quotes", icon: FileText, label: "Tilbud" },
+  { to: "/campaigns", icon: Tag, label: "Kampagner" },
   { to: "/suppliers", icon: Truck, label: "Leverandører" },
+
   { to: "/import", icon: Download, label: "WooCommerce" },
   { to: "/shopify", icon: ShoppingBag, label: "Shopify" },
   { to: "/feeds", icon: Rss, label: "Feeds" },

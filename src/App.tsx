@@ -25,6 +25,9 @@ import QuoteEditorPage from "@/pages/QuoteEditorPage";
 import FeedsPage from "@/pages/FeedsPage";
 import CollectionsListPage from "@/pages/CollectionsListPage";
 import CollectionDetailPage from "@/pages/CollectionDetailPage";
+import CampaignListPage from "@/pages/CampaignListPage";
+import CampaignEditorPage from "@/pages/CampaignEditorPage";
+
 import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import OAuthConsentPage from "@/pages/OAuthConsentPage";
@@ -80,7 +83,11 @@ function AuthenticatedApp() {
         <Route path="/feeds" element={<FeedsPage />} />
         <Route path="/collections" element={<CollectionsListPage />} />
         <Route path="/collections/:id" element={<CollectionDetailPage />} />
+        <Route path="/campaigns" element={<CampaignListPage />} />
+        <Route path="/campaigns/new" element={<CampaignEditorPage />} />
+        <Route path="/campaigns/:id" element={<CampaignEditorPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+
         <Route path="/settings/duplicate-eans" element={<DuplicateEansPage />} />
         <Route path="/settings/ean-suggestions" element={<EanSuggestionsPage />} />
         <Route path="*" element={<NotFound />} />

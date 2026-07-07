@@ -1,27 +1,75 @@
-# Fix supplier import/rematch 504 timeouts
+# Tilbudskampagner (bulk)
 
-## Problem
-- `supplier-feed-import`: 11× 504 in 24h. Also 65 runtime errors "No rows found in feed" at index.ts line 448 (unrelated parsing issue on some feeds).
-- `supplier-rematch-product`: 10× 504 in 24h. It fans out to all active auto-feed suppliers in parallel and waits for each `supplier-feed-import` call to finish — inherits the largest feed's runtime, hitting the edge wall-clock limit.
+Muligheden for at oprette en kampagne, tilføje flere produkter, sætte en procentrabat og en start/slutdato. Aktivering og deaktivering sker automatisk i baggrunden.
 
-## Approach: async jobs with status polling
-1. Add table `public.supplier_import_jobs` (id, supplier_id, target_ean, status: pending|running|done|failed, started_at, finished_at, imported, error, source). RLS + GRANTs.
-2. Refactor `supplier-feed-import`:
-   - Accept optional `job_id`. If missing, create one, return `202 { job_id }` immediately, and run the existing pipeline inside `EdgeRuntime.waitUntil(...)`, updating the job row on completion/failure.
-   - Keep a `sync=true` flag for internal cron callers that want the old blocking behavior.
-3. Refactor `supplier-rematch-product`:
-   - Create one parent job, spawn child `supplier-feed-import` calls with `waitUntil`, return `202 { job_id }` immediately.
-4. Frontend (`QuickSupplierSyncButton`, `SupplierStatusTable`, rematch caller): after invoke, poll `supplier_import_jobs` by `job_id` (or realtime subscribe) and show progress; toast on final status.
-5. Investigate the "No rows found in feed" errors at `supplier-feed-import/index.ts:448` — likely a parser edge case for certain CSV/XML shapes; add defensive logging of feed shape before throwing.
+## Datamodel
 
-## Files
-- new migration: `supplier_import_jobs` table + policies + GRANTs
-- `supabase/functions/supplier-feed-import/index.ts`
-- `supabase/functions/supplier-rematch-product/index.ts`
-- `src/components/QuickSupplierSyncButton.tsx`
-- `src/components/monitoring/SupplierStatusTable.tsx`
-- any other callers of the two functions
+Ny tabel `sale_campaigns`:
+- `name` (tekst)
+- `discount_percent` (numerisk, 0–90)
+- `starts_at`, `ends_at` (timestamptz)
+- `status` (`scheduled` | `active` | `ended` | `cancelled`)
+- `overwrite_existing_sale` (boolean — checkbox ved oprettelse)
+- `activated_at`, `deactivated_at` (til logning)
 
-## Risks
-- Cron path (`scheduled-sync`) currently reads the response body — must pass `sync=true` or switch to polling.
-- Concurrent rematch on the same supplier could duplicate work — dedupe on `(supplier_id, status in (pending,running))`.
+Ny tabel `sale_campaign_products`:
+- `campaign_id`, `master_product_id`
+- `original_sale_price` (snapshot af `sale_price` inden aktivering — bruges til at gendanne ved slut)
+- `applied_sale_price` (den beregnede kampagnepris)
+- `applied_at`, `reverted_at`, `skipped_reason`
+
+RLS + GRANTs som resten af projektet (authenticated + service_role).
+
+## Beregning
+
+`applied_sale_price = round(webshop_price × (1 − discount_percent/100), 2)` — ingen prisrunding (som valgt). Beregnes per produkt ved aktivering, så nye webshop_price-ændringer i kampagneperioden ikke automatisk ompriser (fastfrosset ved start).
+
+## Aktivering / deaktivering
+
+Ny edge function `sale-campaign-scheduler` (verify_jwt=false), kaldt af `pg_cron` hvert 5. minut:
+
+1. **Aktivér** kampagner hvor `status='scheduled'` og `starts_at ≤ now()`:
+   - For hvert produkt: hvis `sale_price` allerede sat og `overwrite_existing_sale=false` → skip (log `skipped_reason='had_manual_sale'`)
+   - Ellers: snapshot nuværende `sale_price` → `original_sale_price`, sæt ny `sale_price` = beregnet pris
+   - Sæt `change_source = 'sale-campaign'` så eksisterende trigger enqueuer Shopify-push
+   - Kampagne → `status='active'`
+2. **Deaktivér** kampagner hvor `status='active'` og `ends_at ≤ now()`:
+   - Restore `sale_price` = `original_sale_price` (kan være NULL) for hvert produkt hvor `sale_price` = `applied_sale_price` (undgå at overskrive hvis en bruger har rettet i mellemtiden)
+   - Kampagne → `status='ended'`
+
+Tilføj også manuelle `activate`/`deactivate`/`cancel` actions i UI der kalder samme function med explicit `campaign_id`.
+
+## UI
+
+Ny route `/campaigns`:
+- **Liste**: alle kampagner med status-badge, periode, rabat%, antal produkter, aktivér/pause/annullér
+- **Editor** (`/campaigns/new`, `/campaigns/:id`):
+  - Felter: navn, rabat%, start-dato, slut-dato, checkbox "Overskriv produkter der allerede er på tilbud"
+  - Produkt-picker: søgning (title/EAN/brand/SKU) + filter (brand, kategori, "kun på lager"), tilføj/fjern
+  - Preview-tabel: titel, webshop_price, beregnet kampagnepris, evt. eksisterende sale_price + advarsel hvis den vil blive sprunget over
+- Sidebar-link "Kampagner" i `AppSidebar`
+
+Ingen ændringer i `ProductCard`/`ProductListPage` denne omgang (dedikeret editor valgt).
+
+## Filer
+
+**Ny**
+- Migration: `sale_campaigns`, `sale_campaign_products` (+ GRANTs, RLS, `updated_at`-trigger)
+- `supabase/functions/sale-campaign-scheduler/index.ts`
+- pg_cron schedule (insert via data-tool, ikke migration)
+- `src/pages/CampaignListPage.tsx`
+- `src/pages/CampaignEditorPage.tsx`
+- `src/hooks/use-campaigns.ts`
+- `src/components/CampaignProductPicker.tsx`
+
+**Ændret**
+- `src/App.tsx` (routes)
+- `src/components/AppSidebar.tsx` (nav-link)
+- Regenereret `src/integrations/supabase/types.ts` (auto)
+
+## Kanttilfælde
+
+- Produkt slettet mellem oprettelse og aktivering → skip + log
+- Kampagne redigeret efter aktivering → kun `name`/`ends_at` må ændres (rabat% og produkter låses); ny rabat kræver ny kampagne
+- Overlappende kampagner på samme produkt → seneste aktive kampagne vinder ved aktivering (bruger advares i editor hvis produkt allerede indgår i anden aktiv/planlagt kampagne)
+- Shopify-push håndteres automatisk via `auto_enqueue_shopify_update` triggeren når `sale_price` ændres
