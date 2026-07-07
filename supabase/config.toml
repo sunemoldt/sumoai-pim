@@ -24,4 +24,8 @@ verify_jwt = false
 [functions.sale-campaign-scheduler]
 verify_jwt = false
 
+[functions.shopify-below-cost-scanner]
+verify_jwt = false
+
+
 
