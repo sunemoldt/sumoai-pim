@@ -14,6 +14,7 @@ import {
   FolderTree,
   Sparkles,
   Tag,
+  AlertTriangle,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,6 +31,7 @@ const navItems = [
   { to: "/shopify", icon: ShoppingBag, label: "Shopify" },
   { to: "/feeds", icon: Rss, label: "Feeds" },
   { to: "/ai-insights", icon: Sparkles, label: "AI-indsigter" },
+  { to: "/price-alerts", icon: AlertTriangle, label: "Pris-alarmer" },
   { to: "/monitoring", icon: Activity, label: "Monitoring" },
   { to: "/automations/n8n", icon: Workflow, label: "n8n Workflows" },
   { to: "/settings", icon: Settings, label: "Indstillinger" },

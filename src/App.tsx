@@ -27,6 +27,7 @@ import CollectionsListPage from "@/pages/CollectionsListPage";
 import CollectionDetailPage from "@/pages/CollectionDetailPage";
 import CampaignListPage from "@/pages/CampaignListPage";
 import CampaignEditorPage from "@/pages/CampaignEditorPage";
+import PriceAlertsPage from "@/pages/PriceAlertsPage";
 
 import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
@@ -87,6 +88,7 @@ function AuthenticatedApp() {
         <Route path="/campaigns/new" element={<CampaignEditorPage />} />
         <Route path="/campaigns/:id" element={<CampaignEditorPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/price-alerts" element={<PriceAlertsPage />} />
 
         <Route path="/settings/duplicate-eans" element={<DuplicateEansPage />} />
         <Route path="/settings/ean-suggestions" element={<EanSuggestionsPage />} />
