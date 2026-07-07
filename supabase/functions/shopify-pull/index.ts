@@ -80,6 +80,16 @@ function canPull(policy: Map<string, { master: string; direction: string }>, fie
   return p.direction === "pull" || p.direction === "two_way";
 }
 
+function mapShopifyPrices(variant: any) {
+  const price = variant?.price ? Number(variant.price) : null;
+  const compareAt = variant?.compareAtPrice ? Number(variant.compareAtPrice) : null;
+  const onSale = price != null && compareAt != null && compareAt > price;
+  return {
+    webshop_price: onSale ? compareAt : price,
+    sale_price: onSale ? price : null,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -179,8 +189,9 @@ Deno.serve(async (req) => {
 
 
         if (matchedVariant) {
-          tryField("webshop_price", matchedVariant.price ? Number(matchedVariant.price) : null);
-          tryField("sale_price", matchedVariant.compareAtPrice ? Number(matchedVariant.compareAtPrice) : null);
+          const mappedPrices = mapShopifyPrices(matchedVariant);
+          tryField("webshop_price", mappedPrices.webshop_price);
+          tryField("sale_price", mappedPrices.sale_price);
           tryField("stock_quantity", typeof matchedVariant.inventoryQuantity === "number" ? matchedVariant.inventoryQuantity : null);
           tryField("backorders_allowed", matchedVariant.inventoryPolicy === "CONTINUE");
           tryField("backorder_policy", matchedVariant.inventoryPolicy === "CONTINUE" ? "yes" : "no");
@@ -227,20 +238,23 @@ Deno.serve(async (req) => {
         await supabase.from("master_products").update(update).eq("id", t.id);
 
         // Sync variants
-        const variantRows = (sp.variants?.nodes ?? []).map((v: any, idx: number) => ({
-          master_product_id: t.id,
-          shopify_variant_id: v.id?.split("/").pop() ?? null,
-          shopify_inventory_item_id: v.inventoryItem?.id?.split("/").pop() ?? null,
-          sku: v.sku ?? null,
-          ean: v.barcode ? (String(v.barcode).trim().replace(/^0+/, "") || String(v.barcode).trim()) : null,
-          webshop_price: v.price ? Number(v.price) : null,
-          sale_price: v.compareAtPrice ? Number(v.compareAtPrice) : null,
-          stock_quantity: typeof v.inventoryQuantity === "number" ? v.inventoryQuantity : 0,
-          weight: v.inventoryItem?.measurement?.weight?.value ?? null,
-          attributes: Object.fromEntries((v.selectedOptions ?? []).map((o: any) => [o.name, o.value])),
-          position: v.position ?? idx,
-          updated_at: new Date().toISOString(),
-        }));
+        const variantRows = (sp.variants?.nodes ?? []).map((v: any, idx: number) => {
+          const mappedPrices = mapShopifyPrices(v);
+          return {
+            master_product_id: t.id,
+            shopify_variant_id: v.id?.split("/").pop() ?? null,
+            shopify_inventory_item_id: v.inventoryItem?.id?.split("/").pop() ?? null,
+            sku: v.sku ?? null,
+            ean: v.barcode ? (String(v.barcode).trim().replace(/^0+/, "") || String(v.barcode).trim()) : null,
+            webshop_price: mappedPrices.webshop_price,
+            sale_price: mappedPrices.sale_price,
+            stock_quantity: typeof v.inventoryQuantity === "number" ? v.inventoryQuantity : 0,
+            weight: v.inventoryItem?.measurement?.weight?.value ?? null,
+            attributes: Object.fromEntries((v.selectedOptions ?? []).map((o: any) => [o.name, o.value])),
+            position: v.position ?? idx,
+            updated_at: new Date().toISOString(),
+          };
+        });
 
         // Delete variants that no longer exist in Shopify, then upsert current ones
         const keepIds = variantRows.map((v: any) => v.shopify_variant_id).filter(Boolean);
@@ -317,6 +331,7 @@ Deno.serve(async (req) => {
               ? (String(v.barcode).trim().replace(/^0+/, "") || String(v.barcode).trim())
               : null;
             const qty = typeof v.inventoryQuantity === "number" ? v.inventoryQuantity : 0;
+            const mappedPrices = mapShopifyPrices(v);
 
             await supabase.rpc("set_change_source", { source: "shopify-pull-split" });
             const { data: ins, error: insErr } = await supabase
@@ -329,8 +344,8 @@ Deno.serve(async (req) => {
                 shopify_variant_id: vid,
                 shopify_sync_enabled: true,
                 lifecycle_status: lifecycle,
-                webshop_price: v.price ? Number(v.price) : null,
-                sale_price: v.compareAtPrice ? Number(v.compareAtPrice) : null,
+                webshop_price: mappedPrices.webshop_price,
+                sale_price: mappedPrices.sale_price,
                 stock_quantity: qty,
                 stock_status: qty > 0 ? "instock" : "outofstock",
                 backorders_allowed: v.inventoryPolicy === "CONTINUE",

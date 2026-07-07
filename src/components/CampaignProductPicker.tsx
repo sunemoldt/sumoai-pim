@@ -6,7 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Plus, Search, X, Package, ListPlus } from "lucide-react";
 
-type Selected = { id: string; title: string; ean: string | null; image_url: string | null; webshop_price: number | null; sale_price: number | null };
+type Selected = { id: string; title: string; ean: string | null; image_url: string | null; webshop_price: number | null; sale_price: number | null; cheapest_purchase_price?: number | null };
+const VAT_RATE = 0.25;
 
 interface Props {
   selectedIds: Set<string>;
@@ -24,6 +25,19 @@ function getCats(p: any): string[] {
   const arr = p.categories;
   if (Array.isArray(arr) && arr.length > 0) return arr.filter(Boolean);
   return p.category ? [p.category] : [];
+}
+
+function getCheapestPurchase(p: any): number | null {
+  const rows = (p.supplier_products ?? [])
+    .map((sp: any) => ({
+      purchase: sp.purchase_price == null ? null : Number(sp.purchase_price),
+      inStock: sp.in_stock === true && (sp.stock_quantity == null || Number(sp.stock_quantity) > 0),
+    }))
+    .filter((sp: { purchase: number | null }) => sp.purchase != null && Number.isFinite(sp.purchase) && sp.purchase > 0);
+  if (rows.length === 0) return null;
+  const inStockRows = rows.filter((sp: { inStock: boolean }) => sp.inStock);
+  const pool = inStockRows.length > 0 ? inStockRows : rows;
+  return Math.min(...pool.map((sp: { purchase: number }) => sp.purchase));
 }
 
 export default function CampaignProductPicker({ selectedIds, selectedMap, onAdd, onAddMany, onRemove, discountPercent }: Props) {
@@ -66,6 +80,7 @@ export default function CampaignProductPicker({ selectedIds, selectedMap, onAdd,
   const toSelected = (p: any): Selected => ({
     id: p.id, title: p.title, ean: p.ean, image_url: p.image_url,
     webshop_price: p.webshop_price, sale_price: p.sale_price ?? null,
+    cheapest_purchase_price: getCheapestPurchase(p),
   });
 
   const addAll = () => {
@@ -76,6 +91,9 @@ export default function CampaignProductPicker({ selectedIds, selectedMap, onAdd,
 
   const calcSale = (webshop: number | null) =>
     webshop == null ? null : Math.round(webshop * (1 - discountPercent / 100) * 100) / 100;
+
+  const isBelowPurchase = (sale: number | null, purchase: number | null | undefined) =>
+    sale != null && purchase != null && sale / (1 + VAT_RATE) + 0.005 < purchase;
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -133,6 +151,9 @@ export default function CampaignProductPicker({ selectedIds, selectedMap, onAdd,
             <>
               {results.map((p) => {
                 const already = selectedIds.has(p.id);
+                const newSale = calcSale(p.webshop_price);
+                const cheapestPurchase = getCheapestPurchase(p);
+                const belowPurchase = isBelowPurchase(newSale, cheapestPurchase);
                 return (
                   <div key={p.id} className="flex items-center gap-2 rounded-md border border-border p-2">
                     <div className="h-10 w-10 flex-shrink-0 rounded bg-secondary/40 flex items-center justify-center overflow-hidden">
@@ -143,15 +164,16 @@ export default function CampaignProductPicker({ selectedIds, selectedMap, onAdd,
                       <p className="text-xs text-muted-foreground truncate">
                         {p.brand} · {fmt(p.webshop_price)}
                         {p.sale_price != null && <span className="text-warning"> · nu {fmt(p.sale_price)}</span>}
+                        {belowPurchase && <span className="text-destructive"> · under indkøb ({fmt(cheapestPurchase)})</span>}
                       </p>
                     </div>
                     <Button
                       size="sm"
                       variant={already ? "ghost" : "secondary"}
-                      disabled={already}
+                      disabled={already || belowPurchase}
                       onClick={() => onAdd(toSelected(p))}
                     >
-                      {already ? "Tilføjet" : <><Plus className="h-3.5 w-3.5 mr-1" />Tilføj</>}
+                      {already ? "Tilføjet" : belowPurchase ? "Blokeret" : <><Plus className="h-3.5 w-3.5 mr-1" />Tilføj</>}
                     </Button>
                   </div>
                 );
@@ -179,6 +201,7 @@ export default function CampaignProductPicker({ selectedIds, selectedMap, onAdd,
           ) : (
             [...selectedMap.values()].map((p) => {
               const newSale = calcSale(p.webshop_price);
+              const belowPurchase = isBelowPurchase(newSale, p.cheapest_purchase_price);
               return (
                 <div key={p.id} className="flex items-center gap-2 rounded-md border border-border p-2">
                   <div className="h-10 w-10 flex-shrink-0 rounded bg-secondary/40 flex items-center justify-center overflow-hidden">
@@ -189,6 +212,7 @@ export default function CampaignProductPicker({ selectedIds, selectedMap, onAdd,
                     <p className="text-xs text-muted-foreground truncate">
                       {fmt(p.webshop_price)} → <span className="text-primary font-semibold">{fmt(newSale)}</span>
                       {p.sale_price != null && <span className="text-warning"> · allerede på tilbud ({fmt(p.sale_price)})</span>}
+                      {belowPurchase && <span className="text-destructive"> · under indkøb ({fmt(p.cheapest_purchase_price)})</span>}
                     </p>
                   </div>
                   <Button size="sm" variant="ghost" onClick={() => onRemove(p.id)} aria-label="Fjern">

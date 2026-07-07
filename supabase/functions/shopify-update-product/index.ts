@@ -9,6 +9,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const API_VERSION = "2026-04";
+const VAT_RATE = 0.25;
 
 async function requireUser(req: Request) {
   const authHeader = req.headers.get("authorization");
@@ -144,6 +145,35 @@ function toGid(type: "Product" | "ProductVariant" | "InventoryItem" | "Location"
   return `gid://shopify/${type}/${s}`;
 }
 
+async function getCheapestPurchasePrice(admin: any, masterProductId: string): Promise<number | null> {
+  const { data } = await admin
+    .from("supplier_products")
+    .select("purchase_price, in_stock, stock_quantity")
+    .eq("master_product_id", masterProductId);
+
+  const rows = (data ?? [])
+    .map((sp: any) => ({
+      purchase: sp.purchase_price == null ? null : Number(sp.purchase_price),
+      inStock: sp.in_stock === true && (sp.stock_quantity == null || Number(sp.stock_quantity) > 0),
+    }))
+    .filter((sp: { purchase: number | null }) => sp.purchase != null && Number.isFinite(sp.purchase) && sp.purchase > 0);
+
+  if (rows.length === 0) return null;
+  const inStockRows = rows.filter((sp: { inStock: boolean }) => sp.inStock);
+  const pool = inStockRows.length > 0 ? inStockRows : rows;
+  return Math.min(...pool.map((sp: { purchase: number }) => sp.purchase));
+}
+
+function assertNotBelowPurchase(sellingPriceInclVat: number | null, purchasePriceExVat: number | null) {
+  if (sellingPriceInclVat == null || purchasePriceExVat == null) return;
+  const sellingExVat = sellingPriceInclVat / (1 + VAT_RATE);
+  if (sellingExVat + 0.005 < purchasePriceExVat) {
+    throw new Error(
+      `Blokeret: Shopify-salgspris ${sellingPriceInclVat.toFixed(2)} kr inkl. moms er under indkøb ${purchasePriceExVat.toFixed(2)} kr ekskl. moms.`
+    );
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -269,6 +299,13 @@ Deno.serve(async (req) => {
       const newSaleRaw = effectiveSalePrice !== undefined ? effectiveSalePrice : product.sale_price;
       const newSale = newSaleRaw !== null && newSaleRaw !== undefined ? Number(newSaleRaw) : null;
       const onSale = newSale !== null && newRegular !== null && newSale < newRegular && newSale > 0;
+      const intendedSellingPrice = onSale ? newSale : newRegular;
+      const willPushSellingPrice = onSale ? canPush("sale_price") : canPush("webshop_price");
+
+      if (willPushSellingPrice) {
+        const cheapestPurchase = await getCheapestPurchasePrice(supabase, master_product_id);
+        assertNotBelowPurchase(intendedSellingPrice, cheapestPurchase);
+      }
 
       if (effectiveRegularPrice !== undefined && effectiveRegularPrice !== null) {
         if (canPush("webshop_price")) {

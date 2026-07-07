@@ -64,7 +64,7 @@ export function useSaleCampaignProducts(campaignId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sale_campaign_products")
-        .select("*, master_products(id, title, ean, image_url, webshop_price, sale_price, brand)")
+        .select("*, master_products(id, title, ean, image_url, webshop_price, sale_price, brand, supplier_products(purchase_price, in_stock, stock_quantity))")
         .eq("campaign_id", campaignId!);
       if (error) throw error;
       return data as (SaleCampaignProduct & {
@@ -76,6 +76,11 @@ export function useSaleCampaignProducts(campaignId: string | undefined) {
           webshop_price: number | null;
           sale_price: number | null;
           brand: string | null;
+          supplier_products?: {
+            purchase_price: number | null;
+            in_stock: boolean | null;
+            stock_quantity: number | null;
+          }[];
         } | null;
       })[];
     },

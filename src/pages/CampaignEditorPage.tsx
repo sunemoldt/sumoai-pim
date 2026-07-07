@@ -13,7 +13,20 @@ import { Loader2, ArrowLeft, Play, Square, Trash2, Save } from "lucide-react";
 import { toast } from "sonner";
 import CampaignProductPicker from "@/components/CampaignProductPicker";
 
-type SelectedProduct = { id: string; title: string; ean: string | null; image_url: string | null; webshop_price: number | null; sale_price: number | null };
+type SelectedProduct = { id: string; title: string; ean: string | null; image_url: string | null; webshop_price: number | null; sale_price: number | null; cheapest_purchase_price?: number | null };
+
+function getCheapestPurchase(product: { supplier_products?: { purchase_price: number | null; in_stock: boolean | null; stock_quantity: number | null }[] } | null | undefined) {
+  const rows = (product?.supplier_products ?? [])
+    .map((sp) => ({
+      purchase: sp.purchase_price == null ? null : Number(sp.purchase_price),
+      inStock: sp.in_stock === true && (sp.stock_quantity == null || Number(sp.stock_quantity) > 0),
+    }))
+    .filter((sp): sp is { purchase: number; inStock: boolean } => sp.purchase != null && Number.isFinite(sp.purchase) && sp.purchase > 0);
+  if (rows.length === 0) return null;
+  const inStockRows = rows.filter((sp) => sp.inStock);
+  const pool = inStockRows.length > 0 ? inStockRows : rows;
+  return Math.min(...pool.map((sp) => sp.purchase));
+}
 
 function toLocalInput(iso: string | null): string {
   if (!iso) return "";
@@ -61,6 +74,7 @@ export default function CampaignEditorPage() {
         image_url: cp.master_products.image_url,
         webshop_price: cp.master_products.webshop_price,
         sale_price: cp.master_products.sale_price,
+        cheapest_purchase_price: getCheapestPurchase(cp.master_products),
       });
     }
     setSelectedMap(m);

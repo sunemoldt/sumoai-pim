@@ -13,6 +13,32 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+const VAT_RATE = 0.25;
+
+async function getCheapestPurchasePrice(admin: any, masterProductId: string): Promise<number | null> {
+  const { data } = await admin
+    .from("supplier_products")
+    .select("purchase_price, in_stock, stock_quantity")
+    .eq("master_product_id", masterProductId);
+
+  const rows = (data ?? [])
+    .map((sp: any) => ({
+      purchase: sp.purchase_price == null ? null : Number(sp.purchase_price),
+      inStock: sp.in_stock === true && (sp.stock_quantity == null || Number(sp.stock_quantity) > 0),
+    }))
+    .filter((sp: { purchase: number | null }) => sp.purchase != null && Number.isFinite(sp.purchase) && sp.purchase > 0);
+
+  if (rows.length === 0) return null;
+  const inStockRows = rows.filter((sp: { inStock: boolean }) => sp.inStock);
+  const pool = inStockRows.length > 0 ? inStockRows : rows;
+  return Math.min(...pool.map((sp: { purchase: number }) => sp.purchase));
+}
+
+function isBelowPurchase(sellingPriceInclVat: number, purchasePriceExVat: number | null): boolean {
+  if (purchasePriceExVat == null) return false;
+  return sellingPriceInclVat / (1 + VAT_RATE) + 0.005 < purchasePriceExVat;
+}
+
 async function activateCampaign(admin: any, campaign: any) {
   const { data: cps } = await admin
     .from("sale_campaign_products")
@@ -49,6 +75,15 @@ async function activateCampaign(admin: any, campaign: any) {
     }
 
     const newSale = round2(Number(mp.webshop_price) * (1 - Number(campaign.discount_percent) / 100));
+    const cheapestPurchase = await getCheapestPurchasePrice(admin, mp.id);
+    if (isBelowPurchase(newSale, cheapestPurchase)) {
+      await admin
+        .from("sale_campaign_products")
+        .update({ skipped_reason: "below_purchase_price" })
+        .eq("id", cp.id);
+      skipped++;
+      continue;
+    }
 
     await admin.rpc("set_change_source", { source: "sale-campaign" });
     const { error: upErr } = await admin
