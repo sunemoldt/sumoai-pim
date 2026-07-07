@@ -9,6 +9,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const API_VERSION = "2026-04";
+const VAT_RATE = 0.25;
 
 // HTML -> Shopify rich_text_field JSON (root/heading/paragraph/list/list-item/text/link).
 function htmlToShopifyRichText(html: string): string {
@@ -102,6 +103,35 @@ async function shopifyGraphql(shopDomain: string, accessToken: string, query: st
   return data.data;
 }
 
+async function getCheapestPurchasePrice(admin: any, masterProductId: string): Promise<number | null> {
+  const { data } = await admin
+    .from("supplier_products")
+    .select("purchase_price, in_stock, stock_quantity")
+    .eq("master_product_id", masterProductId);
+
+  const rows = (data ?? [])
+    .map((sp: any) => ({
+      purchase: sp.purchase_price == null ? null : Number(sp.purchase_price),
+      inStock: sp.in_stock === true && (sp.stock_quantity == null || Number(sp.stock_quantity) > 0),
+    }))
+    .filter((sp: { purchase: number | null }) => sp.purchase != null && Number.isFinite(sp.purchase) && sp.purchase > 0);
+
+  if (rows.length === 0) return null;
+  const inStockRows = rows.filter((sp: { inStock: boolean }) => sp.inStock);
+  const pool = inStockRows.length > 0 ? inStockRows : rows;
+  return Math.min(...pool.map((sp: { purchase: number }) => sp.purchase));
+}
+
+function assertNotBelowPurchase(sellingPriceInclVat: number | null, purchasePriceExVat: number | null) {
+  if (sellingPriceInclVat == null || purchasePriceExVat == null) return;
+  const sellingExVat = sellingPriceInclVat / (1 + VAT_RATE);
+  if (sellingExVat + 0.005 < purchasePriceExVat) {
+    throw new Error(
+      `Blokeret: Shopify-salgspris ${sellingPriceInclVat.toFixed(2)} kr inkl. moms er under indkøb ${purchasePriceExVat.toFixed(2)} kr ekskl. moms.`
+    );
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -185,10 +215,17 @@ Deno.serve(async (req) => {
       }`;
     const effectiveWeight = p.weight_kg != null ? Number(p.weight_kg) : 1;
     const inventoryPolicy = p.backorder_policy === "yes" ? "CONTINUE" : "DENY";
+    const regularPrice = p.webshop_price != null ? Number(p.webshop_price) : null;
+    const salePrice = p.sale_price != null ? Number(p.sale_price) : null;
+    const onSale = regularPrice != null && salePrice != null && salePrice > 0 && salePrice < regularPrice;
+    const sellingPrice = onSale ? salePrice : regularPrice;
+    const cheapestPurchase = await getCheapestPurchasePrice(supabase, master_product_id);
+    assertNotBelowPurchase(sellingPrice, cheapestPurchase);
+
     const variantInput: Record<string, unknown> = {
       id: variantGid,
-      price: p.webshop_price != null ? String(p.webshop_price) : undefined,
-      compareAtPrice: p.sale_price != null ? String(p.sale_price) : undefined,
+      price: sellingPrice != null ? String(sellingPrice) : undefined,
+      compareAtPrice: onSale ? String(regularPrice) : undefined,
       barcode: p.ean ?? undefined,
       inventoryPolicy,
       inventoryItem: {
