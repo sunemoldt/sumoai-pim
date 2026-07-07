@@ -356,6 +356,65 @@ export type Database = {
         }
         Relationships: []
       }
+      price_alerts: {
+        Row: {
+          cheapest_purchase_price: number
+          created_at: string
+          details: Json
+          id: string
+          margin_pct: number
+          master_product_id: string
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          shopify_compare_at_price: number | null
+          shopify_price: number
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          cheapest_purchase_price: number
+          created_at?: string
+          details?: Json
+          id?: string
+          margin_pct: number
+          master_product_id: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity: string
+          shopify_compare_at_price?: number | null
+          shopify_price: number
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          cheapest_purchase_price?: number
+          created_at?: string
+          details?: Json
+          id?: string
+          margin_pct?: number
+          master_product_id?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          shopify_compare_at_price?: number | null
+          shopify_price?: number
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_alerts_master_product_id_fkey"
+            columns: ["master_product_id"]
+            isOneToOne: false
+            referencedRelation: "master_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       price_history: {
         Row: {
           id: string
