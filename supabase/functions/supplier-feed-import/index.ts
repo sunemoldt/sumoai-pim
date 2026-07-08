@@ -430,6 +430,7 @@ Deno.serve(async (req) => {
         await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, (line: string) => {
           if (!line) return;
           if (headers === null) {
+            if (line.charCodeAt(0) === 0xFEFF) line = line.slice(1);
             headers = line.split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
             eanIdx = headers.indexOf(eanCol);
             return;
