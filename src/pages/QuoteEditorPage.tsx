@@ -113,6 +113,23 @@ export default function QuoteEditorPage() {
     }]);
   };
 
+  const addLineFromEanLookup = (sel: EanLookupSelection) => {
+    const name = sel.master_product?.title ?? `EAN ${sel.ean}`;
+    const priceIncl = Number(sel.sellingPriceInclVat.toFixed(2));
+    setLines((prev) => [...prev, {
+      _key: crypto.randomUUID(),
+      pim_product_id: sel.master_product?.id ?? null,
+      product_name: name,
+      quantity: 1,
+      purchase_price: Number(sel.offer.purchase_price.toFixed(2)),
+      list_price: priceIncl,
+      quote_price: priceIncl,
+      sort_order: prev.length,
+    }]);
+    setEanDialogOpen(false);
+    toast({ title: "Linje tilføjet", description: `${sel.offer.supplier_name} · ${sel.offer.purchase_price.toFixed(2)} → ${priceIncl.toFixed(2)} inkl. moms` });
+  };
+
   const updateLine = (idx: number, patch: Partial<Line>) => {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
   };
