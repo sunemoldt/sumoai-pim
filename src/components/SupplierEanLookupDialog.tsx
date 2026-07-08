@@ -157,8 +157,12 @@ export function SupplierEanLookupPanel({ useLabel, onUse, initialEan }: Omit<Pro
             </div>
           ) : (
             <div className="rounded-md border border-dashed border-border bg-secondary/20 p-4 text-sm">
-              <p className="font-medium">Intet produkt fundet med EAN {result.ean_normalized}</p>
-              <p className="text-muted-foreground mt-1">Leverandør-feeds matcher først når produktet er oprettet i PIM.</p>
+              <p className="font-medium">Intet produkt oprettet med EAN {result.ean_normalized}</p>
+              <p className="text-muted-foreground mt-1">
+                {result.offers.length > 0
+                  ? `Fundet ${result.offers.length} leverandør-tilbud fra feed-cachen nedenfor.`
+                  : "Ingen leverandører har dette EAN i deres feed endnu."}
+              </p>
               <div className="mt-3">
                 <Link to={`/products/new?ean=${encodeURIComponent(result.ean_normalized)}`}>
                   <Button size="sm"><Package className="h-4 w-4 mr-1" /> Opret produkt</Button>
@@ -167,7 +171,7 @@ export function SupplierEanLookupPanel({ useLabel, onUse, initialEan }: Omit<Pro
             </div>
           )}
 
-          {result.master_product && (
+          {(result.master_product || result.offers.length > 0) && (
             <div className="space-y-2">
               <div className="text-xs font-medium uppercase text-muted-foreground tracking-wide">
                 Leverandørpriser ({result.offers.length})
