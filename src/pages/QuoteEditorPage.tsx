@@ -233,45 +233,51 @@ export default function QuoteEditorPage() {
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" /></div>;
 
   return (
-    <div className="space-y-6 pb-40">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/quotes")}><ArrowLeft className="h-4 w-4" /></Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold">{isNew ? "Nyt tilbud" : `Tilbud #${quoteNumber ?? ""}`}</h1>
-          {voucherGuid && status === "sent" && (
-            <p className="text-sm text-green-600 mt-1">Sendt til Dinero · {voucherGuid}</p>
-          )}
-          {status === "approved" && (
-            <p className="text-sm text-green-600 mt-1">✓ Godkendt af kunde</p>
-          )}
-          {status === "rejected" && (
-            <p className="text-sm text-destructive mt-1">✗ Afvist af kunde</p>
-          )}
+    <div className="space-y-6 pb-52 md:pb-40">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/quotes")} className="shrink-0"><ArrowLeft className="h-4 w-4" /></Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl md:text-2xl font-semibold truncate">{isNew ? "Nyt tilbud" : `Tilbud #${quoteNumber ?? ""}`}</h1>
+            {voucherGuid && status === "sent" && (
+              <p className="text-sm text-green-600 mt-1 truncate">Sendt til Dinero · {voucherGuid}</p>
+            )}
+            {status === "approved" && (
+              <p className="text-sm text-green-600 mt-1">✓ Godkendt af kunde</p>
+            )}
+            {status === "rejected" && (
+              <p className="text-sm text-destructive mt-1">✗ Afvist af kunde</p>
+            )}
+          </div>
         </div>
-        <Button variant="outline" onClick={saveQuote} disabled={saving}>
-          {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-          Gem
-        </Button>
-        <Button onClick={sendToDinero} disabled={sending || saving || lines.length === 0}>
-          {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
-          Send til Dinero
-        </Button>
-        <Button
-          variant="outline"
-          className="text-green-700 border-green-300 hover:bg-green-50 hover:text-green-800"
-          onClick={() => setOutcome("approved")}
-          disabled={saving || status === "approved"}
-        >
-          <CheckCircle2 className="h-4 w-4 mr-1" /> Godkendt
-        </Button>
-        <Button
-          variant="outline"
-          className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-          onClick={() => setOutcome("rejected")}
-          disabled={saving || status === "rejected"}
-        >
-          <XCircle className="h-4 w-4 mr-1" /> Afvist
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={saveQuote} disabled={saving} className="flex-1 md:flex-none">
+            {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+            Gem
+          </Button>
+          <Button size="sm" onClick={sendToDinero} disabled={sending || saving || lines.length === 0} className="flex-1 md:flex-none">
+            {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
+            <span className="md:inline">Send til Dinero</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-green-700 border-green-300 hover:bg-green-50 hover:text-green-800 flex-1 md:flex-none"
+            onClick={() => setOutcome("approved")}
+            disabled={saving || status === "approved"}
+          >
+            <CheckCircle2 className="h-4 w-4 mr-1" /> Godkendt
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive flex-1 md:flex-none"
+            onClick={() => setOutcome("rejected")}
+            disabled={saving || status === "rejected"}
+          >
+            <XCircle className="h-4 w-4 mr-1" /> Afvist
+          </Button>
+        </div>
       </div>
 
       <Card>
