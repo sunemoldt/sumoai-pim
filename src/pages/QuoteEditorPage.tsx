@@ -515,16 +515,23 @@ export default function QuoteEditorPage() {
       </div>
 
       {/* Sticky summary */}
-      <div className="fixed bottom-0 left-60 right-0 border-t border-border bg-card/95 backdrop-blur px-6 py-3 z-40">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
-          <Stat label="Subtotal ekskl. moms" value={`${totals.subtotal.toFixed(2)} kr.`} />
+      <div className="fixed bottom-0 left-0 md:left-60 right-0 border-t border-border bg-card/95 backdrop-blur px-3 sm:px-6 py-3 z-40">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 md:gap-4 text-sm">
+          <Stat label="Subtotal ex.moms" value={`${totals.subtotal.toFixed(2)} kr.`} />
           <Stat label="Moms (25%)" value={`${totals.vat.toFixed(2)} kr.`} />
-          <Stat label="Tilbuds pris inkl. moms" value={`${totals.total.toFixed(2)} kr.`} bold />
-          <Stat label="Indkøb total inkl. moms" value={`${(totals.purchase * (1 + VAT)).toFixed(2)} kr.`} />
+          <Stat label="Tilbud inkl. moms" value={`${totals.total.toFixed(2)} kr.`} bold />
+          <Stat label="Indkøb inkl. moms" value={`${(totals.purchase * (1 + VAT)).toFixed(2)} kr.`} />
           <Stat label="Avance kr." value={`${totals.marginKr.toFixed(2)} kr.`} />
           <Stat label="Avance %" value={`${totals.marginPct.toFixed(1)}%`} className={marginColor(totals.marginPct)} bold />
         </div>
       </div>
+
+      <SupplierEanLookupDialog
+        open={eanDialogOpen}
+        onOpenChange={setEanDialogOpen}
+        useLabel="Tilføj til tilbud"
+        onUse={addLineFromEanLookup}
+      />
     </div>
   );
 }
