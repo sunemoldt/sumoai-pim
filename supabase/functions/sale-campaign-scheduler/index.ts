@@ -168,12 +168,23 @@ async function deactivateCampaign(admin: any, campaign: any, finalStatus: "ended
       .eq("id", cp.id);
   }
 
-  await admin
-    .from("sale_campaigns")
-    .update({ status: finalStatus, deactivated_at: new Date().toISOString() })
-    .eq("id", campaign.id);
+  // Only mark the campaign as ended/cancelled once every applicable product has been reverted.
+  // If any revert failed (e.g. below-cost trigger), leave status = 'active' so the next tick retries.
+  const { count: pendingCount } = await admin
+    .from("sale_campaign_products")
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", campaign.id)
+    .not("applied_at", "is", null)
+    .is("reverted_at", null);
 
-  return { reverted };
+  if ((pendingCount ?? 0) === 0) {
+    await admin
+      .from("sale_campaigns")
+      .update({ status: finalStatus, deactivated_at: new Date().toISOString() })
+      .eq("id", campaign.id);
+  }
+
+  return { reverted, pending: pendingCount ?? 0 };
 }
 
 Deno.serve(async (req) => {
