@@ -303,8 +303,23 @@ Deno.serve(async (req) => {
       const willPushSellingPrice = onSale ? canPush("sale_price") : canPush("webshop_price");
 
       if (willPushSellingPrice) {
-        const cheapestPurchase = await getCheapestPurchasePrice(supabase, master_product_id);
-        assertNotBelowPurchase(intendedSellingPrice, cheapestPurchase);
+        // Guard: only block when the selling price is actually being LOWERED (or newly set)
+        // to a value under cost. If the price is unchanged vs. what's already in the DB,
+        // don't block — otherwise stock/other updates that re-push the current price get
+        // stuck forever when a new supplier feed lands a higher purchase price.
+        const currentSellingPrice = (() => {
+          const curRegular = product.webshop_price != null ? Number(product.webshop_price) : null;
+          const curSale = product.sale_price != null ? Number(product.sale_price) : null;
+          const wasOnSale = curSale !== null && curRegular !== null && curSale < curRegular && curSale > 0;
+          return wasOnSale ? curSale : curRegular;
+        })();
+        const priceIsLoweredOrNew =
+          intendedSellingPrice != null &&
+          (currentSellingPrice == null || intendedSellingPrice + 0.005 < currentSellingPrice);
+        if (force !== true && priceIsLoweredOrNew) {
+          const cheapestPurchase = await getCheapestPurchasePrice(supabase, master_product_id);
+          assertNotBelowPurchase(intendedSellingPrice, cheapestPurchase);
+        }
       }
 
       if (effectiveRegularPrice !== undefined && effectiveRegularPrice !== null) {
