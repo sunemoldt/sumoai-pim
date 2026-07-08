@@ -235,7 +235,10 @@ Deno.serve(async (req) => {
         update.updated_at = new Date().toISOString();
 
         await supabase.rpc("set_change_source", { source: "shopify-pull" });
-        await supabase.from("master_products").update(update).eq("id", t.id);
+        const { error: mpUpdErr } = await supabase.from("master_products").update(update).eq("id", t.id);
+        if (mpUpdErr) {
+          throw new Error(`master_products update rejected: ${mpUpdErr.message}`);
+        }
 
         // Sync variants
         const variantRows = (sp.variants?.nodes ?? []).map((v: any, idx: number) => {
