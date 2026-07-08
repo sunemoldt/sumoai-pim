@@ -146,10 +146,19 @@ async function deactivateCampaign(admin: any, campaign: any, finalStatus: "ended
 
     if (currentMatches) {
       await admin.rpc("set_change_source", { source: "sale-campaign" });
-      await admin
+      const { error: revertErr } = await admin
         .from("master_products")
         .update({ sale_price: cp.original_sale_price })
         .eq("id", mp.id);
+      if (revertErr) {
+        // Revert rejected (e.g. below-cost trigger). Do NOT mark reverted — leave for retry/manual fix.
+        console.error(`revert failed for ${mp.id}: ${revertErr.message}`);
+        await admin
+          .from("sale_campaign_products")
+          .update({ skipped_reason: `revert_failed:${revertErr.message}` })
+          .eq("id", cp.id);
+        continue;
+      }
       reverted++;
     }
 
