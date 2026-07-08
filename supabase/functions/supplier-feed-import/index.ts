@@ -441,8 +441,9 @@ Deno.serve(async (req) => {
           if (!rawEan) return;
           const ean = rawEan.replace(/^0+/, "") || rawEan;
           if (targetEan && ean !== targetEan) return;
-          const known = eanToIdEarlyOuter!.has(ean);
-          if (mode === "unmatched" ? known : !known) return;
+          // Keep every row (matched or not) so we can build the supplier feed cache
+          // for cross-supplier EAN lookup. Downstream loops still skip unmatched rows
+          // for supplier_products import.
           const row: Record<string, string> = {};
           headers.forEach((h, idx) => {
             row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
@@ -561,6 +562,70 @@ Deno.serve(async (req) => {
       );
     }
 
+
+    // --- Supplier feed cache: upsert EVERY row (matched or not) so cross-supplier
+    // EAN-lookup can find prices even for products not yet created in the PIM.
+    try {
+      const eanCol = mapping.ean;
+      const priceCol = mapping.purchase_price;
+      const stockCol = mapping.stock_quantity;
+      const skuCol = mapping.sku;
+      const titleCol = (mapping as any).title || (mapping as any).name || (mapping as any).short_description;
+      const brandCol = (mapping as any).brand || (mapping as any).manufacturer;
+      const eurRate = parseFloat((((mapping as any)._eur_rate ?? "7.46") as string).toString().replace(",", ".")) || 7.46;
+      const isEur = (mapping as any)._currency === "EUR";
+      const nowIsoCache = new Date().toISOString();
+      const seenCache = new Set<string>();
+      const cacheRows: Array<{
+        supplier_id: string;
+        ean: string;
+        product_title: string | null;
+        supplier_sku: string | null;
+        brand: string | null;
+        purchase_price: number | null;
+        stock_quantity: number | null;
+        in_stock: boolean;
+        last_seen_at: string;
+      }> = [];
+      for (const row of feedRows) {
+        const rawEan = eanCol ? row[eanCol]?.trim() : "";
+        if (!rawEan) continue;
+        const ean = rawEan.replace(/^0+/, "") || rawEan;
+        if (seenCache.has(ean)) continue;
+        seenCache.add(ean);
+        const priceStr = priceCol ? row[priceCol]?.trim().replace(",", ".") : "";
+        let price: number | null = priceStr ? parseFloat(priceStr) : NaN;
+        if (price === null || isNaN(price as number)) price = null;
+        else if (isEur) price = Math.round((price as number) * eurRate * 100) / 100;
+        const stockStr = stockCol ? row[stockCol]?.trim() : "";
+        const stockQty = stockStr ? parseInt(stockStr, 10) : NaN;
+        let inStock = true;
+        if (mapping.in_stock) {
+          const v = row[mapping.in_stock]?.trim().toLowerCase();
+          inStock = v === "1" || v === "yes" || v === "ja" || v === "true" || v === "in stock" || v === "på lager";
+        } else if (!isNaN(stockQty)) inStock = stockQty > 0;
+        cacheRows.push({
+          supplier_id: supplier.id,
+          ean,
+          product_title: titleCol ? (row[titleCol]?.trim() || null) : null,
+          supplier_sku: skuCol ? (row[skuCol]?.trim() || null) : null,
+          brand: brandCol ? (row[brandCol]?.trim() || null) : null,
+          purchase_price: price as number | null,
+          stock_quantity: isNaN(stockQty) ? null : stockQty,
+          in_stock: inStock,
+          last_seen_at: nowIsoCache,
+        });
+      }
+      for (let i = 0; i < cacheRows.length; i += 500) {
+        const { error: cacheErr } = await supabase
+          .from("supplier_feed_cache")
+          .upsert(cacheRows.slice(i, i + 500), { onConflict: "supplier_id,ean" });
+        if (cacheErr) console.error(`supplier_feed_cache upsert failed at ${i}: ${cacheErr.message}`);
+      }
+      console.log(`supplier_feed_cache: upserted ${cacheRows.length} rows for supplier ${supplier.name}`);
+    } catch (cacheErr) {
+      console.error(`supplier_feed_cache build failed: ${(cacheErr as Error).message}`);
+    }
 
     let imported = 0;
     let skipped = 0;

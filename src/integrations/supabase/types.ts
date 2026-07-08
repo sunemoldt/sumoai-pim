@@ -1209,6 +1209,59 @@ export type Database = {
         }
         Relationships: []
       }
+      supplier_feed_cache: {
+        Row: {
+          brand: string | null
+          created_at: string
+          ean: string
+          id: string
+          in_stock: boolean
+          last_seen_at: string
+          product_title: string | null
+          purchase_price: number | null
+          stock_quantity: number | null
+          supplier_id: string
+          supplier_sku: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string
+          ean: string
+          id?: string
+          in_stock?: boolean
+          last_seen_at?: string
+          product_title?: string | null
+          purchase_price?: number | null
+          stock_quantity?: number | null
+          supplier_id: string
+          supplier_sku?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string
+          ean?: string
+          id?: string
+          in_stock?: boolean
+          last_seen_at?: string
+          product_title?: string | null
+          purchase_price?: number | null
+          stock_quantity?: number | null
+          supplier_id?: string
+          supplier_sku?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_feed_cache_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_products: {
         Row: {
           created_at: string

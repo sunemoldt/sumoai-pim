@@ -60,27 +60,57 @@ Deno.serve(async (req) => {
 
     const master = masters?.[0] ?? null;
 
-    let offers: any[] = [];
+    // Combined offers: from supplier_products (linked to master) + supplier_feed_cache (all feeds).
+    const offersByKey = new Map<string, any>();
+
     if (master) {
       const { data: sp } = await admin
         .from("supplier_products")
         .select("supplier_id, purchase_price, in_stock, stock_quantity, supplier_sku, last_updated, suppliers(id, name)")
         .eq("master_product_id", master.id);
-      offers = (sp ?? []).map((row: any) => ({
+      for (const row of (sp ?? []) as any[]) {
+        offersByKey.set(row.supplier_id, {
+          supplier_id: row.supplier_id,
+          supplier_name: row.suppliers?.name ?? "Ukendt",
+          purchase_price: Number(row.purchase_price ?? 0),
+          in_stock: !!row.in_stock,
+          stock_quantity: row.stock_quantity ?? null,
+          supplier_sku: row.supplier_sku ?? null,
+          last_updated: row.last_updated ?? null,
+          source: "linked" as const,
+        });
+      }
+    }
+
+    // Always also search the supplier_feed_cache — this covers products that don't
+    // exist in master_products yet (or suppliers that haven't been linked yet).
+    const { data: cache } = await admin
+      .from("supplier_feed_cache")
+      .select("supplier_id, purchase_price, in_stock, stock_quantity, supplier_sku, product_title, brand, last_seen_at, suppliers(id, name)")
+      .in("ean", Array.from(new Set([raw, stripped])));
+
+    for (const row of (cache ?? []) as any[]) {
+      if (row.purchase_price == null) continue;
+      // Prefer linked offer if the supplier is already represented.
+      if (offersByKey.has(row.supplier_id)) continue;
+      offersByKey.set(row.supplier_id, {
         supplier_id: row.supplier_id,
         supplier_name: row.suppliers?.name ?? "Ukendt",
-        purchase_price: Number(row.purchase_price ?? 0),
+        purchase_price: Number(row.purchase_price),
         in_stock: !!row.in_stock,
         stock_quantity: row.stock_quantity ?? null,
         supplier_sku: row.supplier_sku ?? null,
-        last_updated: row.last_updated ?? null,
-      }));
-      // Sort: in stock first, then cheapest first.
-      offers.sort((a, b) => {
-        if (a.in_stock !== b.in_stock) return a.in_stock ? -1 : 1;
-        return a.purchase_price - b.purchase_price;
+        last_updated: row.last_seen_at ?? null,
+        product_title: row.product_title ?? null,
+        brand: row.brand ?? null,
+        source: "feed" as const,
       });
     }
+
+    const offers = Array.from(offersByKey.values()).sort((a, b) => {
+      if (a.in_stock !== b.in_stock) return a.in_stock ? -1 : 1;
+      return a.purchase_price - b.purchase_price;
+    });
 
     return new Response(
       JSON.stringify({
