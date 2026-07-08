@@ -397,7 +397,12 @@ const WRITABLE_FIELDS = [
 
 async function withChangeSource<T>(source: string | undefined, fn: () => Promise<T>): Promise<T> {
   if (source) {
-    await supabase.rpc("set_change_source", { source }).catch(() => {});
+    try {
+      const { error } = await supabase.rpc("set_change_source", { source });
+      if (error) console.warn(JSON.stringify({ event: "set_change_source_failed", message: error.message }));
+    } catch (err) {
+      console.warn(JSON.stringify({ event: "set_change_source_exception", message: (err as Error).message }));
+    }
   }
   return fn();
 }
