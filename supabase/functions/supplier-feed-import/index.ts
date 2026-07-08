@@ -441,8 +441,9 @@ Deno.serve(async (req) => {
           if (!rawEan) return;
           const ean = rawEan.replace(/^0+/, "") || rawEan;
           if (targetEan && ean !== targetEan) return;
-          const known = eanToIdEarlyOuter!.has(ean);
-          if (mode === "unmatched" ? known : !known) return;
+          // Keep every row (matched or not) so we can build the supplier feed cache
+          // for cross-supplier EAN lookup. Downstream loops still skip unmatched rows
+          // for supplier_products import.
           const row: Record<string, string> = {};
           headers.forEach((h, idx) => {
             row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
