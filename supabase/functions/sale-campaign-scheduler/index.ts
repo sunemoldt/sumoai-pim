@@ -146,10 +146,19 @@ async function deactivateCampaign(admin: any, campaign: any, finalStatus: "ended
 
     if (currentMatches) {
       await admin.rpc("set_change_source", { source: "sale-campaign" });
-      await admin
+      const { error: revertErr } = await admin
         .from("master_products")
         .update({ sale_price: cp.original_sale_price })
         .eq("id", mp.id);
+      if (revertErr) {
+        // Revert rejected (e.g. below-cost trigger). Do NOT mark reverted — leave for retry/manual fix.
+        console.error(`revert failed for ${mp.id}: ${revertErr.message}`);
+        await admin
+          .from("sale_campaign_products")
+          .update({ skipped_reason: `revert_failed:${revertErr.message}` })
+          .eq("id", cp.id);
+        continue;
+      }
       reverted++;
     }
 
@@ -159,12 +168,23 @@ async function deactivateCampaign(admin: any, campaign: any, finalStatus: "ended
       .eq("id", cp.id);
   }
 
-  await admin
-    .from("sale_campaigns")
-    .update({ status: finalStatus, deactivated_at: new Date().toISOString() })
-    .eq("id", campaign.id);
+  // Only mark the campaign as ended/cancelled once every applicable product has been reverted.
+  // If any revert failed (e.g. below-cost trigger), leave status = 'active' so the next tick retries.
+  const { count: pendingCount } = await admin
+    .from("sale_campaign_products")
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", campaign.id)
+    .not("applied_at", "is", null)
+    .is("reverted_at", null);
 
-  return { reverted };
+  if ((pendingCount ?? 0) === 0) {
+    await admin
+      .from("sale_campaigns")
+      .update({ status: finalStatus, deactivated_at: new Date().toISOString() })
+      .eq("id", campaign.id);
+  }
+
+  return { reverted, pending: pendingCount ?? 0 };
 }
 
 Deno.serve(async (req) => {
