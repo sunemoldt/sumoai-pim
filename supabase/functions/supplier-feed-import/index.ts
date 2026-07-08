@@ -22,6 +22,8 @@ function assertSafeFeedUrl(raw: string): void {
 }
 
 function parseCsv(text: string, delimiter: string): Record<string, string>[] {
+  // Strip UTF-8 BOM so the first header column is not "\uFEFFcolname".
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
   const headers = lines[0].split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
