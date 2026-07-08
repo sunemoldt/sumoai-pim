@@ -203,9 +203,15 @@ export function SupplierEanLookupPanel({ useLabel, onUse, initialEan }: Omit<Pro
                               </Badge>
                             )}
                           </div>
+                          {(offer.product_title || offer.brand) && !result.master_product && (
+                            <div className="text-xs text-foreground/80 mt-0.5 truncate">
+                              {[offer.brand, offer.product_title].filter(Boolean).join(" · ")}
+                            </div>
+                          )}
                           <div className="text-xs text-muted-foreground mt-0.5 flex gap-3 flex-wrap">
                             {offer.supplier_sku && <span>SKU: {offer.supplier_sku}</span>}
                             {offer.last_updated && <span>Opdateret: {new Date(offer.last_updated).toLocaleDateString("da-DK")}</span>}
+                            {offer.source === "feed" && <span className="italic">fra feed-cache</span>}
                           </div>
                         </div>
                         <div className="grid grid-cols-3 gap-3 sm:gap-6 text-sm">
