@@ -456,39 +456,43 @@ export default function QuoteEditorPage() {
               </TableBody>
             </Table>
           </div>
-          <div className="border-t border-border bg-secondary/30 px-4 py-3 flex flex-wrap items-center justify-end gap-3">
-            <Label htmlFor="package-price" className="text-sm font-medium">Pakkepris ekskl. moms</Label>
-            <Input
-              id="package-price"
-              type="number"
-              step="0.01"
-              placeholder="Tom = brug linjesum"
-              className="h-8 w-40 text-right font-mono"
-              value={packagePrice ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                setPackagePrice(v === "" ? null : parseFloat(v));
-              }}
-            />
-            <Label htmlFor="package-price-incl" className="text-sm font-medium">inkl. moms</Label>
-            <Input
-              id="package-price-incl"
-              type="number"
-              step="0.01"
-              placeholder="Tom = brug linjesum"
-              className="h-8 w-40 text-right font-mono"
-              value={packagePrice !== null ? Number((packagePrice * (1 + VAT)).toFixed(2)) : ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === "") { setPackagePrice(null); return; }
-                const incl = parseFloat(v);
-                setPackagePrice(Number.isFinite(incl) ? incl / (1 + VAT) : null);
-              }}
-            />
-            {packagePrice !== null && (
-              <Button variant="ghost" size="sm" onClick={() => setPackagePrice(null)}>Ryd</Button>
-            )}
-            <span className="text-xs text-muted-foreground ml-2">
+          <div className="border-t border-border bg-secondary/30 px-3 py-3 sm:px-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="package-price" className="text-sm font-medium whitespace-nowrap">Pakkepris ex.moms</Label>
+              <Input
+                id="package-price"
+                type="number"
+                step="0.01"
+                placeholder="Linjesum"
+                className="h-8 flex-1 sm:w-40 text-right font-mono"
+                value={packagePrice ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPackagePrice(v === "" ? null : parseFloat(v));
+                }}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="package-price-incl" className="text-sm font-medium whitespace-nowrap">inkl. moms</Label>
+              <Input
+                id="package-price-incl"
+                type="number"
+                step="0.01"
+                placeholder="Linjesum"
+                className="h-8 flex-1 sm:w-40 text-right font-mono"
+                value={packagePrice !== null ? Number((packagePrice * (1 + VAT)).toFixed(2)) : ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "") { setPackagePrice(null); return; }
+                  const incl = parseFloat(v);
+                  setPackagePrice(Number.isFinite(incl) ? incl / (1 + VAT) : null);
+                }}
+              />
+              {packagePrice !== null && (
+                <Button variant="ghost" size="sm" onClick={() => setPackagePrice(null)}>Ryd</Button>
+              )}
+            </div>
+            <span className="text-xs text-muted-foreground sm:ml-2">
               Linjesum: {totals.lineSubtotal.toFixed(2)} kr.
             </span>
           </div>
