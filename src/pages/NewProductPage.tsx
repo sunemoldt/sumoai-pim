@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 export default function NewProductPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const duplicateFrom = (location.state as any)?.duplicateFrom ?? null;
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -23,7 +24,7 @@ export default function NewProductPage() {
     const numStr = (v: any) => (v === null || v === undefined || v === "" ? "" : String(v));
     return {
       title: d?.title ? `${d.title} (kopi)` : "",
-      ean: "",
+      ean: searchParams.get("ean") ?? "",
       sku: "",
       brand: d?.brand ?? "",
       category: d?.category ?? "",

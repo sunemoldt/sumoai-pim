@@ -92,19 +92,60 @@ export default function QuoteListPage() {
   };
 
 
+  const statusBadge = (status: string) => {
+    if (status === "approved") return <Badge variant="outline" className="text-green-700 border-green-400 bg-green-50">Godkendt</Badge>;
+    if (status === "rejected") return <Badge variant="outline" className="text-destructive border-destructive/40">Afvist</Badge>;
+    if (status === "sent") return <Badge variant="outline" className="text-green-600 border-green-300">Sendt til Dinero</Badge>;
+    return <Badge variant="secondary">Kladde</Badge>;
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Tilbud</h1>
           <p className="text-sm text-muted-foreground mt-1">Opret tilbud og send dem som kladdefaktura til Dinero</p>
         </div>
-        <Button onClick={() => navigate("/quotes/new")}>
+        <Button className="w-full sm:w-auto" onClick={() => navigate("/quotes/new")}>
           <Plus className="h-4 w-4 mr-1" /> Nyt tilbud
         </Button>
       </div>
 
-      <Card>
+      {/* Mobile card list */}
+      <div className="space-y-2 md:hidden">
+        {isLoading ? (
+          <Card><CardContent className="py-6 text-center text-muted-foreground">Indlæser…</CardContent></Card>
+        ) : quotes.length === 0 ? (
+          <Card><CardContent className="py-6 text-center text-muted-foreground">Ingen tilbud endnu</CardContent></Card>
+        ) : quotes.map((q) => (
+          <Card key={q.id} className="cursor-pointer active:bg-accent/30" onClick={() => navigate(`/quotes/${q.id}`)}>
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">#{q.quote_number}</span>
+                {statusBadge(q.status)}
+              </div>
+              <div className="text-sm">{q.customer_name || <span className="text-muted-foreground">Uden kunde</span>}</div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{q.quote_date ? format(new Date(q.quote_date), "dd-MM-yyyy") : "—"} · {q.line_count} linje{q.line_count === 1 ? "" : "r"}</span>
+                <span className="font-mono text-foreground">{(Number(q.total_excl_vat || 0) * 1.25).toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.</span>
+              </div>
+              <div className="pt-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={(e) => { e.stopPropagation(); handleDuplicate(q.id); }}
+                >
+                  <Copy className="h-3.5 w-3.5 mr-1" /> Dupliker
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Desktop table */}
+      <Card className="hidden md:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -130,17 +171,7 @@ export default function QuoteListPage() {
                   <TableCell>{q.quote_date ? format(new Date(q.quote_date), "dd-MM-yyyy") : "—"}</TableCell>
                   <TableCell className="text-right font-mono">{q.line_count}</TableCell>
                   <TableCell className="text-right font-mono">{(Number(q.total_excl_vat || 0) * 1.25).toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.</TableCell>
-                  <TableCell>
-                    {q.status === "approved" ? (
-                      <Badge variant="outline" className="text-green-700 border-green-400 bg-green-50">Godkendt</Badge>
-                    ) : q.status === "rejected" ? (
-                      <Badge variant="outline" className="text-destructive border-destructive/40">Afvist</Badge>
-                    ) : q.status === "sent" ? (
-                      <Badge variant="outline" className="text-green-600 border-green-300">Sendt til Dinero</Badge>
-                    ) : (
-                      <Badge variant="secondary">Kladde</Badge>
-                    )}
-                  </TableCell>
+                  <TableCell>{statusBadge(q.status)}</TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <TooltipProvider>
                       <Tooltip>

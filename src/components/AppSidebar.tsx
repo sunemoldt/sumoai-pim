@@ -15,6 +15,7 @@ import {
   Sparkles,
   Tag,
   AlertTriangle,
+  ScanBarcode,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +26,7 @@ const navItems = [
   { to: "/collections", icon: FolderTree, label: "Kategorier" },
   { to: "/quotes", icon: FileText, label: "Tilbud" },
   { to: "/campaigns", icon: Tag, label: "Kampagner" },
+  { to: "/ean-lookup", icon: ScanBarcode, label: "EAN-opslag" },
   { to: "/suppliers", icon: Truck, label: "Leverandører" },
 
   { to: "/import", icon: Download, label: "WooCommerce" },

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, Save, Send, Trash2, Loader2, Search, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft, Plus, Save, Send, Trash2, Loader2, Search, CheckCircle2, XCircle, ScanBarcode } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import SupplierEanLookupDialog, { type EanLookupSelection } from "@/components/SupplierEanLookupDialog";
+import { VAT_RATE } from "@/hooks/use-products";
 
 type Line = {
   _key?: string;
@@ -59,6 +61,7 @@ export default function QuoteEditorPage() {
   const [noteInternal, setNoteInternal] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
   const [packagePrice, setPackagePrice] = useState<number | null>(null);
+  const [eanDialogOpen, setEanDialogOpen] = useState(false);
 
   // Load existing quote
   useEffect(() => {
@@ -108,6 +111,23 @@ export default function QuoteEditorPage() {
       pim_product_id: null, product_name: "", quantity: 1,
       purchase_price: 0, list_price: 0, quote_price: 0, sort_order: prev.length,
     }]);
+  };
+
+  const addLineFromEanLookup = (sel: EanLookupSelection) => {
+    const name = sel.master_product?.title ?? `EAN ${sel.ean}`;
+    const priceIncl = Number(sel.sellingPriceInclVat.toFixed(2));
+    setLines((prev) => [...prev, {
+      _key: crypto.randomUUID(),
+      pim_product_id: sel.master_product?.id ?? null,
+      product_name: name,
+      quantity: 1,
+      purchase_price: Number(sel.offer.purchase_price.toFixed(2)),
+      list_price: priceIncl,
+      quote_price: priceIncl,
+      sort_order: prev.length,
+    }]);
+    setEanDialogOpen(false);
+    toast({ title: "Linje tilføjet", description: `${sel.offer.supplier_name} · ${sel.offer.purchase_price.toFixed(2)} → ${priceIncl.toFixed(2)} inkl. moms` });
   };
 
   const updateLine = (idx: number, patch: Partial<Line>) => {
@@ -213,45 +233,51 @@ export default function QuoteEditorPage() {
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" /></div>;
 
   return (
-    <div className="space-y-6 pb-40">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/quotes")}><ArrowLeft className="h-4 w-4" /></Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold">{isNew ? "Nyt tilbud" : `Tilbud #${quoteNumber ?? ""}`}</h1>
-          {voucherGuid && status === "sent" && (
-            <p className="text-sm text-green-600 mt-1">Sendt til Dinero · {voucherGuid}</p>
-          )}
-          {status === "approved" && (
-            <p className="text-sm text-green-600 mt-1">✓ Godkendt af kunde</p>
-          )}
-          {status === "rejected" && (
-            <p className="text-sm text-destructive mt-1">✗ Afvist af kunde</p>
-          )}
+    <div className="space-y-6 pb-52 md:pb-40">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/quotes")} className="shrink-0"><ArrowLeft className="h-4 w-4" /></Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl md:text-2xl font-semibold truncate">{isNew ? "Nyt tilbud" : `Tilbud #${quoteNumber ?? ""}`}</h1>
+            {voucherGuid && status === "sent" && (
+              <p className="text-sm text-green-600 mt-1 truncate">Sendt til Dinero · {voucherGuid}</p>
+            )}
+            {status === "approved" && (
+              <p className="text-sm text-green-600 mt-1">✓ Godkendt af kunde</p>
+            )}
+            {status === "rejected" && (
+              <p className="text-sm text-destructive mt-1">✗ Afvist af kunde</p>
+            )}
+          </div>
         </div>
-        <Button variant="outline" onClick={saveQuote} disabled={saving}>
-          {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-          Gem
-        </Button>
-        <Button onClick={sendToDinero} disabled={sending || saving || lines.length === 0}>
-          {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
-          Send til Dinero
-        </Button>
-        <Button
-          variant="outline"
-          className="text-green-700 border-green-300 hover:bg-green-50 hover:text-green-800"
-          onClick={() => setOutcome("approved")}
-          disabled={saving || status === "approved"}
-        >
-          <CheckCircle2 className="h-4 w-4 mr-1" /> Godkendt
-        </Button>
-        <Button
-          variant="outline"
-          className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-          onClick={() => setOutcome("rejected")}
-          disabled={saving || status === "rejected"}
-        >
-          <XCircle className="h-4 w-4 mr-1" /> Afvist
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={saveQuote} disabled={saving} className="flex-1 md:flex-none">
+            {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+            Gem
+          </Button>
+          <Button size="sm" onClick={sendToDinero} disabled={sending || saving || lines.length === 0} className="flex-1 md:flex-none">
+            {sending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
+            <span className="md:inline">Send til Dinero</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-green-700 border-green-300 hover:bg-green-50 hover:text-green-800 flex-1 md:flex-none"
+            onClick={() => setOutcome("approved")}
+            disabled={saving || status === "approved"}
+          >
+            <CheckCircle2 className="h-4 w-4 mr-1" /> Godkendt
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive flex-1 md:flex-none"
+            onClick={() => setOutcome("rejected")}
+            disabled={saving || status === "rejected"}
+          >
+            <XCircle className="h-4 w-4 mr-1" /> Afvist
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -277,38 +303,30 @@ export default function QuoteEditorPage() {
       </Card>
 
       <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+        <CardHeader className="pb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-base">Produktlinjer</CardTitle>
-          <Button size="sm" variant="outline" onClick={addLine}><Plus className="h-4 w-4 mr-1" /> Tilføj linje</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => setEanDialogOpen(true)}>
+              <ScanBarcode className="h-4 w-4 mr-1" /> EAN-opslag
+            </Button>
+            <Button size="sm" variant="outline" onClick={addLine}><Plus className="h-4 w-4 mr-1" /> Tilføj linje</Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-secondary/50">
-                <TableHead className="w-[24%]">Produkt</TableHead>
-                <TableHead className="text-right w-[100px]">Antal</TableHead>
-                <TableHead className="text-right">Indkøb</TableHead>
-                <TableHead className="text-right">Webshop pris</TableHead>
-                <TableHead className="text-right w-[110px]">Rabat %</TableHead>
-                <TableHead className="text-right">Tilbudspris</TableHead>
-                <TableHead className="text-right">Avance kr.</TableHead>
-                <TableHead className="text-right">Avance %</TableHead>
-                <TableHead className="text-right">Subtotal</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lines.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Ingen linjer endnu</TableCell></TableRow>
-              ) : lines.map((l, idx) => {
-                const sub = l.quantity * l.quote_price; // incl. VAT
-                const quoteEx = l.quote_price / (1 + VAT);
-                const margin = (quoteEx - l.purchase_price) * l.quantity;
-                const marginPct = quoteEx > 0 ? ((quoteEx - l.purchase_price) / quoteEx) * 100 : 0;
-                const discountPct = l.list_price > 0 ? ((l.list_price - l.quote_price) / l.list_price) * 100 : 0;
-                return (
-                  <TableRow key={l._key ?? l.id ?? idx}>
-                    <TableCell>
+          {/* Mobile card view */}
+          <div className="md:hidden divide-y divide-border">
+            {lines.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8 text-sm">Ingen linjer endnu</div>
+            ) : lines.map((l, idx) => {
+              const sub = l.quantity * l.quote_price;
+              const quoteEx = l.quote_price / (1 + VAT);
+              const margin = (quoteEx - l.purchase_price) * l.quantity;
+              const marginPct = quoteEx > 0 ? ((quoteEx - l.purchase_price) / quoteEx) * 100 : 0;
+              const discountPct = l.list_price > 0 ? ((l.list_price - l.quote_price) / l.list_price) * 100 : 0;
+              return (
+                <div key={l._key ?? l.id ?? idx} className="p-3 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
                       <ProductPicker
                         value={l.product_name}
                         onSelect={(p) => updateLine(idx, {
@@ -320,13 +338,18 @@ export default function QuoteEditorPage() {
                         })}
                         onTextChange={(v) => updateLine(idx, { product_name: v })}
                       />
-                    </TableCell>
-                    <TableCell className="text-right">
+                    </div>
+                    <Button variant="ghost" size="icon" className="shrink-0" onClick={() => removeLine(idx)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Antal</Label>
                       <Input type="number" min={1} step={1} className="h-8 text-right font-mono" value={l.quantity} onChange={(e) => updateLine(idx, { quantity: parseFloat(e.target.value) || 0 })} />
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">{l.purchase_price.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">{l.list_price.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">
+                    </div>
+                    <div>
+                      <Label className="text-xs">Rabat %</Label>
                       <Input
                         type="number"
                         step="0.1"
@@ -338,54 +361,138 @@ export default function QuoteEditorPage() {
                           updateLine(idx, { quote_price: Math.max(0, newPrice) });
                         }}
                       />
-                    </TableCell>
-                    <TableCell className="text-right">
+                    </div>
+                    <div>
+                      <Label className="text-xs">Webshop pris</Label>
+                      <Input type="number" step="0.01" className="h-8 text-right font-mono" value={l.list_price} onChange={(e) => updateLine(idx, { list_price: parseFloat(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Tilbudspris</Label>
                       <Input type="number" step="0.01" className="h-8 text-right font-mono" value={l.quote_price} onChange={(e) => updateLine(idx, { quote_price: parseFloat(e.target.value) || 0 })} />
-                    </TableCell>
-                    <TableCell className="text-right font-mono">{margin.toFixed(2)}</TableCell>
-                    <TableCell className={cn("text-right font-mono", marginColor(marginPct))}>{marginPct.toFixed(1)}%</TableCell>
-                    <TableCell className="text-right font-mono">{sub.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => removeLine(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          <div className="border-t border-border bg-secondary/30 px-4 py-3 flex flex-wrap items-center justify-end gap-3">
-            <Label htmlFor="package-price" className="text-sm font-medium">Pakkepris ekskl. moms</Label>
-            <Input
-              id="package-price"
-              type="number"
-              step="0.01"
-              placeholder="Tom = brug linjesum"
-              className="h-8 w-40 text-right font-mono"
-              value={packagePrice ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                setPackagePrice(v === "" ? null : parseFloat(v));
-              }}
-            />
-            <Label htmlFor="package-price-incl" className="text-sm font-medium">inkl. moms</Label>
-            <Input
-              id="package-price-incl"
-              type="number"
-              step="0.01"
-              placeholder="Tom = brug linjesum"
-              className="h-8 w-40 text-right font-mono"
-              value={packagePrice !== null ? Number((packagePrice * (1 + VAT)).toFixed(2)) : ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v === "") { setPackagePrice(null); return; }
-                const incl = parseFloat(v);
-                setPackagePrice(Number.isFinite(incl) ? incl / (1 + VAT) : null);
-              }}
-            />
-            {packagePrice !== null && (
-              <Button variant="ghost" size="sm" onClick={() => setPackagePrice(null)}>Ryd</Button>
-            )}
-            <span className="text-xs text-muted-foreground ml-2">
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                    <div className="text-muted-foreground">Indkøb: {l.purchase_price.toFixed(2)}</div>
+                    <div className="text-right">Subtotal: {sub.toFixed(2)}</div>
+                    <div>Avance: {margin.toFixed(2)} kr.</div>
+                    <div className={cn("text-right", marginColor(marginPct))}>{marginPct.toFixed(1)}%</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-secondary/50">
+                  <TableHead className="w-[24%]">Produkt</TableHead>
+                  <TableHead className="text-right w-[100px]">Antal</TableHead>
+                  <TableHead className="text-right">Indkøb</TableHead>
+                  <TableHead className="text-right">Webshop pris</TableHead>
+                  <TableHead className="text-right w-[110px]">Rabat %</TableHead>
+                  <TableHead className="text-right">Tilbudspris</TableHead>
+                  <TableHead className="text-right">Avance kr.</TableHead>
+                  <TableHead className="text-right">Avance %</TableHead>
+                  <TableHead className="text-right">Subtotal</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lines.length === 0 ? (
+                  <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">Ingen linjer endnu</TableCell></TableRow>
+                ) : lines.map((l, idx) => {
+                  const sub = l.quantity * l.quote_price;
+                  const quoteEx = l.quote_price / (1 + VAT);
+                  const margin = (quoteEx - l.purchase_price) * l.quantity;
+                  const marginPct = quoteEx > 0 ? ((quoteEx - l.purchase_price) / quoteEx) * 100 : 0;
+                  const discountPct = l.list_price > 0 ? ((l.list_price - l.quote_price) / l.list_price) * 100 : 0;
+                  return (
+                    <TableRow key={l._key ?? l.id ?? idx}>
+                      <TableCell>
+                        <ProductPicker
+                          value={l.product_name}
+                          onSelect={(p) => updateLine(idx, {
+                            pim_product_id: p.id,
+                            product_name: p.title,
+                            purchase_price: p.purchase_price,
+                            list_price: p.list_price,
+                            quote_price: p.list_price,
+                          })}
+                          onTextChange={(v) => updateLine(idx, { product_name: v })}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Input type="number" min={1} step={1} className="h-8 text-right font-mono" value={l.quantity} onChange={(e) => updateLine(idx, { quantity: parseFloat(e.target.value) || 0 })} />
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">{l.purchase_price.toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">{l.list_price.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          className="h-8 text-right font-mono"
+                          value={Number.isFinite(discountPct) ? Number(discountPct.toFixed(2)) : 0}
+                          onChange={(e) => {
+                            const pct = parseFloat(e.target.value) || 0;
+                            const newPrice = l.list_price * (1 - pct / 100);
+                            updateLine(idx, { quote_price: Math.max(0, newPrice) });
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Input type="number" step="0.01" className="h-8 text-right font-mono" value={l.quote_price} onChange={(e) => updateLine(idx, { quote_price: parseFloat(e.target.value) || 0 })} />
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{margin.toFixed(2)}</TableCell>
+                      <TableCell className={cn("text-right font-mono", marginColor(marginPct))}>{marginPct.toFixed(1)}%</TableCell>
+                      <TableCell className="text-right font-mono">{sub.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => removeLine(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="border-t border-border bg-secondary/30 px-3 py-3 sm:px-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="package-price" className="text-sm font-medium whitespace-nowrap">Pakkepris ex.moms</Label>
+              <Input
+                id="package-price"
+                type="number"
+                step="0.01"
+                placeholder="Linjesum"
+                className="h-8 flex-1 sm:w-40 text-right font-mono"
+                value={packagePrice ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPackagePrice(v === "" ? null : parseFloat(v));
+                }}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="package-price-incl" className="text-sm font-medium whitespace-nowrap">inkl. moms</Label>
+              <Input
+                id="package-price-incl"
+                type="number"
+                step="0.01"
+                placeholder="Linjesum"
+                className="h-8 flex-1 sm:w-40 text-right font-mono"
+                value={packagePrice !== null ? Number((packagePrice * (1 + VAT)).toFixed(2)) : ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "") { setPackagePrice(null); return; }
+                  const incl = parseFloat(v);
+                  setPackagePrice(Number.isFinite(incl) ? incl / (1 + VAT) : null);
+                }}
+              />
+              {packagePrice !== null && (
+                <Button variant="ghost" size="sm" onClick={() => setPackagePrice(null)}>Ryd</Button>
+              )}
+            </div>
+            <span className="text-xs text-muted-foreground sm:ml-2">
               Linjesum: {totals.lineSubtotal.toFixed(2)} kr.
             </span>
           </div>
@@ -408,16 +515,23 @@ export default function QuoteEditorPage() {
       </div>
 
       {/* Sticky summary */}
-      <div className="fixed bottom-0 left-60 right-0 border-t border-border bg-card/95 backdrop-blur px-6 py-3 z-40">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
-          <Stat label="Subtotal ekskl. moms" value={`${totals.subtotal.toFixed(2)} kr.`} />
+      <div className="fixed bottom-0 left-0 md:left-60 right-0 border-t border-border bg-card/95 backdrop-blur px-3 sm:px-6 py-3 z-40">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 md:gap-4 text-sm">
+          <Stat label="Subtotal ex.moms" value={`${totals.subtotal.toFixed(2)} kr.`} />
           <Stat label="Moms (25%)" value={`${totals.vat.toFixed(2)} kr.`} />
-          <Stat label="Tilbuds pris inkl. moms" value={`${totals.total.toFixed(2)} kr.`} bold />
-          <Stat label="Indkøb total inkl. moms" value={`${(totals.purchase * (1 + VAT)).toFixed(2)} kr.`} />
+          <Stat label="Tilbud inkl. moms" value={`${totals.total.toFixed(2)} kr.`} bold />
+          <Stat label="Indkøb inkl. moms" value={`${(totals.purchase * (1 + VAT)).toFixed(2)} kr.`} />
           <Stat label="Avance kr." value={`${totals.marginKr.toFixed(2)} kr.`} />
           <Stat label="Avance %" value={`${totals.marginPct.toFixed(1)}%`} className={marginColor(totals.marginPct)} bold />
         </div>
       </div>
+
+      <SupplierEanLookupDialog
+        open={eanDialogOpen}
+        onOpenChange={setEanDialogOpen}
+        useLabel="Tilføj til tilbud"
+        onUse={addLineFromEanLookup}
+      />
     </div>
   );
 }
