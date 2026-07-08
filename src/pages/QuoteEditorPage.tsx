@@ -61,6 +61,7 @@ export default function QuoteEditorPage() {
   const [noteInternal, setNoteInternal] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
   const [packagePrice, setPackagePrice] = useState<number | null>(null);
+  const [eanDialogOpen, setEanDialogOpen] = useState(false);
 
   // Load existing quote
   useEffect(() => {
