@@ -22,6 +22,8 @@ function assertSafeFeedUrl(raw: string): void {
 }
 
 function parseCsv(text: string, delimiter: string): Record<string, string>[] {
+  // Strip UTF-8 BOM so the first header column is not "\uFEFFcolname".
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
   const headers = lines[0].split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
@@ -428,7 +430,8 @@ Deno.serve(async (req) => {
         await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, (line: string) => {
           if (!line) return;
           if (headers === null) {
-            headers = line.split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
+            const hdrLine = line.charCodeAt(0) === 0xFEFF ? line.slice(1) : line;
+            headers = hdrLine.split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
             eanIdx = headers.indexOf(eanCol);
             return;
           }

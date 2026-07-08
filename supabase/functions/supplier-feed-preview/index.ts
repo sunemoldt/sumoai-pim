@@ -293,7 +293,8 @@ Deno.serve(async (req) => {
       } else {
         const firstLine = sample.split(/\r?\n/)[0];
         if (firstLine) {
-          columns = firstLine.split(delimiter).map((c) => c.trim().replace(/^["']|["']$/g, ""));
+          const hdr = firstLine.charCodeAt(0) === 0xFEFF ? firstLine.slice(1) : firstLine;
+          columns = hdr.split(delimiter).map((c) => c.trim().replace(/^["']|["']$/g, ""));
         }
       }
       return new Response(JSON.stringify({ columns }), {
@@ -378,7 +379,8 @@ Deno.serve(async (req) => {
     } else {
       const firstLine = text.split(/\r?\n/)[0];
       if (firstLine) {
-        columns = firstLine.split(delimiter).map((c) => c.trim().replace(/^["']|["']$/g, ""));
+        const hdr = firstLine.charCodeAt(0) === 0xFEFF ? firstLine.slice(1) : firstLine;
+        columns = hdr.split(delimiter).map((c) => c.trim().replace(/^["']|["']$/g, ""));
       }
     }
 
