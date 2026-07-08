@@ -474,10 +474,19 @@ mcpServer.tool("update_product", {
       if (allowed.has(k)) f[k] = v; else rejected.push(k);
     }
     if (!Object.keys(f).length) return { content: [{ type: "text" as const, text: `No valid fields. Rejected: ${rejected.join(", ")}` }] };
-    let q = supabase.from("master_products").update(f);
-    q = /^[0-9a-f]{8}-/.test(product_id) ? q.eq("id", product_id) : q.eq("ean", product_id);
-    const { data, error } = await withChangeSource(change_source, () => q.select(ALL).single());
-    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify({ updated: data, rejected_fields: rejected }, null, 2) }] };
+    try {
+      let q = supabase.from("master_products").update(f);
+      q = /^[0-9a-f]{8}-/.test(product_id) ? q.eq("id", product_id) : q.eq("ean", product_id);
+      const { data, error } = await withChangeSource(change_source, () => q.select(ALL).single());
+      if (error) {
+        console.error(JSON.stringify({ event: "update_product_error", product_id, fields: Object.keys(f), pg_code: (error as any).code, pg_details: (error as any).details, pg_hint: (error as any).hint, message: error.message }));
+        return { content: [{ type: "text" as const, text: `Error: ${error.message}${(error as any).details ? " | details: " + (error as any).details : ""}${(error as any).hint ? " | hint: " + (error as any).hint : ""}` }], isError: true };
+      }
+      return { content: [{ type: "text" as const, text: JSON.stringify({ updated: data, rejected_fields: rejected }, null, 2) }] };
+    } catch (e: any) {
+      console.error(JSON.stringify({ event: "update_product_exception", product_id, fields: Object.keys(f), message: e?.message, stack: e?.stack }));
+      return { content: [{ type: "text" as const, text: `Exception: ${e?.message ?? String(e)}` }], isError: true };
+    }
   },
 });
 
@@ -535,10 +544,19 @@ mcpServer.tool("bulk_update_products", {
     const f: any = {};
     for (const [k, v] of Object.entries(updates)) if (allowed.has(k)) f[k] = v;
     if (!Object.keys(f).length) return { content: [{ type: "text" as const, text: "No valid fields" }] };
-    const { data, error } = await withChangeSource(change_source, () =>
-      supabase.from("master_products").update(f).in("ean", eans).select("id, ean")
-    );
-    return { content: [{ type: "text" as const, text: error ? `Error: ${error.message}` : JSON.stringify({ updated_count: data?.length ?? 0, products: data }, null, 2) }] };
+    try {
+      const { data, error } = await withChangeSource(change_source, () =>
+        supabase.from("master_products").update(f).in("ean", eans).select("id, ean")
+      );
+      if (error) {
+        console.error(JSON.stringify({ event: "bulk_update_error", eans_count: eans?.length, fields: Object.keys(f), pg_code: (error as any).code, pg_details: (error as any).details, pg_hint: (error as any).hint, message: error.message }));
+        return { content: [{ type: "text" as const, text: `Error: ${error.message}${(error as any).details ? " | details: " + (error as any).details : ""}${(error as any).hint ? " | hint: " + (error as any).hint : ""}` }], isError: true };
+      }
+      return { content: [{ type: "text" as const, text: JSON.stringify({ updated_count: data?.length ?? 0, products: data }, null, 2) }] };
+    } catch (e: any) {
+      console.error(JSON.stringify({ event: "bulk_update_exception", eans_count: eans?.length, fields: Object.keys(f), message: e?.message, stack: e?.stack }));
+      return { content: [{ type: "text" as const, text: `Exception: ${e?.message ?? String(e)}` }], isError: true };
+    }
   },
 });
 
