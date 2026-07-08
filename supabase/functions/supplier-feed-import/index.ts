@@ -563,9 +563,11 @@ Deno.serve(async (req) => {
     }
 
 
-    // --- Supplier feed cache: upsert EVERY row (matched or not) so cross-supplier
-    // EAN-lookup can find prices even for products not yet created in the PIM.
-    try {
+    // --- Supplier feed cache: upsert rows with a valid EAN + purchase_price so
+    // cross-supplier EAN-lookup can find prices even for products not yet in the PIM.
+    // Skip rows without price (useless for lookup) and skip targeted (single-EAN) runs
+    // so a rematch doesn't accidentally invalidate the whole supplier's cache below.
+    if (!targetEan) try {
       const eanCol = mapping.ean;
       const priceCol = mapping.purchase_price;
       const stockCol = mapping.stock_quantity;
@@ -574,7 +576,7 @@ Deno.serve(async (req) => {
       const brandCol = (mapping as any).brand || (mapping as any).manufacturer;
       const eurRate = parseFloat((((mapping as any)._eur_rate ?? "7.46") as string).toString().replace(",", ".")) || 7.46;
       const isEur = (mapping as any)._currency === "EUR";
-      const nowIsoCache = new Date().toISOString();
+      const runStartedAt = new Date().toISOString();
       const seenCache = new Set<string>();
       const cacheRows: Array<{
         supplier_id: string;
@@ -582,7 +584,7 @@ Deno.serve(async (req) => {
         product_title: string | null;
         supplier_sku: string | null;
         brand: string | null;
-        purchase_price: number | null;
+        purchase_price: number;
         stock_quantity: number | null;
         in_stock: boolean;
         last_seen_at: string;
@@ -592,11 +594,11 @@ Deno.serve(async (req) => {
         if (!rawEan) continue;
         const ean = rawEan.replace(/^0+/, "") || rawEan;
         if (seenCache.has(ean)) continue;
-        seenCache.add(ean);
         const priceStr = priceCol ? row[priceCol]?.trim().replace(",", ".") : "";
-        let price: number | null = priceStr ? parseFloat(priceStr) : NaN;
-        if (price === null || isNaN(price as number)) price = null;
-        else if (isEur) price = Math.round((price as number) * eurRate * 100) / 100;
+        const parsedPrice = priceStr ? parseFloat(priceStr) : NaN;
+        if (isNaN(parsedPrice) || parsedPrice <= 0) continue; // skip useless rows
+        const price = isEur ? Math.round(parsedPrice * eurRate * 100) / 100 : parsedPrice;
+        seenCache.add(ean);
         const stockStr = stockCol ? row[stockCol]?.trim() : "";
         const stockQty = stockStr ? parseInt(stockStr, 10) : NaN;
         let inStock = true;
@@ -604,16 +606,19 @@ Deno.serve(async (req) => {
           const v = row[mapping.in_stock]?.trim().toLowerCase();
           inStock = v === "1" || v === "yes" || v === "ja" || v === "true" || v === "in stock" || v === "på lager";
         } else if (!isNaN(stockQty)) inStock = stockQty > 0;
+        // Cap free-text length so odd feeds can't blow up the table.
+        const trim = (s: string | undefined | null, n: number) =>
+          s ? (s.length > n ? s.slice(0, n) : s) : null;
         cacheRows.push({
           supplier_id: supplier.id,
           ean,
-          product_title: titleCol ? (row[titleCol]?.trim() || null) : null,
-          supplier_sku: skuCol ? (row[skuCol]?.trim() || null) : null,
-          brand: brandCol ? (row[brandCol]?.trim() || null) : null,
-          purchase_price: price as number | null,
+          product_title: trim(titleCol ? row[titleCol]?.trim() : null, 300),
+          supplier_sku: trim(skuCol ? row[skuCol]?.trim() : null, 100),
+          brand: trim(brandCol ? row[brandCol]?.trim() : null, 100),
+          purchase_price: price,
           stock_quantity: isNaN(stockQty) ? null : stockQty,
           in_stock: inStock,
-          last_seen_at: nowIsoCache,
+          last_seen_at: runStartedAt,
         });
       }
       for (let i = 0; i < cacheRows.length; i += 500) {
@@ -622,10 +627,18 @@ Deno.serve(async (req) => {
           .upsert(cacheRows.slice(i, i + 500), { onConflict: "supplier_id,ean" });
         if (cacheErr) console.error(`supplier_feed_cache upsert failed at ${i}: ${cacheErr.message}`);
       }
-      console.log(`supplier_feed_cache: upserted ${cacheRows.length} rows for supplier ${supplier.name}`);
+      // Prune stale entries: anything not seen in this run is gone from the feed.
+      const { error: pruneErr, count: pruned } = await supabase
+        .from("supplier_feed_cache")
+        .delete({ count: "estimated" })
+        .eq("supplier_id", supplier.id)
+        .lt("last_seen_at", runStartedAt);
+      if (pruneErr) console.error(`supplier_feed_cache prune failed: ${pruneErr.message}`);
+      console.log(`supplier_feed_cache: upserted ${cacheRows.length}, pruned ${pruned ?? "?"} stale rows for ${supplier.name}`);
     } catch (cacheErr) {
       console.error(`supplier_feed_cache build failed: ${(cacheErr as Error).message}`);
     }
+
 
     let imported = 0;
     let skipped = 0;
