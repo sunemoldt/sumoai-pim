@@ -18,6 +18,9 @@ export type EanLookupOffer = {
   stock_quantity: number | null;
   supplier_sku: string | null;
   last_updated: string | null;
+  product_title?: string | null;
+  brand?: string | null;
+  source?: "linked" | "feed";
 };
 
 export type EanLookupResult = {
