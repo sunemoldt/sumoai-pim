@@ -48,7 +48,7 @@ const BACKUP_TABLES = [
 const CAPPED_TABLES: Record<string, { column: string; days: number }> = {
   import_logs: { column: "created_at", days: 90 },
   product_change_log: { column: "created_at", days: 90 },
-  product_analytics: { column: "date", days: 90 },
+  product_analytics: { column: "period_start", days: 90 },
 };
 
 function json(body: unknown, status = 200) {
