@@ -24,6 +24,7 @@ interface Props {
   className?: string;
   inputClassName?: string;
   multiline?: boolean;
+  onSaved?: (next: any) => void | Promise<void>;
 }
 
 export default function InlineEditField({
@@ -38,6 +39,7 @@ export default function InlineEditField({
   invalidateKeys,
   className = "",
   inputClassName = "",
+  onSaved,
 }: Props) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -77,6 +79,7 @@ export default function InlineEditField({
       toast.success("Gemt");
       (invalidateKeys ?? [["master_product", productId], ["product_change_log", productId], ["master_products"]])
         .forEach((k) => qc.invalidateQueries({ queryKey: k as any }));
+      await onSaved?.(next);
       setEditing(false);
     } catch (e: any) {
       toast.error(e?.message || "Fejl ved gemning");

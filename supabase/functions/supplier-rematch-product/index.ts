@@ -12,6 +12,11 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
+const normalizeEan = (value: string | null | undefined) => {
+  const trimmed = (value ?? "").trim();
+  return trimmed.replace(/^0+/, "") || trimmed;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -55,10 +60,105 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: suppliers } = await supabase
+    const productEan = normalizeEan(product.ean);
+    const eanCandidates = Array.from(new Set([product.ean, productEan].filter(Boolean)));
+
+    // Fast path: use the maintained feed cache so newly-created products can be
+    // linked to supplier offers immediately without downloading every feed.
+    const { data: cacheRows, error: cacheErr } = await supabase
+      .from("supplier_feed_cache")
+      .select("supplier_id, purchase_price, in_stock, stock_quantity, supplier_sku, last_seen_at, suppliers(id, name)")
+      .in("ean", eanCandidates);
+    if (cacheErr) throw new Error(`Supplier cache lookup failed: ${cacheErr.message}`);
+
+    const bestBySupplier = new Map<string, any>();
+    for (const row of (cacheRows ?? []) as any[]) {
+      const price = Number(row.purchase_price ?? 0);
+      if (!row.supplier_id || !Number.isFinite(price) || price <= 0) continue;
+      const existing = bestBySupplier.get(row.supplier_id);
+      if (
+        !existing ||
+        (Boolean(row.in_stock) && !Boolean(existing.in_stock)) ||
+        (Boolean(row.in_stock) === Boolean(existing.in_stock) && price < Number(existing.purchase_price ?? Infinity))
+      ) {
+        bestBySupplier.set(row.supplier_id, row);
+      }
+    }
+
+    const cacheMatches = Array.from(bestBySupplier.values());
+    let imported = 0;
+    if (cacheMatches.length > 0) {
+      const supplierIds = cacheMatches.map((row: any) => row.supplier_id);
+      const { data: existingRows } = await supabase
+        .from("supplier_products")
+        .select("supplier_id, purchase_price, stock_quantity, in_stock, supplier_sku")
+        .eq("master_product_id", product.id)
+        .in("supplier_id", supplierIds);
+
+      const existingBySupplier = new Map((existingRows ?? []).map((row: any) => [row.supplier_id, row]));
+      const nowIso = new Date().toISOString();
+      const upsertRows = cacheMatches.map((row: any) => ({
+        supplier_id: row.supplier_id,
+        master_product_id: product.id,
+        purchase_price: Number(row.purchase_price),
+        in_stock: Boolean(row.in_stock),
+        stock_quantity: row.stock_quantity ?? null,
+        supplier_sku: row.supplier_sku ?? null,
+        last_updated: nowIso,
+      }));
+
+      const changeLogs: Array<{
+        master_product_id: string;
+        change_type: string;
+        field_name: string;
+        old_value: string | null;
+        new_value: string | null;
+        source: string;
+      }> = [];
+
+      for (const row of cacheMatches as any[]) {
+        const existing = existingBySupplier.get(row.supplier_id) as any;
+        const supplierName = row.suppliers?.name ?? "Ukendt leverandør";
+        const price = Number(row.purchase_price);
+        if (!existing) {
+          changeLogs.push({ master_product_id: product.id, change_type: "supplier_added", field_name: "supplier_product", old_value: null, new_value: `${supplierName}: ${price} DKK`, source: "supplier-rematch-cache" });
+        } else {
+          if (Number(existing.purchase_price) !== price) {
+            changeLogs.push({ master_product_id: product.id, change_type: "price_update", field_name: "purchase_price", old_value: String(existing.purchase_price), new_value: String(price), source: "supplier-rematch-cache" });
+          }
+          if (existing.stock_quantity !== (row.stock_quantity ?? null)) {
+            changeLogs.push({ master_product_id: product.id, change_type: "stock_update", field_name: "supplier_stock_quantity", old_value: String(existing.stock_quantity ?? "null"), new_value: String(row.stock_quantity ?? "null"), source: "supplier-rematch-cache" });
+          }
+          if (existing.in_stock !== Boolean(row.in_stock)) {
+            changeLogs.push({ master_product_id: product.id, change_type: "stock_update", field_name: "supplier_in_stock", old_value: String(existing.in_stock), new_value: String(Boolean(row.in_stock)), source: "supplier-rematch-cache" });
+          }
+        }
+      }
+
+      await supabase.rpc("set_bulk_supplier_import", { enabled: true });
+      const { error: upsertErr } = await supabase
+        .from("supplier_products")
+        .upsert(upsertRows, { onConflict: "supplier_id,master_product_id" });
+      await supabase.rpc("set_bulk_supplier_import", { enabled: false });
+      if (upsertErr) throw new Error(`Supplier match upsert failed: ${upsertErr.message}`);
+
+      imported = upsertRows.length;
+
+      if (changeLogs.length > 0) {
+        const { error: logErr } = await supabase.from("product_change_log").insert(changeLogs);
+        if (logErr) console.error("supplier-rematch change log failed:", logErr.message);
+      }
+
+      const { error: stockErr } = await supabase.rpc("recompute_product_stock", { p_master_product_id: product.id });
+      if (stockErr) console.error("supplier-rematch stock recompute failed:", stockErr.message);
+    }
+
+    const shouldRefreshFeeds = imported === 0;
+
+    const { data: suppliers } = shouldRefreshFeeds ? await supabase
       .from("suppliers")
       .select("id, name, feed_type, feed_url")
-      .eq("is_active", true);
+      .eq("is_active", true) : { data: [] as any[] };
 
     // Only suppliers with auto-feeds (api/csv/xml/ftp) — manual ones can't be re-imported on demand
     const targets = (suppliers ?? []).filter((s) =>
@@ -87,7 +187,14 @@ Deno.serve(async (req) => {
       }
     }));
 
-    return new Response(JSON.stringify({ success: true, ean: product.ean, started: results.filter(r => r.started).length, results }), {
+    return new Response(JSON.stringify({
+      success: true,
+      ean: product.ean,
+      total_imported: imported,
+      cache_matches: imported,
+      started: results.filter(r => r.started).length,
+      results,
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

@@ -123,6 +123,25 @@ export default function NewProductPage() {
     if (error) { toast({ title: "Kunne ikke oprette", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Kladde oprettet i PIM" });
 
+    if (created) {
+      const { data: rematchData, error: rematchError } = await supabase.functions.invoke("supplier-rematch-product", {
+        body: { master_product_id: created.id },
+      });
+      if (rematchError || (rematchData as any)?.error) {
+        toast({ title: "Leverandør-søgning fejlede", description: rematchError?.message ?? (rematchData as any)?.error, variant: "destructive" });
+      } else {
+        const imported = (rematchData as any)?.total_imported ?? 0;
+        const started = (rematchData as any)?.started ?? 0;
+        if (imported > 0) {
+          toast({ title: `Fandt ${imported} leverandør-match`, description: "Produktet er koblet til leverandørpris og lager." });
+        } else if (started > 0) {
+          toast({ title: "Leverandør-søgning startet", description: `Søger hos ${started} leverandør${started === 1 ? "" : "er"} i baggrunden.` });
+        } else {
+          toast({ title: "Ingen leverandør-match", description: "Ingen leverandører havde dette EAN i deres feed." });
+        }
+      }
+    }
+
     if (alsoPush && created) {
       setPushing(true);
       const { data, error: pErr } = await supabase.functions.invoke("shopify-create-product", {

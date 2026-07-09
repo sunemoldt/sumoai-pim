@@ -119,10 +119,42 @@ export default function ProductDetailPage() {
       return;
     }
     const imported = (data as any)?.total_imported ?? 0;
+    const started = (data as any)?.started ?? 0;
     toast.success(imported > 0
       ? `Fandt ${imported} leverand\u00f8r-match`
-      : "Ingen leverand\u00f8rer havde dette EAN i deres feed");
+      : started > 0
+        ? `S\u00f8ger hos ${started} leverand\u00f8r${started === 1 ? "" : "er"} i baggrunden`
+        : "Ingen leverand\u00f8rer havde dette EAN i deres feed");
     queryClient.invalidateQueries({ queryKey: ["master_product", product.id] });
+    if (started > 0) {
+      window.setTimeout(() => queryClient.invalidateQueries({ queryKey: ["master_product", product.id] }), 8000);
+      window.setTimeout(() => queryClient.invalidateQueries({ queryKey: ["master_product", product.id] }), 20000);
+    }
+  };
+
+  const rematchSuppliersAfterEanSave = async () => {
+    if (!product) return;
+    const { data, error } = await supabase.functions.invoke("supplier-rematch-product", {
+      body: { master_product_id: product.id },
+    });
+    if (error || (data as any)?.error) {
+      toast.error(`Leverandør-søgning fejlede: ${error?.message ?? (data as any)?.error}`);
+      return;
+    }
+    const imported = (data as any)?.total_imported ?? 0;
+    const started = (data as any)?.started ?? 0;
+    if (imported > 0) {
+      toast.success(`Fandt ${imported} leverandør-match på EAN`);
+    } else if (started > 0) {
+      toast.success(`Søger hos ${started} leverandør${started === 1 ? "" : "er"} i baggrunden`);
+    } else {
+      toast.info("Ingen leverandører havde dette EAN i deres feed");
+    }
+    queryClient.invalidateQueries({ queryKey: ["master_product", product.id] });
+    if (started > 0) {
+      window.setTimeout(() => queryClient.invalidateQueries({ queryKey: ["master_product", product.id] }), 8000);
+      window.setTimeout(() => queryClient.invalidateQueries({ queryKey: ["master_product", product.id] }), 20000);
+    }
   };
 
   const toggleArchived = async () => {
@@ -560,7 +592,7 @@ export default function ProductDetailPage() {
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">EAN</Label>
-                  <InlineEditField productId={product.id} field="ean" value={product.ean} />
+                  <InlineEditField productId={product.id} field="ean" value={product.ean} onSaved={rematchSuppliersAfterEanSave} />
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Lagerbeholdning</Label>
