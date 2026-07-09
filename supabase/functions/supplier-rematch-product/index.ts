@@ -153,10 +153,12 @@ Deno.serve(async (req) => {
       if (stockErr) console.error("supplier-rematch stock recompute failed:", stockErr.message);
     }
 
-    const { data: suppliers } = await supabase
+    const shouldRefreshFeeds = imported === 0;
+
+    const { data: suppliers } = shouldRefreshFeeds ? await supabase
       .from("suppliers")
       .select("id, name, feed_type, feed_url")
-      .eq("is_active", true);
+      .eq("is_active", true) : { data: [] as any[] };
 
     // Only suppliers with auto-feeds (api/csv/xml/ftp) — manual ones can't be re-imported on demand
     const targets = (suppliers ?? []).filter((s) =>
