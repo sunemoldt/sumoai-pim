@@ -119,10 +119,17 @@ export default function ProductDetailPage() {
       return;
     }
     const imported = (data as any)?.total_imported ?? 0;
+    const started = (data as any)?.started ?? 0;
     toast.success(imported > 0
       ? `Fandt ${imported} leverand\u00f8r-match`
-      : "Ingen leverand\u00f8rer havde dette EAN i deres feed");
+      : started > 0
+        ? `S\u00f8ger hos ${started} leverand\u00f8r${started === 1 ? "" : "er"} i baggrunden`
+        : "Ingen leverand\u00f8rer havde dette EAN i deres feed");
     queryClient.invalidateQueries({ queryKey: ["master_product", product.id] });
+    if (started > 0) {
+      window.setTimeout(() => queryClient.invalidateQueries({ queryKey: ["master_product", product.id] }), 8000);
+      window.setTimeout(() => queryClient.invalidateQueries({ queryKey: ["master_product", product.id] }), 20000);
+    }
   };
 
   const toggleArchived = async () => {
