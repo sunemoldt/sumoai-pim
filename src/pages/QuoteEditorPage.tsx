@@ -551,7 +551,7 @@ function ProductPicker({
   value, onSelect, onTextChange,
 }: {
   value: string;
-  onSelect: (p: { id: string; title: string; purchase_price: number; list_price: number }) => void;
+  onSelect: (p: { id: string; title: string; purchase_price: number; list_price: number; sale_price: number }) => void;
   onTextChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
