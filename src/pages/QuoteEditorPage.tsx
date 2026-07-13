@@ -33,8 +33,10 @@ type ProductSearchResult = {
   ean: string | null;
   sku: string | null;
   webshop_price: number | string | null;
+  sale_price: number | string | null;
   supplier_products?: { purchase_price: number | string | null; in_stock: boolean | null }[];
 };
+
 
 const VAT = 0.25;
 
@@ -334,7 +336,7 @@ export default function QuoteEditorPage() {
                           product_name: p.title,
                           purchase_price: p.purchase_price,
                           list_price: p.list_price,
-                          quote_price: p.list_price,
+                          quote_price: p.sale_price || p.list_price,
                         })}
                         onTextChange={(v) => updateLine(idx, { product_name: v })}
                       />
@@ -418,7 +420,7 @@ export default function QuoteEditorPage() {
                             product_name: p.title,
                             purchase_price: p.purchase_price,
                             list_price: p.list_price,
-                            quote_price: p.list_price,
+                            quote_price: p.sale_price || p.list_price,
                           })}
                           onTextChange={(v) => updateLine(idx, { product_name: v })}
                         />
@@ -549,7 +551,7 @@ function ProductPicker({
   value, onSelect, onTextChange,
 }: {
   value: string;
-  onSelect: (p: { id: string; title: string; purchase_price: number; list_price: number }) => void;
+  onSelect: (p: { id: string; title: string; purchase_price: number; list_price: number; sale_price: number }) => void;
   onTextChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -602,7 +604,7 @@ function ProductPicker({
       if (q.length < 2) return [];
       const { data } = await supabase
         .from("master_products")
-        .select("id, title, ean, sku, webshop_price, supplier_products(purchase_price, in_stock)")
+        .select("id, title, ean, sku, webshop_price, sale_price, supplier_products(purchase_price, in_stock)")
         .or((() => { const isDigits = /^\d+$/.test(q); const s = isDigits ? q.replace(/^0+/, "") : q; const eanF = isDigits && s !== q ? `ean.ilike.%${q}%,ean.ilike.%${s}%` : `ean.ilike.%${q}%`; return `title.ilike.%${q}%,${eanF},sku.ilike.%${q}%`; })())
         .limit(15);
       return (data ?? []) as ProductSearchResult[];
@@ -638,13 +640,15 @@ function ProductPicker({
               }, null);
               const purchase = cheapest?.purchase_price ?? 0;
               const list = Number(p.webshop_price) || 0;
+              const sale = Number(p.sale_price) || 0;
+              const effective = sale > 0 && (list === 0 || sale < list) ? sale : list;
               return (
                 <button
                   key={p.id}
                   type="button"
                   className="w-full text-left p-2 rounded hover:bg-accent text-sm"
                   onClick={() => {
-                    onSelect({ id: p.id, title: p.title, purchase_price: Number(purchase), list_price: list });
+                    onSelect({ id: p.id, title: p.title, purchase_price: Number(purchase), list_price: list, sale_price: effective });
                     setSearch(p.title);
                     setOpen(false);
                   }}
@@ -654,6 +658,7 @@ function ProductPicker({
                     <span>EAN: {p.ean}</span>
                     <span>Indkøb: {Number(purchase).toFixed(2)}</span>
                     <span>Liste: {list.toFixed(2)}</span>
+                    {sale > 0 && sale < list && <span className="text-primary">Tilbud: {sale.toFixed(2)}</span>}
                   </div>
                 </button>
               );
