@@ -604,7 +604,7 @@ function ProductPicker({
       if (q.length < 2) return [];
       const { data } = await supabase
         .from("master_products")
-        .select("id, title, ean, sku, webshop_price, supplier_products(purchase_price, in_stock)")
+        .select("id, title, ean, sku, webshop_price, sale_price, supplier_products(purchase_price, in_stock)")
         .or((() => { const isDigits = /^\d+$/.test(q); const s = isDigits ? q.replace(/^0+/, "") : q; const eanF = isDigits && s !== q ? `ean.ilike.%${q}%,ean.ilike.%${s}%` : `ean.ilike.%${q}%`; return `title.ilike.%${q}%,${eanF},sku.ilike.%${q}%`; })())
         .limit(15);
       return (data ?? []) as ProductSearchResult[];
