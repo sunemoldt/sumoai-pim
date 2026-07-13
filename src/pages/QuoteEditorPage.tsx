@@ -640,13 +640,15 @@ function ProductPicker({
               }, null);
               const purchase = cheapest?.purchase_price ?? 0;
               const list = Number(p.webshop_price) || 0;
+              const sale = Number(p.sale_price) || 0;
+              const effective = sale > 0 && (list === 0 || sale < list) ? sale : list;
               return (
                 <button
                   key={p.id}
                   type="button"
                   className="w-full text-left p-2 rounded hover:bg-accent text-sm"
                   onClick={() => {
-                    onSelect({ id: p.id, title: p.title, purchase_price: Number(purchase), list_price: list });
+                    onSelect({ id: p.id, title: p.title, purchase_price: Number(purchase), list_price: list, sale_price: effective });
                     setSearch(p.title);
                     setOpen(false);
                   }}
@@ -656,6 +658,7 @@ function ProductPicker({
                     <span>EAN: {p.ean}</span>
                     <span>Indkøb: {Number(purchase).toFixed(2)}</span>
                     <span>Liste: {list.toFixed(2)}</span>
+                    {sale > 0 && sale < list && <span className="text-primary">Tilbud: {sale.toFixed(2)}</span>}
                   </div>
                 </button>
               );
