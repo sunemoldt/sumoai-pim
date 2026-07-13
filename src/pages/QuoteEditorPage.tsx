@@ -336,7 +336,7 @@ export default function QuoteEditorPage() {
                           product_name: p.title,
                           purchase_price: p.purchase_price,
                           list_price: p.list_price,
-                          quote_price: p.list_price,
+                          quote_price: p.sale_price || p.list_price,
                         })}
                         onTextChange={(v) => updateLine(idx, { product_name: v })}
                       />
