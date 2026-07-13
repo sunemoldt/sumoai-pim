@@ -33,8 +33,10 @@ type ProductSearchResult = {
   ean: string | null;
   sku: string | null;
   webshop_price: number | string | null;
+  sale_price: number | string | null;
   supplier_products?: { purchase_price: number | string | null; in_stock: boolean | null }[];
 };
+
 
 const VAT = 0.25;
 
