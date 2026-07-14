@@ -372,6 +372,7 @@ export default function ProductDetailPage() {
         const platform = targets[i].platform;
         if (res.error) return { platform, success: false, message: res.error.message };
         if (res.data?.error) return { platform, success: false, message: String(res.data.error) };
+        if (res.data?.skipped) return { platform, success: false, message: res.data.message ?? `Sprunget over (${res.data.reason ?? "ukendt"})` };
         const fields = res.data?.updated_fields ?? [];
         return { platform, success: true, message: `${fields.length} felter opdateret`, updatedFields: fields };
       });
