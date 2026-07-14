@@ -63,8 +63,19 @@ export default function InlineEditField({
       if (parse) {
         next = parse(raw);
       } else if (type === "number") {
-        next = raw.trim() === "" ? null : Number(raw);
-        if (next !== null && Number.isNaN(next)) throw new Error("Ugyldigt tal");
+        const trimmed = raw.trim();
+        if (trimmed === "") {
+          next = null;
+        } else {
+          // Accept both "1.234,56" (Danish) and "1234.56" (dot decimal).
+          // Strip thousands separators, then normalise comma → dot.
+          const normalised = trimmed
+            .replace(/\s/g, "")
+            .replace(/\.(?=\d{3}(\D|$))/g, "")
+            .replace(",", ".");
+          next = Number(normalised);
+          if (Number.isNaN(next)) throw new Error(`Ugyldigt tal: "${raw}"`);
+        }
       } else if (type === "boolean") {
         next = raw === "true";
       } else {
