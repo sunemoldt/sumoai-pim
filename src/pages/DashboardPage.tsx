@@ -22,6 +22,19 @@ export default function DashboardPage() {
   const { data: analyticsMap } = useAllProductAnalytics();
   const navigate = useNavigate();
   const [view, setView] = useState<DashView>("overview");
+  const [periodDays, setPeriodDays] = useState<number>(30);
+
+  useEffect(() => {
+    supabase
+      .from("analytics_settings")
+      .select("setting_value")
+      .eq("setting_key", "analysis_period_days")
+      .maybeSingle()
+      .then(({ data }) => {
+        const n = parseInt(data?.setting_value ?? "30", 10);
+        if (!isNaN(n) && n > 0) setPeriodDays(n);
+      });
+  }, []);
 
   const openProduct = (id: string) => {
     window.open(`/products/${id}`, "_blank", "noopener,noreferrer");
