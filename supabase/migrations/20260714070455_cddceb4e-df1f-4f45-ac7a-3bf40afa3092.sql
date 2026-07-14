@@ -1,0 +1,1 @@
+UPDATE public.master_products SET lifecycle_status = 'active' WHERE lifecycle_status = 'draft' AND shopify_product_id IS NOT NULL AND shopify_variant_id IS NOT NULL;

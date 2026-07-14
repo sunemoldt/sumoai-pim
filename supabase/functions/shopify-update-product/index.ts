@@ -210,7 +210,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (product.lifecycle_status === "draft") {
+    // Only skip drafts that have NEVER been pushed to Shopify. If a product already
+    // has a Shopify variant ID it's live on the shop — regardless of PIM lifecycle —
+    // and edits (price/stock) must sync, otherwise the shop drifts silently.
+    if (product.lifecycle_status === "draft" && (!product.shopify_product_id || !product.shopify_variant_id)) {
       return new Response(JSON.stringify({ skipped: true, reason: "lifecycle=draft", message: "Produktet er en kladde og er ikke sendt til Shopify endnu." }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
