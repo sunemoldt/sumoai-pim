@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useMasterProducts,
   getCheapestSupplierAny,
@@ -12,6 +12,7 @@ import { Package, Truck, AlertTriangle, TrendingUp, TrendingDown, Eye } from "lu
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 type DashView = "overview" | "low_margin" | "out_of_stock" | "high_margin";
 
@@ -21,6 +22,19 @@ export default function DashboardPage() {
   const { data: analyticsMap } = useAllProductAnalytics();
   const navigate = useNavigate();
   const [view, setView] = useState<DashView>("overview");
+  const [periodDays, setPeriodDays] = useState<number>(30);
+
+  useEffect(() => {
+    supabase
+      .from("analytics_settings")
+      .select("setting_value")
+      .eq("setting_key", "analysis_period_days")
+      .maybeSingle()
+      .then(({ data }) => {
+        const n = parseInt(data?.setting_value ?? "30", 10);
+        if (!isNaN(n) && n > 0) setPeriodDays(n);
+      });
+  }, []);
 
   const openProduct = (id: string) => {
     window.open(`/products/${id}`, "_blank", "noopener,noreferrer");
@@ -254,7 +268,7 @@ export default function DashboardPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-medium flex items-center gap-2">
                 <Eye className="h-4 w-4 text-muted-foreground" />
-                Mest besøgte (30 dage)
+                Mest besøgte ({periodDays} dage)
               </CardTitle>
             </CardHeader>
             <CardContent>
