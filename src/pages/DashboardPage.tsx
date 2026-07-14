@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useMasterProducts,
   getCheapestSupplierAny,
@@ -12,6 +12,7 @@ import { Package, Truck, AlertTriangle, TrendingUp, TrendingDown, Eye } from "lu
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 type DashView = "overview" | "low_margin" | "out_of_stock" | "high_margin";
 
