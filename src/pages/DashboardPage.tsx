@@ -268,7 +268,7 @@ export default function DashboardPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-medium flex items-center gap-2">
                 <Eye className="h-4 w-4 text-muted-foreground" />
-                Mest besøgte (30 dage)
+                Mest besøgte ({periodDays} dage)
               </CardTitle>
             </CardHeader>
             <CardContent>
