@@ -67,12 +67,14 @@ export default function InlineEditField({
         if (trimmed === "") {
           next = null;
         } else {
-          // Accept both "1.234,56" (Danish) and "1234.56" (dot decimal).
-          // Strip thousands separators, then normalise comma → dot.
-          const normalised = trimmed
-            .replace(/\s/g, "")
-            .replace(/\.(?=\d{3}(\D|$))/g, "")
-            .replace(",", ".");
+          // Accept both "1.234,56" (Danish w/ thousands+decimal) and dot-decimal
+          // like "1.5" or "0.500". Only treat dot as a thousands separator when
+          // a comma decimal is also present — otherwise a plain "1.500" would
+          // become 1500 instead of 1.5.
+          let normalised = trimmed.replace(/\s/g, "");
+          if (normalised.includes(",")) {
+            normalised = normalised.replace(/\./g, "").replace(",", ".");
+          }
           next = Number(normalised);
           if (Number.isNaN(next)) throw new Error(`Ugyldigt tal: "${raw}"`);
         }
