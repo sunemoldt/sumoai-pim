@@ -1707,6 +1707,32 @@ export default function ProductDetailPage() {
               <div className="flex flex-wrap gap-2">
                 <PullFromShopifyButton productId={product.id} hasShopify={Boolean(product.shopify_product_id)} />
                 <SendToShopifyButton product={product} />
+                {!product.shopify_product_id && product.ean && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      toast.info("Søger efter match i Shopify...");
+                      const { data, error } = await supabase.functions.invoke("shopify-match", {
+                        body: { ean: product.ean },
+                      });
+                      if (error || (data as any)?.error) {
+                        toast.error(`Match fejlede: ${error?.message ?? (data as any)?.error}`);
+                        return;
+                      }
+                      const newly = (data as any)?.pim?.newly_updated ?? 0;
+                      const already = (data as any)?.pim?.already_matched ?? 0;
+                      if (newly > 0 || already > 0) {
+                        toast.success("Koblet til Shopify — produktet er nu linket.");
+                        window.location.reload();
+                      } else {
+                        toast.error("Ingen match: EAN findes ikke som barcode i Shopify.");
+                      }
+                    }}
+                  >
+                    Match til eksisterende Shopify
+                  </Button>
+                )}
                 {product.shopify_product_id && (
                   <div className="basis-full text-xs text-muted-foreground">
                     {(() => {
