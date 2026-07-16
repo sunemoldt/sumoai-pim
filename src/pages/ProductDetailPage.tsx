@@ -1712,21 +1712,21 @@ export default function ProductDetailPage() {
                     variant="outline"
                     size="sm"
                     onClick={async () => {
-                      toast({ title: "Søger efter match i Shopify..." });
+                      toast.info("Søger efter match i Shopify...");
                       const { data, error } = await supabase.functions.invoke("shopify-match", {
                         body: { ean: product.ean },
                       });
                       if (error || (data as any)?.error) {
-                        toast({ title: "Match fejlede", description: error?.message ?? (data as any)?.error, variant: "destructive" });
+                        toast.error(`Match fejlede: ${error?.message ?? (data as any)?.error}`);
                         return;
                       }
                       const newly = (data as any)?.pim?.newly_updated ?? 0;
                       const already = (data as any)?.pim?.already_matched ?? 0;
                       if (newly > 0 || already > 0) {
-                        toast({ title: "Koblet til Shopify", description: "Produktet er nu linket til det eksisterende Shopify-produkt." });
+                        toast.success("Koblet til Shopify — produktet er nu linket.");
                         window.location.reload();
                       } else {
-                        toast({ title: "Ingen match fundet", description: "EAN findes ikke som barcode i Shopify.", variant: "destructive" });
+                        toast.error("Ingen match: EAN findes ikke som barcode i Shopify.");
                       }
                     }}
                   >
