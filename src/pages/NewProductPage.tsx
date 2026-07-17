@@ -145,28 +145,38 @@ export default function NewProductPage() {
     if (alsoPush && created) {
       setPushing(true);
       // Prøv først at matche mod eksisterende Shopify-produkt via EAN (undgår duplikat)
-      const { data: matchData } = await supabase.functions.invoke("shopify-match", {
+      const { data: matchData, error: matchError } = await supabase.functions.invoke("shopify-match", {
         body: { ean },
       });
-      const newlyMatched = (matchData as any)?.pim?.newly_updated ?? 0;
-      const alreadyMatched = (matchData as any)?.pim?.already_matched ?? 0;
-      if (newlyMatched > 0 || alreadyMatched > 0) {
+      if (matchError || (matchData as any)?.error || (matchData as any)?.success === false) {
         setPushing(false);
         toast({
-          title: "Koblet til eksisterende Shopify-produkt",
-          description: "EAN fandtes allerede i Shopify — produktet er nu linket i stedet for at oprette en dublet.",
+          title: "Match-tjek fejlede — Shopify-push afbrudt",
+          description: `Kunne ikke verificere om EAN allerede findes i Shopify (${matchError?.message ?? (matchData as any)?.error ?? "ukendt fejl"}). Produktet er gemt som kladde. Prøv 'Match til eksisterende Shopify' på produktsiden.`,
+          variant: "destructive",
         });
       } else {
-        const { data, error: pErr } = await supabase.functions.invoke("shopify-create-product", {
-          body: { master_product_id: created.id },
-        });
-        setPushing(false);
-        if (pErr || (data as any)?.error) {
-          toast({ title: "Push fejlede", description: pErr?.message ?? (data as any)?.error, variant: "destructive" });
+        const newlyMatched = (matchData as any)?.pim?.newly_updated ?? 0;
+        const alreadyMatched = (matchData as any)?.pim?.already_matched ?? 0;
+        if (newlyMatched > 0 || alreadyMatched > 0) {
+          setPushing(false);
+          toast({
+            title: "Koblet til eksisterende Shopify-produkt",
+            description: "EAN fandtes allerede i Shopify — produktet er nu linket i stedet for at oprette en dublet.",
+          });
         } else {
-          toast({ title: "Sendt til Shopify som KLADDE", description: "Aktivér i Shopify-admin når klar." });
+          const { data, error: pErr } = await supabase.functions.invoke("shopify-create-product", {
+            body: { master_product_id: created.id },
+          });
+          setPushing(false);
+          if (pErr || (data as any)?.error) {
+            toast({ title: "Push fejlede", description: pErr?.message ?? (data as any)?.error, variant: "destructive" });
+          } else {
+            toast({ title: "Sendt til Shopify som KLADDE", description: "Aktivér i Shopify-admin når klar." });
+          }
         }
       }
+
     }
     navigate(`/products/${created!.id}`);
   };
