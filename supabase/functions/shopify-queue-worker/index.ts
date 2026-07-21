@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
       }
 
       // Throttle worker itself to stay friendly to Shopify
-      await sleep(1200);
+      await sleep(400);
     }
 
     return json({ processed, succeeded, requeued, failed, results });
