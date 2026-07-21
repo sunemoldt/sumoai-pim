@@ -1256,12 +1256,18 @@ export default function ProductDetailPage() {
                 </div>
                 {/* Stock recommendation from suppliers */}
                 {(() => {
-                  // Only consider suppliers selected as stock sources for this product.
-                  // If none are selected, fall back to all linked suppliers.
+                  // Strictly respect the selected stock sources — no fallback to all suppliers.
                   const selectedIds = stockSyncSupplierIds ?? [];
-                  const relevantSuppliers = selectedIds.length > 0
-                    ? product.supplier_products.filter(sp => selectedIds.includes(sp.supplier_id))
-                    : product.supplier_products;
+                  if (selectedIds.length === 0) {
+                    return (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30">
+                          Ingen lagerkilde valgt
+                        </Badge>
+                      </div>
+                    );
+                  }
+                  const relevantSuppliers = product.supplier_products.filter(sp => selectedIds.includes(sp.supplier_id));
                   const totalSupplierStock = relevantSuppliers
                     .filter(sp => sp.in_stock)
                     .reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
@@ -1309,6 +1315,7 @@ export default function ProductDetailPage() {
                       )}
                     </div>
                   );
+
                 })()}
               </div>
 
