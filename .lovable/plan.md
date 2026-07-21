@@ -1,53 +1,34 @@
-## Tilbudsmodul mobiloptimering + EAN-opslag på tværs af leverandører
+## Problem
 
-### 1. Mobilvenligt tilbudsmodul
+Produkt `4711636204439` (ASUS Ascent GX10) har kun DCS valgt som lagerkilde blandt de tilknyttede leverandører, men PIM foreslår stadig et samlet lager der inkluderer andre leverandører (fx Kosatec, der ikke er valgt).
 
-**QuoteListPage** (`/quotes`):
-- Header stakkes lodret på mobil (titel + "Nyt tilbud"-knap under hinanden, fuld bredde).
-- Under `md:` skjules tabellen og hver række vises som et kort med: tilbudsnr + status-badge øverst, kundenavn, dato, antal linjer, total. Tap på kort = åbn tilbud. "Dupliker"-knap som lille tekstknap i bunden af kortet.
-- Tabellen bevares uændret for tablet/desktop (`md:` og op).
+Rodårsag: to steder ignorerer den aktive valgte leverandørliste (`stock_sync_supplier_ids`):
 
-**QuoteEditorPage** (`/quotes/:id`):
-- Topbar (tilbage, titel, Gem, Send, Godkendt, Afvist) bliver fleksibel: titel på egen linje, knapper wrapper og bliver ikoner + kort tekst på mobil. En "..."-menu er ikke nødvendig — vi bruger `flex-wrap` + `flex-1` på titlen.
-- "Kunde og detaljer"-kortet er allerede responsive.
-- **Produktlinjer** er hovedproblemet: tabellen med 10 kolonner hopper vandret. Under `md:` skjules tabellen og hver linje rendes som et kort med felter i to kolonner (Antal / Rabat%, Webshop / Tilbudspris) og små read-only rækker (Indkøb, Avance kr., Avance %, Subtotal). ProductPicker fylder hele bredden. Slet-knap i kortets header.
-- Pakkepris-footer stakkes lodret på mobil (label + input under hinanden, fuld bredde).
-- Total-widget/summary (linjer 388+) skal jeg først læse — bliver stakket lodret på mobil.
+1. **UI — `src/pages/ProductDetailPage.tsx` linje 293 (`initPushFields`)**
+   Når "Send til Shopify"-fanen åbnes, summeres `stock_quantity` fra ALLE `supplier_products`, ikke kun de valgte lagerkilder. Det er dette tal der forudfyldes i "Antal på lager".
 
-Ingen ændringer i beregninger, gem-flow eller datamodel.
+2. **DB — `public.recompute_product_stock` fallback**
+   Hvis ingen valgt leverandør passer margin-filteret, falder funktionen tilbage til "sum af alle in-stock leverandører på laveste indkøbspris" — det kan trække ikke-valgte leverandører ind.
 
-### 2. EAN-opslag på tværs af leverandører
+## Ændringer
 
-**Ny genbrugelig komponent** `src/components/SupplierEanLookupDialog.tsx`:
-- Modal med EAN-input + "Søg"-knap. Enter = søg. Normaliserer EAN (strip leading zeros som andre steder i koden).
-- Kalder ny edge function `supplier-ean-lookup` (verify_jwt=false, JWT valideret i koden) der:
-  1. Slår op i `supplier_products` join `suppliers` på normaliseret EAN (SQL: strip leading zeros på begge sider).
-  2. Returnerer per leverandør: navn, purchase_price ex.moms, stock_quantity, in_stock, sidst opdateret, evt. supplier_sku/title.
-  3. Finder også evt. eksisterende `master_products`-match og returnerer den (så brugeren ser om produktet allerede er oprettet).
-- Modal viser resultater i en sorteret liste (billigste in-stock øverst), med:
-  - Leverandørnavn, lagerstatus, indkøbspris ex.moms.
-  - **Avance-beregner**: input for avance% (default fra `price_settings` global). Viser beregnet udsalgspris ex.moms og inkl. moms live per leverandør (bruger `getRecommendedPriceInclVat`). Global avance% kan justeres i toppen af dialogen og gælder alle rækker.
-  - Hvis PIM-match findes: link til produktet + "Brug denne pris".
-  - Hvis intet PIM-match: knap "Opret produkt" der navigerer til `/products/new?ean=...` (findes allerede via `NewProductPage`).
+### 1. `src/pages/ProductDetailPage.tsx`
+- I `initPushFields`: filtrer `product.supplier_products` gennem `stockSyncSupplierIds` før summering, præcis som stock-anbefalings-badget (linje 1250-1256) allerede gør.
+- Hvis ingen leverandør er valgt: brug 0 / eksisterende `product.stock_quantity` (ingen aggregering på tværs). Ingen "fallback til alle".
 
-**Indgange til opslag:**
-- **Sidebar** (`AppSidebar.tsx`): nyt punkt "EAN-opslag" (ikon: `ScanBarcode`) der åbner dialogen fra en tynd wrapper-page eller globalt via context. Enkleste løsning: dedikeret route `/ean-lookup` der bare rendrer dialog-indholdet som fuld side (samme komponent, `asPage` prop).
-- **QuoteEditorPage**: knap "Søg EAN på tværs af leverandører" ved siden af "Tilføj linje". Når en pris vælges i modalen, tilføjes en ny linje med `product_name` (fra PIM-match eller "EAN 5701234…"), `purchase_price` = leverandørens pris, `quote_price`/`list_price` = beregnet udsalgspris inkl. moms. `pim_product_id` sættes hvis der findes match, ellers null.
+### 2. Migration — forenkl `public.recompute_product_stock`
+- Fjern fallback-blokken der genberegner totalen ud fra `MIN(purchase_price)` på tværs af alle in-stock leverandører.
+- Regel bliver enkel: hvis `auto_stock_sync = true` og `stock_sync_supplier_ids` er sat, sum kun stock fra de valgte leverandører der består margin-tjekket. Ellers → 0 / `outofstock`.
+- Behold eksisterende trigger-flow og `apply_low_margin_guard`-kaldet uændret.
 
-### Tekniske detaljer
+### 3. UI — fjern "fallback til alle leverandører" i stock-anbefalingen (linje 1249-1253)
+- Hvis ingen leverandører er valgt som lagerkilde: vis "Ingen lagerkilde valgt" i stedet for at summere alle tilknyttede.
+- Konsistens: både forslags-badget og init-værdien viser nu udelukkende det, brugeren har valgt.
 
-**Ny edge function** `supabase/functions/supplier-ean-lookup/index.ts`:
-- Body: `{ ean: string }`, zod-valideret.
-- CORS + JWT-validering (samme mønster som andre funktioner).
-- Bruger service role client. Query normaliserer EAN så leading zeros ignoreres begge veje.
-- Response: `{ ean_normalized, master_product: {id,title,image_url,webshop_price}|null, offers: [{supplier_id, supplier_name, purchase_price, stock_quantity, in_stock, updated_at, supplier_sku, supplier_title}] }`.
+## Ikke ændret
+- `apply_low_margin_guard` og `prevent_below_purchase_price` — de arbejder på tværs af leverandører for at beskytte mod negativ avance, hvilket er ønsket.
+- Trigger-kaskader og Shopify-push-flow.
 
-**Ny route i `App.tsx`:** `/ean-lookup` → `EanLookupPage` (tynd wrapper der bruger samme dialog-komponent i "page mode").
-
-**AppSidebar.tsx:** tilføj nav-item "EAN-opslag" med `ScanBarcode`-ikon, placeret over "Leverandører".
-
-**Filer**
-- Nye: `supabase/functions/supplier-ean-lookup/index.ts`, `src/components/SupplierEanLookupDialog.tsx`, `src/pages/EanLookupPage.tsx`.
-- Ændrede: `src/pages/QuoteListPage.tsx`, `src/pages/QuoteEditorPage.tsx`, `src/components/AppSidebar.tsx`, `src/App.tsx`.
-
-Ingen skema-ændringer, ingen migrations.
+## Verifikation
+- Kør `recompute_product_stock` for `fbf014d6-3a0a-4f85-9df1-0122a27a6bd0` og bekræft `stock_quantity = 3` (kun DCS).
+- Åbn produktsiden → "Send til Shopify": "Antal" forudfyldes med 3, ikke summen inkl. Kosatec.
