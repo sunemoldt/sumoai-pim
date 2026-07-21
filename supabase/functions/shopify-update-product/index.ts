@@ -594,11 +594,61 @@ Deno.serve(async (req) => {
     const isThrottle = /rate.?limit|throttl|429|too many requests|exceeded for trace/i.test(message);
     const shouldEnqueue = isThrottle && enqueue_on_throttle !== false && queued !== true;
 
+    // Detect stale Shopify link: the product no longer exists in Shopify.
+    // Clear the stale IDs so future edits don't keep failing, and attempt an
+    // automatic re-match by EAN via the shopify-match function.
+    const isStaleLink = /product does not exist|does not exist|not\s*found/i.test(message);
+    if (isStaleLink && master_product_id) {
+      try {
+        const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const { data: prod } = await sb
+          .from("master_products")
+          .select("ean")
+          .eq("id", master_product_id)
+          .maybeSingle();
+
+        await sb.from("master_products").update({
+          shopify_product_id: null,
+          shopify_variant_id: null,
+          last_shopify_sync_status: "unlinked",
+          last_shopify_sync_error: `Shopify-produktet findes ikke længere — link nulstillet. ${message}`,
+          updated_at: new Date().toISOString(),
+        }).eq("id", master_product_id);
+
+        // Best-effort auto-rematch by EAN (does not throw on failure)
+        if (prod?.ean) {
+          try {
+            await fetch(`${SUPABASE_URL}/functions/v1/shopify-match`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                apikey: SUPABASE_SERVICE_ROLE_KEY,
+              },
+              body: JSON.stringify({ ean: prod.ean, onlyUnlinked: true }),
+            });
+          } catch (_) { /* ignore */ }
+        }
+
+        return new Response(JSON.stringify({
+          error: message,
+          stale_link_cleared: true,
+          message: "Shopify-produktet findes ikke længere. Linket er nulstillet — prøv at matche eller opret på ny.",
+        }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (clearErr) {
+        console.error("Failed to clear stale Shopify link:", clearErr);
+      }
+    }
+
     // Stamp failure on product (best-effort, ignore errors)
     try {
       const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       await sb.from("master_products").update({ last_shopify_sync_status: shouldEnqueue ? "queued" : "failed" }).eq("id", master_product_id);
     } catch { /* ignore */ }
+
 
 
     if (shouldEnqueue) {
