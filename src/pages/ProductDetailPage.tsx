@@ -289,9 +289,15 @@ export default function ProductDetailPage() {
     // når brugeren klikker "Brug anbefalet pris".
     setPushPrice(product.webshop_price?.toString() ?? "");
     setPushSalePrice(product.sale_price?.toString() ?? "");
-    // Suggest supplier stock total as stock quantity
-    const supplierStockTotal = product.supplier_products.reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
-    const hasSupplierStock = product.supplier_products.some(sp => sp.in_stock);
+    // Suggest supplier stock — only from suppliers explicitly selected as stock sources.
+    const selectedIds = ((product as any).stock_sync_supplier_ids as string[] | null) ?? [];
+    const relevantSuppliers = selectedIds.length > 0
+      ? product.supplier_products.filter(sp => selectedIds.includes(sp.supplier_id))
+      : [];
+    const supplierStockTotal = relevantSuppliers
+      .filter(sp => sp.in_stock)
+      .reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
+    const hasSupplierStock = relevantSuppliers.some(sp => sp.in_stock);
     // If the current webshop price (ex VAT) is below the cheapest in-stock purchase price,
     // we'd be selling at a loss — force stock to 0 / out of stock instead.
     const activePrice = product.sale_price ?? product.webshop_price;
@@ -300,10 +306,15 @@ export default function ProductDetailPage() {
     if (wouldBeLoss) {
       setPushStockQty("0");
       setPushStockStatus("outofstock");
+    } else if (selectedIds.length === 0) {
+      // No stock source selected — fall back to product's own current stock.
+      setPushStockQty(product.stock_quantity?.toString() ?? "0");
+      setPushStockStatus(product.stock_status ?? "outofstock");
     } else {
-      setPushStockQty(supplierStockTotal > 0 ? supplierStockTotal.toString() : (product.stock_quantity?.toString() ?? "0"));
-      setPushStockStatus(hasSupplierStock ? "instock" : (product.stock_status ?? "outofstock"));
+      setPushStockQty(supplierStockTotal.toString());
+      setPushStockStatus(hasSupplierStock ? "instock" : "outofstock");
     }
+
     setPushBackorders((product as any).backorder_policy ?? (product.backorders_allowed ? "yes" : "no"));
     setPushInitialized(true);
   };
@@ -1245,12 +1256,18 @@ export default function ProductDetailPage() {
                 </div>
                 {/* Stock recommendation from suppliers */}
                 {(() => {
-                  // Only consider suppliers selected as stock sources for this product.
-                  // If none are selected, fall back to all linked suppliers.
+                  // Strictly respect the selected stock sources — no fallback to all suppliers.
                   const selectedIds = stockSyncSupplierIds ?? [];
-                  const relevantSuppliers = selectedIds.length > 0
-                    ? product.supplier_products.filter(sp => selectedIds.includes(sp.supplier_id))
-                    : product.supplier_products;
+                  if (selectedIds.length === 0) {
+                    return (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30">
+                          Ingen lagerkilde valgt
+                        </Badge>
+                      </div>
+                    );
+                  }
+                  const relevantSuppliers = product.supplier_products.filter(sp => selectedIds.includes(sp.supplier_id));
                   const totalSupplierStock = relevantSuppliers
                     .filter(sp => sp.in_stock)
                     .reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
@@ -1298,6 +1315,7 @@ export default function ProductDetailPage() {
                       )}
                     </div>
                   );
+
                 })()}
               </div>
 
