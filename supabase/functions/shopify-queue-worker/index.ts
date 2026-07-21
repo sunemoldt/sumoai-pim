@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
 
 
   const url = new URL(req.url);
-  const batchSize = Math.min(Number(url.searchParams.get("batch") ?? 10), 25);
+  const batchSize = Math.min(Number(url.searchParams.get("batch") ?? 25), 25);
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   // Serialize worker runs: if another instance is already draining the queue,
@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
       }
 
       // Throttle worker itself to stay friendly to Shopify
-      await sleep(1200);
+      await sleep(400);
     }
 
     return json({ processed, succeeded, requeued, failed, results });
