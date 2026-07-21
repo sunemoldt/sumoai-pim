@@ -1,34 +1,29 @@
 ## Problem
 
-Produkt `4711636204439` (ASUS Ascent GX10) har kun DCS valgt som lagerkilde blandt de tilknyttede leverandører, men PIM foreslår stadig et samlet lager der inkluderer andre leverandører (fx Kosatec, der ikke er valgt).
+`shopify-update-product` sender kun `seo.title` / `seo.description` når `meta_title` / `meta_description` er eksplicit med i request-body, eller når kaldet er `queued=true` og feltet står i `changed_fields`. Alle andre opdateringer (pris, lager, beskrivelse osv.) skubber ikke SEO ud — så Shopify-siden ender med tom `seo.description` for produkter der aldrig har haft et dedikeret SEO-push. Resultat: 331 produkter i Shopify med manglende SEO.
 
-Rodårsag: to steder ignorerer den aktive valgte leverandørliste (`stock_sync_supplier_ids`):
+## Fix
 
-1. **UI — `src/pages/ProductDetailPage.tsx` linje 293 (`initPushFields`)**
-   Når "Send til Shopify"-fanen åbnes, summeres `stock_quantity` fra ALLE `supplier_products`, ikke kun de valgte lagerkilder. Det er dette tal der forudfyldes i "Antal på lager".
+### 1. Altid sende SEO fra DB (`supabase/functions/shopify-update-product/index.ts`)
 
-2. **DB — `public.recompute_product_stock` fallback**
-   Hvis ingen valgt leverandør passer margin-filteret, falder funktionen tilbage til "sum af alle in-stock leverandører på laveste indkøbspris" — det kan trække ikke-valgte leverandører ind.
+I SEO-blokken (linje 448-470): fjern kravet om at `effectiveMetaTitle` / `effectiveMetaDescription` skal være defineret. Fald i stedet tilbage til DB-værdien (`product.meta_title`, `product.meta_description`) hver gang funktionen skriver til Shopify, så længe `canPush("meta_title" / "meta_description")` tillader det og værdien ikke er tom.
 
-## Ændringer
+- Loggen (`logChange` + `updatedFields`) skal kun tælle når værdien reelt er ny på Shopify-siden — brug fortsat `effectiveMeta*` (eksplicit ændring) til det, så "0 felter opdateret"-UI ikke bliver forvirrende, men medtag altid feltet i `productInput.seo` når DB har en værdi.
+- Bevar `dbUpdate` sådan at PIM-tabellen ikke får unødige skrivninger.
 
-### 1. `src/pages/ProductDetailPage.tsx`
-- I `initPushFields`: filtrer `product.supplier_products` gennem `stockSyncSupplierIds` før summering, præcis som stock-anbefalings-badget (linje 1250-1256) allerede gør.
-- Hvis ingen leverandør er valgt: brug 0 / eksisterende `product.stock_quantity` (ingen aggregering på tværs). Ingen "fallback til alle".
+### 2. Full re-sync af eksisterende Shopify-produkter
 
-### 2. Migration — forenkl `public.recompute_product_stock`
-- Fjern fallback-blokken der genberegner totalen ud fra `MIN(purchase_price)` på tværs af alle in-stock leverandører.
-- Regel bliver enkel: hvis `auto_stock_sync = true` og `stock_sync_supplier_ids` er sat, sum kun stock fra de valgte leverandører der består margin-tjekket. Ellers → 0 / `outofstock`.
-- Behold eksisterende trigger-flow og `apply_low_margin_guard`-kaldet uændret.
+Kør engangs-backfill der queuer alle produkter med `shopify_product_id IS NOT NULL AND shopify_sync_enabled = true AND (meta_title IS NOT NULL OR meta_description IS NOT NULL)` i `shopify_update_queue` med `payload = { reason: 'seo-backfill', changed_fields: ['meta_title','meta_description'], meta_title, meta_description }`. Worker skubber dem løbende via ovennævnte kode-fix.
 
-### 3. UI — fjern "fallback til alle leverandører" i stock-anbefalingen (linje 1249-1253)
-- Hvis ingen leverandører er valgt som lagerkilde: vis "Ingen lagerkilde valgt" i stedet for at summere alle tilknyttede.
-- Konsistens: både forslags-badget og init-værdien viser nu udelukkende det, brugeren har valgt.
+### 3. Verifikation
 
-## Ikke ændret
-- `apply_low_margin_guard` og `prevent_below_purchase_price` — de arbejder på tværs af leverandører for at beskytte mod negativ avance, hvilket er ønsket.
-- Trigger-kaskader og Shopify-push-flow.
+Efter køen er tømt: `shopify-seo-backfill` (mode `report`) forventes at rapportere 0 produkter med tom `seo.description` på Shopify — det er brugerens accept-kriterium.
 
-## Verifikation
-- Kør `recompute_product_stock` for `fbf014d6-3a0a-4f85-9df1-0122a27a6bd0` og bekræft `stock_quantity = 3` (kun DCS).
-- Åbn produktsiden → "Send til Shopify": "Antal" forudfyldes med 3, ikke summen inkl. Kosatec.
+## Teknisk detalje
+
+- Filer der ændres:
+  - `supabase/functions/shopify-update-product/index.ts` (SEO-blok ~L448-470)
+- SQL migration/insert:
+  - Batch-insert i `shopify_update_queue` (én række pr. produkt, chunkes hvis nødvendigt).
+- Ingen ændringer nødvendige i `shopify-create-product` (sender allerede `seo` i `productSet`/`productCreate`).
+- Sync-policy respekteres fortsat via eksisterende `canPush(...)` — brugere der har blokeret `meta_title`/`meta_description` i policy'en får dem stadig ikke skubbet.
