@@ -611,9 +611,9 @@ Deno.serve(async (req) => {
           shopify_product_id: null,
           shopify_variant_id: null,
           last_shopify_sync_status: "unlinked",
-          last_shopify_sync_error: `Shopify-produktet findes ikke længere — link nulstillet. ${message}`,
           updated_at: new Date().toISOString(),
         }).eq("id", master_product_id);
+
 
         // Best-effort auto-rematch by EAN (does not throw on failure)
         if (prod?.ean) {
