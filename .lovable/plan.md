@@ -1,29 +1,56 @@
-## Problem
+# Plan: Pilot-drænet + BF payload-merge (revideret)
 
-`shopify-update-product` sender kun `seo.title` / `seo.description` når `meta_title` / `meta_description` er eksplicit med i request-body, eller når kaldet er `queued=true` og feltet står i `changed_fields`. Alle andre opdateringer (pris, lager, beskrivelse osv.) skubber ikke SEO ud — så Shopify-siden ender med tom `seo.description` for produkter der aldrig har haft et dedikeret SEO-push. Resultat: 331 produkter i Shopify med manglende SEO.
+Sekvensen er nu strikt: trin 1-3 kører først, du verificerer i Shopify, og først ved grønt lys deployes trin 4.
 
-## Fix
+## Trin 1 — Prioritér pilot + BF-rækker (én migration)
 
-### 1. Altid sende SEO fra DB (`supabase/functions/shopify-update-product/index.ts`)
+To updates i samme migration, ingen INSERT'er, ingen nye rækker.
 
-I SEO-blokken (linje 448-470): fjern kravet om at `effectiveMetaTitle` / `effectiveMetaDescription` skal være defineret. Fald i stedet tilbage til DB-værdien (`product.meta_title`, `product.meta_description`) hver gang funktionen skriver til Shopify, så længe `canPush("meta_title" / "meta_description")` tillader det og værdien ikke er tom.
+**1a. Pilot (11 master_product_ids) — 60 min tilbage:**
+```sql
+UPDATE public.shopify_update_queue
+SET next_attempt_at = now() - interval '60 minutes',
+    updated_at = now()
+WHERE status = 'pending'
+  AND master_product_id IN ( … 11 pilot-UUIDs … );
+```
 
-- Loggen (`logChange` + `updatedFields`) skal kun tælle når værdien reelt er ny på Shopify-siden — brug fortsat `effectiveMeta*` (eksplicit ændring) til det, så "0 felter opdateret"-UI ikke bliver forvirrende, men medtag altid feltet i `productInput.seo` når DB har en værdi.
-- Bevar `dbUpdate` sådan at PIM-tabellen ikke får unødige skrivninger.
+**1b. BF (17 PIM-rækker bag 11 shopify_product_ids) — 55 min tilbage + payload-merge:**
 
-### 2. Full re-sync af eksisterende Shopify-produkter
+For hver eksisterende pending-række på de 17 master_product_ids:
+- `changed_fields` unioneres med `["long_description", "short_description"]` via `jsonb_agg(DISTINCT …)` (samme mønster som `auto_enqueue_shopify_update`).
+- `payload.long_description` og `payload.short_description` sættes fra `master_products` — så worker sender aktuelle DB-værdier og `descriptionHtml` bygges som short+long concat.
+- `source` sættes til `seo-bf-merge` for sporbarhed.
+- `next_attempt_at = now() - interval '55 minutes'` — deterministisk bag piloten.
 
-Kør engangs-backfill der queuer alle produkter med `shopify_product_id IS NOT NULL AND shopify_sync_enabled = true AND (meta_title IS NOT NULL OR meta_description IS NOT NULL)` i `shopify_update_queue` med `payload = { reason: 'seo-backfill', changed_fields: ['meta_title','meta_description'], meta_title, meta_description }`. Worker skubber dem løbende via ovennævnte kode-fix.
+BF-produkter: KeyPad Outdoor, 2× Apple Watch-opladere, USB-Lightning, 20W-oplader, 11-i-1 dock, 33W Nano, HDMI-dock, PD nylon sort + hvid, MFi-kabel.
 
-### 3. Verifikation
+Hvis et af de 17 mod forventning ikke har en pending række, logges det i migration-output — ingen INSERT-fallback i denne runde (håndteres separat hvis nødvendigt).
 
-Efter køen er tømt: `shopify-seo-backfill` (mode `report`) forventes at rapportere 0 produkter med tom `seo.description` på Shopify — det er brugerens accept-kriterium.
+## Trin 2 — Manuel worker-kørsel
 
-## Teknisk detalje
+`POST /shopify-queue-worker?batch=25`, én gang. Piloten (11) ligger deterministisk forrest pga. den ældre timestamp, så de 25 dækker alle 11 pilot + 14 af 17 BF. Sidste 3 BF-rækker plukkes af næste automatiske cron-kørsel (≤15 min).
 
-- Filer der ændres:
-  - `supabase/functions/shopify-update-product/index.ts` (SEO-blok ~L448-470)
-- SQL migration/insert:
-  - Batch-insert i `shopify_update_queue` (én række pr. produkt, chunkes hvis nødvendigt).
-- Ingen ændringer nødvendige i `shopify-create-product` (sender allerede `seo` i `productSet`/`productCreate`).
-- Sync-policy respekteres fortsat via eksisterende `canPush(...)` — brugere der har blokeret `meta_title`/`meta_description` i policy'en får dem stadig ikke skubbet.
+## Trin 3 — Status-rapport til dig
+
+Jeg poster:
+- Queue-state for de 11 pilot + 17 BF master_product_ids (done/failed/pending, evt. fejlbeskeder).
+- Payload-verificering på et par BF-rækker efter merge: bekræfter at `changed_fields` indeholder både `long_description` og `short_description`, og at `payload` har DB-friske tekster.
+
+**Herefter stopper jeg og venter på dit grønt/rødt lys** fra Shopify-verificeringen (4 pilot-tilstande + BF-links væk fra 11 live-beskrivelser).
+
+## Trin 4 — Throughput (KUN efter dit grønne lys — separat deploy)
+
+`supabase/functions/shopify-queue-worker/index.ts`:
+- default `batchSize` 10 → 25
+- item-sleep 1200 ms → 400 ms
+
+Ingen ændringer i rate-limit-guards eller mapping-logik. Deployes først når du siger grønt — indtil da drænes køen med nuværende hastighed (10/15 min).
+
+## Teknisk
+
+- Trin 1: `supabase--migration` (én samlet migration for 1a + 1b).
+- Trin 2: `supabase--curl_edge_functions` mod `/shopify-queue-worker?batch=25`.
+- Trin 3: `supabase--read_query` for status + payload-inspection.
+- Trin 4: `supabase--deploy_edge_functions` — kun efter dit grønne lys.
+- Ingen skema-ændringer, ingen RLS, ingen nye kodepaths i worker.
