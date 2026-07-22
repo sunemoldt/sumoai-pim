@@ -31,7 +31,7 @@ const BACKUP_TABLES = [
   "product_analytics",
   "product_change_log",
   "product_recommendations",
-  "product_translations",
+  
   "product_variants",
   "quote_lines",
   "quotes",
