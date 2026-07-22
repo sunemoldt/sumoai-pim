@@ -342,6 +342,7 @@ export default function ProductDetailPage() {
           auto_stock_sync: autoStockSync,
           stock_sync_supplier_ids: stockSyncSupplierIds,
           stock_sync_supplier_id: stockSyncSupplierIds[0] || null,
+          stock_supplier_order_override: stockSupplierOrderOverride,
           stock_sync_interval: stockSyncInterval,
           min_sync_margin: parseFloat(minSyncMargin) || 15,
         } as any)
