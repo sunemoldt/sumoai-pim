@@ -319,26 +319,14 @@ Deno.serve(async (req) => {
                   }
                 }
               }
-            } else if (sync_target === "woocommerce") {
-              try {
-                await callFn("wc-update-product", {
-                  master_product_id: p.id,
-                  description: newLong,
-                  short_description: newShort,
-                });
-                r.step = "synced_woocommerce";
-                r.shopify = "not_applicable";
-                r.shopify_reason = "WooCommerce-mål";
-              } catch (sErr) {
-                r.shopify = "error";
-                r.shopify_reason = sErr instanceof Error ? sErr.message : String(sErr);
-                throw sErr;
-              }
             } else {
               r.step = "pim_only";
               r.shopify = "not_applicable";
-              r.shopify_reason = "sync_target=none";
+              r.shopify_reason = sync_target === "woocommerce"
+                ? "WooCommerce-sync er deaktiveret — PIM opdateret."
+                : "sync_target=none";
             }
+
           }
         } catch (e) {
           r.status = "error";
