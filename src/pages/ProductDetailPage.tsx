@@ -1358,22 +1358,6 @@ export default function ProductDetailPage() {
                   const suggestedQty = active ? (active.sp.stock_quantity ?? 1) : 0;
                   const suggestedStatus = active ? "instock" : "outofstock";
                   const suggestedBackorder = backorderMode === "yes" ? "yes" : backorderMode === "notify" ? "notify" : "no";
-                  const activeEx = activePriceIncl > 0 ? activePriceIncl / 1.25 : 0;
-                  const minMargin = product.min_sync_margin ?? 15;
-                  const relevant = product.supplier_products
-                    .filter(sp => selectedIds.includes(sp.supplier_id))
-                    .map(sp => {
-                      const price = Number(sp.purchase_price ?? 0);
-                      const margin = activeEx > 0 && price > 0 ? ((activeEx - price) / activeEx) * 100 : null;
-                      const safe = margin === null ? true : margin >= minMargin;
-                      return { sp, price, margin, safe };
-                    })
-                    .sort((a, b) => a.price - b.price);
-                  const inStockSafe = relevant.filter(r => r.sp.in_stock && (r.sp.stock_quantity == null || r.sp.stock_quantity > 0) && r.safe);
-                  const active = inStockSafe[0] ?? null;
-                  const suggestedQty = active ? (active.sp.stock_quantity ?? 1) : 0;
-                  const suggestedStatus = active ? "instock" : "outofstock";
-                  const suggestedBackorder = backorderMode === "yes" ? "yes" : backorderMode === "notify" ? "notify" : "no";
 
                   return (
                     <div className="space-y-2">
