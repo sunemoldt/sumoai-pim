@@ -589,9 +589,8 @@ export default function ProductDetailPage() {
                 currentShort={(product as any).short_description}
                 currentLong={(product as any).long_description}
                 shopifyProductId={(product as any).shopify_product_id}
-                webshopPlatform={(product as any).webshop_platform}
-                webshopProductId={(product as any).webshop_product_id}
               />
+
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
                   <Label className="text-muted-foreground text-xs">Brand</Label>
