@@ -356,6 +356,66 @@ export default function CollectionDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Tilføj produkt til kategorien</DialogTitle>
+            <DialogDescription>
+              Søg på titel, EAN eller SKU. Kun produkter der er linket til Shopify vises. Tilføjelse synker med det samme til Shopify.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              autoFocus
+              value={addQuery}
+              onChange={(e) => setAddQuery(e.target.value)}
+              placeholder="Søg produkt…"
+              className="pl-9"
+            />
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto -mx-6 px-6 divide-y">
+            {addQuery.trim().length < 2 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">Indtast mindst 2 tegn for at søge.</p>
+            ) : searching ? (
+              <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : searchResults.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">Ingen produkter fundet.</p>
+            ) : (
+              searchResults.map((p: any) => {
+                const inCollection = existingIds.has(p.id);
+                return (
+                  <div key={p.id} className="flex items-center gap-3 py-2">
+                    {p.image_url ? (
+                      <img src={p.image_url} alt="" className="h-10 w-10 rounded object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="h-10 w-10 rounded bg-muted flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{p.title}</p>
+                      <p className="text-xs text-muted-foreground">{p.ean} · {p.sku}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={inCollection ? "ghost" : "outline"}
+                      disabled={inCollection || adding === p.id}
+                      onClick={() => handleAdd(p.id)}
+                    >
+                      {adding === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> :
+                        inCollection ? <><Check className="h-4 w-4 mr-1" /> Tilføjet</> :
+                        <><Plus className="h-4 w-4 mr-1" /> Tilføj</>}
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddOpen(false)}>Luk</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
 
   );
