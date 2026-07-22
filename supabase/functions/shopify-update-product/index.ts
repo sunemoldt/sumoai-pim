@@ -606,10 +606,16 @@ Deno.serve(async (req) => {
     const isThrottle = /rate.?limit|throttl|429|too many requests|exceeded for trace/i.test(message);
     const shouldEnqueue = isThrottle && enqueue_on_throttle !== false && queued !== true;
 
-    // Detect stale Shopify link: the product no longer exists in Shopify.
-    // Clear the stale IDs so future edits don't keep failing, and attempt an
-    // automatic re-match by EAN via the shopify-match function.
-    const isStaleLink = /product does not exist|does not exist|not\s*found/i.test(message);
+    // Narrowly detect a stale product link. Only clear the link when Shopify
+    // explicitly reports the *product* (or its variant referenced by the
+    // productSet/variant mutation) as missing — NOT for unrelated "not found"
+    // errors like missing Location, InventoryItem, Metafield, etc., which
+    // routinely surface during stock/price pushes on healthy products.
+    const isStaleLink =
+      /\bProduct(?: with id [^\s]+)? does not exist\b/i.test(message) ||
+      /\bproduct(?: with id)?\s+not\s*found\b/i.test(message) ||
+      /gid:\/\/shopify\/Product\/[^\s'"]+\s+(?:does not exist|not found)/i.test(message);
+
     if (isStaleLink && master_product_id) {
       try {
         const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
