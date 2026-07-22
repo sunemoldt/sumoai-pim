@@ -104,6 +104,7 @@ export default function SupplierListPage() {
             <TableHeader>
               <TableRow className="bg-secondary/50">
                 <TableHead>Navn</TableHead>
+                <TableHead className="w-32" title="Lavere tal = højere prioritet ved lager/pris-valg">Prioritet</TableHead>
                 <TableHead>Feed type</TableHead>
                 <TableHead>Feed URL / Fil</TableHead>
                 <TableHead>Frekvens</TableHead>
