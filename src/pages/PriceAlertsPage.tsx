@@ -21,7 +21,7 @@ type Alert = {
   shopify_compare_at_price: number | null;
   cheapest_purchase_price: number;
   margin_pct: number;
-  severity: "below_cost" | "low_margin";
+  severity: "below_cost" | "low_margin" | "margin_blocked";
   details: any;
   resolved_at: string | null;
   created_at: string;
