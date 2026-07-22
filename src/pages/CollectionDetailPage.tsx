@@ -24,6 +24,9 @@ export default function CollectionDetailPage() {
   const [metaDesc, setMetaDesc] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDraft, setAiDraft] = useState<null | { description_html: string; meta_title: string; meta_description: string }>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addQuery, setAddQuery] = useState("");
+  const [adding, setAdding] = useState<string | null>(null);
 
 
   const { data: collection, isLoading } = useQuery({
