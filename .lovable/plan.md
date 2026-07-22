@@ -1,51 +1,47 @@
-## Ny lager-regel (opsummeret fra dig)
+## Mål
+Leverandør-prioritet skal styre hvilken kilde der bruges til lager/pris — ikke automatisk billigste. Fallback går til næste prioriterede leverandør der er på lager og clearer margin.
 
-- Kun **valgte** leverandører må bidrage til lager og pris.
-- Er alle valgte leverandører udsolgt → produktet er **udsolgt**.
-- Total lager = **den billigste valgte leverandørs lager** (ikke summen). Når den er solgt tomt, hopper vi over til næste billigste og bruger dens lager.
-- Formålet: aldrig sælge under indkøbspris fordi en dyrere leverandør har lager.
+## Model
 
-Eksempel: to valgte leverandører har hver 1 stk. → PIM viser 1 stk. Sælges den, går varen udsolgt indtil næste feed-opdatering; så bliver total = 1 igen fra leverandør 2.
+**Global default** på `suppliers`:
+- Ny kolonne `priority integer NOT NULL DEFAULT 100` (lavere tal = højere prioritet).
+- Redigeres på Indstillinger → Leverandører (drag/sort eller talfelt).
 
-## Bekræftet på 810084698426
+**Pr. produkt override** på `master_products`:
+- Bruger den eksisterende `stock_sync_supplier_ids uuid[]` — rækkefølgen i arrayet = prioritet på det produkt.
+- Ny kolonne `stock_supplier_order_override boolean DEFAULT false`. Når `false` sorteres arrayet efter global `suppliers.priority` ved beregning; når `true` respekteres den manuelle rækkefølge fra UI.
 
-DCS-feedet melder i morges 12 stk. Der er *ingen* skjult sammenlægning i det aktuelle recompute — DCS'ens 12 er ægte. Men reglerne skal alligevel skærpes så det aldrig kan blive galt.
+## Beregningsregel (ny)
+I `recompute_product_stock` og `apply_low_margin_guard`:
+1. Kandidater = `supplier_products` for produktet hvor `supplier_id = ANY(stock_sync_supplier_ids)`.
+2. Sortér efter: override-array-index hvis `stock_supplier_order_override=true`, ellers `suppliers.priority ASC, purchase_price ASC` som tiebreak.
+3. Walk listen: første leverandør der er `in_stock`, har `stock_quantity>0` (eller null) og margin ≥ `min_sync_margin` bliver aktiv kilde.
+4. `stock_quantity` = den aktive kildes lager. Ingen sum.
+5. Ingen match → 0 / outofstock.
 
-## Ændringer
+## UI
 
-### 1. Ny `recompute_product_stock` (migration)
+**Indstillinger → Leverandører**
+- Ny kolonne "Prioritet" med talfelt (eller pil op/ned). Gemmer `suppliers.priority`.
 
-- Kun leverandører i `stock_sync_supplier_ids` tælles.
-- Sortér valgte in‑stock leverandører **billigst først** (ex‑moms indkøbspris).
-- Filtrér dem der ikke opfylder `min_sync_margin` (produkt eller globalt default).
-- **Total lager = lageret hos den billigste tilbageværende leverandør**, ikke summen.
-- Ingen valgte leverandører / alle udsolgte / alle under margin → `stock_quantity = 0`, `stock_status = 'outofstock'`.
-- Ingen fallback til uvalgte leverandører — nogensinde.
+**Produktside (ProductDetailPage) → Lagerkilder-sektion**
+- Viser de valgte leverandører sorteret efter gældende prioritet.
+- Toggle "Brug egen rækkefølge for dette produkt" → sætter `stock_supplier_order_override`.
+- Når slået til: drag-handles / op-ned knapper til at omordne `stock_sync_supplier_ids`.
+- Breakdown-listen (allerede indført) markerer stadig "aktiv kilde" og viser status pr. leverandør (udsolgt / lav margin / aktiv).
 
-### 2. `apply_low_margin_guard` (migration)
+## Migrationer
+1. `ALTER TABLE suppliers ADD COLUMN priority integer NOT NULL DEFAULT 100;`
+2. `ALTER TABLE master_products ADD COLUMN stock_supplier_order_override boolean NOT NULL DEFAULT false;`
+3. Genskriv `recompute_product_stock` + `apply_low_margin_guard` til at bruge ny sortering.
+4. Kør engangs-rebuild af alle aktive produkter (som sidste gang).
 
-- Fjern fallback‑grenen der scanner alle in‑stock leverandører når `stock_sync_supplier_ids` er tom/NULL. Tom udvælgelse → guarden gør intet (recompute har allerede sat 0).
-- Beholder cheapest‑first walk, men over samme snævre kandidat‑pulje.
-- Cap lageret til den billigste sikre leverandørs lager (samme "hop til næste når tom" princip).
+## Filer der røres
+- `supabase/migrations/*` — schema + funktioner
+- `src/pages/settings/SuppliersPage.tsx` (eller tilsvarende) — prioritets-kolonne
+- `src/pages/ProductDetailPage.tsx` — override-toggle + omordning + brug den nye rækkefølge i preview-logikken
+- Evt. `src/hooks/useSuppliers.ts` / query hvor `priority` skal med
 
-### 3. Én‑gangs rebuild efter migration
-
-- Kald `recompute_product_stock` på alle aktive produkter med Shopify‑link, så eventuelle spøgelsestal fra tidligere sum‑logik ryddes.
-- `change_source = 'stock-sync'`, så eksisterende auto‑push til Shopify tager de ændrede rækker.
-
-### 4. UI på ProductDetailPage (kun præsentation)
-
-- Under "Lagerstyring" vises pr. valgt leverandør: `navn — X stk. @ pris kr — margin %` med farve for aktiv (bidrager) vs. udsolgt/afvist.
-- Badge "Leverandørlager: N stk." forklarer at N er lageret hos den aktive (billigste sikre) kilde, ikke en sum.
-- Ingen ændring i knappen "Brug leverandørlager" — den bruger nu det nye tal.
-
-### 5. Verifikation
-
-- Query der lister produkter hvor gammelt `stock_quantity` var større end den nye billigste‑kilde‑værdi (dvs. hvor sum‑logikken oppustede lager). Rapport til dig før Shopify‑køen drænes.
-- Spotcheck på 810084698426: efter migration bør stock forblive 12 (DCS er billigste sikre og har 12).
-
-## Teknik
-
-- Rører kun `recompute_product_stock` og `apply_low_margin_guard`. Triggere og queue‑logik uændret.
-- `attach_own_stock_supplier` triggeren rører jeg ikke — den er INSERT‑only, og Eget‑lager uden supplier_products‑række bidrager naturligt 0 i den nye logik.
-- Bulk‑recompute køres i migrationen med `set_bulk_supplier_import(true)` for at undgå N synkron trigger‑storm; efterfølges af én samlet queue‑poke.
+## Ikke i scope
+- Ændringer i shopify-push / Woo-push (bruger stadig `stock_quantity` fra master_products).
+- Ændringer i tilbudsmodul / EAN-lookup.
