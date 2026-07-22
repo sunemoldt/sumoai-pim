@@ -1323,7 +1323,7 @@ export default function ProductDetailPage() {
                     </Select>
                   </div>
                 </div>
-                {/* Stock recommendation from suppliers — cheapest selected safe supplier drives total */}
+                {/* Stock recommendation from suppliers — priority-based (override or global) */}
                 {(() => {
                   const selectedIds = stockSyncSupplierIds ?? [];
                   if (selectedIds.length === 0) {
@@ -1336,6 +1336,28 @@ export default function ProductDetailPage() {
                     );
                   }
                   const activePriceIncl = product.sale_price ?? product.webshop_price ?? 0;
+                  const activeEx = activePriceIncl > 0 ? activePriceIncl / 1.25 : 0;
+                  const minMargin = product.min_sync_margin ?? 15;
+                  const relevant = product.supplier_products
+                    .filter(sp => selectedIds.includes(sp.supplier_id))
+                    .map(sp => {
+                      const price = Number(sp.purchase_price ?? 0);
+                      const margin = activeEx > 0 && price > 0 ? ((activeEx - price) / activeEx) * 100 : null;
+                      const safe = margin === null ? true : margin >= minMargin;
+                      const globalPriority = (sp.suppliers as any)?.priority ?? 100;
+                      const overridePos = selectedIds.indexOf(sp.supplier_id);
+                      return { sp, price, margin, safe, globalPriority, overridePos };
+                    })
+                    .sort((a, b) => {
+                      if (stockSupplierOrderOverride) return a.overridePos - b.overridePos;
+                      if (a.globalPriority !== b.globalPriority) return a.globalPriority - b.globalPriority;
+                      return a.price - b.price;
+                    });
+                  const inStockSafe = relevant.filter(r => r.sp.in_stock && (r.sp.stock_quantity == null || r.sp.stock_quantity > 0) && r.safe);
+                  const active = inStockSafe[0] ?? null;
+                  const suggestedQty = active ? (active.sp.stock_quantity ?? 1) : 0;
+                  const suggestedStatus = active ? "instock" : "outofstock";
+                  const suggestedBackorder = backorderMode === "yes" ? "yes" : backorderMode === "notify" ? "notify" : "no";
                   const activeEx = activePriceIncl > 0 ? activePriceIncl / 1.25 : 0;
                   const minMargin = product.min_sync_margin ?? 15;
                   const relevant = product.supplier_products
