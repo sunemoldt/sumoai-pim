@@ -326,6 +326,7 @@ export default function ProductDetailPage() {
     const ids = (product as any).stock_sync_supplier_ids as string[] | null;
     const legacyId = (product as any).stock_sync_supplier_id as string | null;
     setStockSyncSupplierIds(ids && ids.length > 0 ? ids : legacyId ? [legacyId] : []);
+    setStockSupplierOrderOverride(!!(product as any).stock_supplier_order_override);
     setStockSyncInterval((product as any).stock_sync_interval ?? "daily");
     setMinSyncMargin(String((product as any).min_sync_margin ?? 15));
     setSyncInitialized(true);
