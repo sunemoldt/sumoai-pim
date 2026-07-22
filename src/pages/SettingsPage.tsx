@@ -21,8 +21,6 @@ import CleanupAuditCard from "@/components/CleanupAuditCard";
 import DuplicateEansCard from "@/components/DuplicateEansCard";
 import EanSuggestionsCard from "@/components/EanSuggestionsCard";
 import ShopifyQueueCard from "@/components/ShopifyQueueCard";
-import WoocommerceToggleCard from "@/components/WoocommerceToggleCard";
-import WoocommerceForcePushCard from "@/components/WoocommerceForcePushCard";
 import ShopifyOrderSyncCard from "@/components/ShopifyOrderSyncCard";
 import { NightlyBackupCard } from "@/components/NightlyBackupCard";
 import { ROUNDING_EXAMPLES } from "@/lib/price-rounding";
