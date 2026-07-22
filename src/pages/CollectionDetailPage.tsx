@@ -9,8 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Loader2, Save, X } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowLeft, Loader2, Save, Sparkles, X, Check } from "lucide-react";
 import { toast } from "sonner";
+
 
 export default function CollectionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +22,9 @@ export default function CollectionDetailPage() {
   const [descHtml, setDescHtml] = useState("");
   const [metaTitle, setMetaTitle] = useState("");
   const [metaDesc, setMetaDesc] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiDraft, setAiDraft] = useState<null | { description_html: string; meta_title: string; meta_description: string }>(null);
+
 
   const { data: collection, isLoading } = useQuery({
     queryKey: ["shopify_collection", id],
@@ -58,7 +63,37 @@ export default function CollectionDetailPage() {
 
   const isSmart = collection?.collection_type === "smart";
 
+  const runAi = async () => {
+    setAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-rewrite-collection", {
+        body: { collection_id: id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      setAiDraft({
+        description_html: (data as any).description_html ?? "",
+        meta_title: (data as any).meta_title ?? "",
+        meta_description: (data as any).meta_description ?? "",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "AI fejlede");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const applyAiDraft = () => {
+    if (!aiDraft) return;
+    setDescHtml(aiDraft.description_html);
+    setMetaTitle(aiDraft.meta_title);
+    setMetaDesc(aiDraft.meta_description);
+    setAiDraft(null);
+    toast.success("AI-forslag indsat – husk at gemme");
+  };
+
   const handleSave = async () => {
+
     setSaving(true);
     try {
       const { error } = await supabase.functions.invoke("shopify-collections-update", {
@@ -129,9 +164,14 @@ export default function CollectionDetailPage() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Beskrivelse & SEO</CardTitle>
+          <Button variant="outline" size="sm" onClick={runAi} disabled={aiLoading}>
+            {aiLoading ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-2" />}
+            Generér med AI
+          </Button>
         </CardHeader>
+
         <CardContent className="space-y-4">
           <div>
             <Label>Beskrivelse (HTML tilladt)</Label>
@@ -216,6 +256,64 @@ export default function CollectionDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={aiDraft !== null} onOpenChange={(o) => !o && setAiDraft(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>AI-forslag til kategoritekster</DialogTitle>
+            <DialogDescription>
+              Redigér forslaget hvis nødvendigt. Når du klikker "Brug forslag" indsættes det i felterne — du skal
+              stadig klikke "Gem & push til Shopify" bagefter.
+            </DialogDescription>
+          </DialogHeader>
+          {aiDraft && (
+            <div className="space-y-4">
+              <div>
+                <Label>Beskrivelse (HTML)</Label>
+                <Textarea
+                  value={aiDraft.description_html}
+                  onChange={(e) => setAiDraft({ ...aiDraft, description_html: e.target.value })}
+                  rows={12}
+                  className="mt-1 font-mono text-xs"
+                />
+              </div>
+              <div>
+                <Label>Meta titel</Label>
+                <Input
+                  value={aiDraft.meta_title}
+                  onChange={(e) => setAiDraft({ ...aiDraft, meta_title: e.target.value })}
+                  maxLength={70}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">{aiDraft.meta_title.length} / 70 tegn</p>
+              </div>
+              <div>
+                <Label>Meta beskrivelse</Label>
+                <Textarea
+                  value={aiDraft.meta_description}
+                  onChange={(e) => setAiDraft({ ...aiDraft, meta_description: e.target.value })}
+                  rows={3}
+                  maxLength={160}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">{aiDraft.meta_description.length} / 160 tegn</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAiDraft(null)}>Annullér</Button>
+            <Button variant="outline" onClick={runAi} disabled={aiLoading}>
+              {aiLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+              Generér igen
+            </Button>
+            <Button onClick={applyAiDraft}>
+              <Check className="h-4 w-4 mr-2" />
+              Brug forslag
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
