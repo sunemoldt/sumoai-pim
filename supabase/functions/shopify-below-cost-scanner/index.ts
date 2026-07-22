@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     // Load PIM products that are synced with Shopify + their cheapest supplier.
     const { data: products } = await svc
       .from("master_products")
-      .select("id,title,sku,shopify_variant_id,shopify_product_id,lifecycle_status")
+      .select("id,title,sku,shopify_variant_id,shopify_product_id,lifecycle_status,webshop_price,sale_price,stock_quantity,auto_stock_sync,stock_sync_supplier_ids,min_sync_margin")
       .not("shopify_variant_id", "is", null)
       .neq("lifecycle_status", "archived");
 
@@ -100,13 +100,15 @@ Deno.serve(async (req) => {
     const productIds = products.map((p) => p.id);
     const { data: suppliers } = await svc
       .from("supplier_products")
-      .select("master_product_id,purchase_price,in_stock,stock_quantity")
+      .select("master_product_id,supplier_id,purchase_price,in_stock,stock_quantity")
       .in("master_product_id", productIds)
       .not("purchase_price", "is", null);
 
-    // Cheapest per product (prefer in-stock; else any).
+    // Cheapest per product (prefer in-stock; else any) — used for below_cost / low_margin.
     const cheapest = new Map<string, number>();
     const cheapestInStock = new Map<string, number>();
+    // Per-product supplier rows for margin_blocked detection (restricted to selected suppliers).
+    const byProduct = new Map<string, Array<{ supplier_id: string; pp: number; qty: number | null; in_stock: boolean }>>();
     for (const sp of suppliers ?? []) {
       const pp = Number(sp.purchase_price);
       if (!(pp > 0)) continue;
@@ -116,7 +118,11 @@ Deno.serve(async (req) => {
         const c2 = cheapestInStock.get(sp.master_product_id);
         if (c2 == null || pp < c2) cheapestInStock.set(sp.master_product_id, pp);
       }
+      const arr = byProduct.get(sp.master_product_id) ?? [];
+      arr.push({ supplier_id: sp.supplier_id, pp, qty: sp.stock_quantity, in_stock: !!sp.in_stock });
+      byProduct.set(sp.master_product_id, arr);
     }
+
 
     // Existing unresolved alerts to avoid duplicates.
     const { data: openAlerts } = await svc
