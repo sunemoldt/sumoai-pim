@@ -167,9 +167,12 @@ function AlertsTable({
               <TableCell>
                 {a.severity === "below_cost" ? (
                   <Badge variant="destructive">Under kost</Badge>
+                ) : a.severity === "margin_blocked" ? (
+                  <Badge variant="destructive">Salg stoppet (lav margin)</Badge>
                 ) : (
                   <Badge variant="secondary">Lav margin</Badge>
                 )}
+
               </TableCell>
               <TableCell className="text-right tabular-nums">
                 {Number(a.shopify_price).toFixed(2)} kr
