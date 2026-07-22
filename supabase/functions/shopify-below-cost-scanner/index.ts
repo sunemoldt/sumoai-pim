@@ -43,14 +43,18 @@ Deno.serve(async (req) => {
   const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    // Threshold for low_margin (guard) alerts.
+    // Thresholds: low_margin (guard) + min_sync_margin (used by stock recompute).
     const { data: settings } = await svc
       .from("analytics_settings")
       .select("setting_key,setting_value")
-      .in("setting_key", ["low_margin_guard_threshold"]);
+      .in("setting_key", ["low_margin_guard_threshold", "min_sync_margin_default"]);
     const threshold = Number(
       settings?.find((s) => s.setting_key === "low_margin_guard_threshold")?.setting_value ?? 10,
     );
+    const minSyncMarginDefault = Number(
+      settings?.find((s) => s.setting_key === "min_sync_margin_default")?.setting_value ?? 15,
+    );
+
 
     const { data: conn } = await svc
       .from("shopify_connection")
