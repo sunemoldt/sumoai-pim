@@ -164,9 +164,14 @@ export default function CollectionDetailPage() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Beskrivelse & SEO</CardTitle>
+          <Button variant="outline" size="sm" onClick={runAi} disabled={aiLoading}>
+            {aiLoading ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-2" />}
+            Generér med AI
+          </Button>
         </CardHeader>
+
         <CardContent className="space-y-4">
           <div>
             <Label>Beskrivelse (HTML tilladt)</Label>
