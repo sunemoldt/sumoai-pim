@@ -59,7 +59,7 @@ export default function SettingsPage() {
       });
   }, []);
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const mcpUrl = `${supabaseUrl}/functions/v1/mcp-server`;
+  const mcpUrl = `${supabaseUrl}/functions/v1/mcp`;
 
   const scopeLabels: Record<string, string> = {
     global: "Global",

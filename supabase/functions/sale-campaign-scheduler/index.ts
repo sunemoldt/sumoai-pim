@@ -204,6 +204,36 @@ Deno.serve(async (req) => {
     }
   }
 
+  // AuthZ: manual actions require an authenticated user; scheduled 'tick' calls
+  // must present the CRON_SECRET header (used by pg_cron / scheduler).
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  const providedCronSecret = req.headers.get("x-cron-secret");
+  const isCron = !!cronSecret && providedCronSecret === cronSecret;
+
+  if (!isCron) {
+    const authHeader = req.headers.get("authorization") ?? "";
+    if (!authHeader.toLowerCase().startsWith("bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const token = authHeader.slice(7);
+    const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const userClient = createClient(SUPABASE_URL, anon, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false },
+    });
+    const { data: userData, error: userErr } = await userClient.auth.getUser(token);
+    if (userErr || !userData?.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
+
   try {
     const results: any[] = [];
 
