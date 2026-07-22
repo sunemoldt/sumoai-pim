@@ -148,9 +148,9 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
           </span>
         )}
         <div className="ml-auto flex flex-wrap gap-2">
-          <SyncButton platform="shopify" />
-          <SyncButton platform="woocommerce" />
+          <SyncButton />
         </div>
+
       </div>
 
       <Dialog open={mode !== null && !loading} onOpenChange={(o) => !o && setMode(null)}>
