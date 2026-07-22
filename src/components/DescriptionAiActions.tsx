@@ -97,41 +97,39 @@ export default function DescriptionAiActions({ productId, currentShort, currentL
     }
   };
 
-  const SyncButton = ({ platform }: { platform: Platform }) => {
-    const label = platform === "shopify" ? "Shopify" : "WooCommerce";
-    const isSyncing = syncing === platform;
-    const linked = platform === "shopify" ? hasShopify : hasWoo;
-    const disabled = !hasPimContent || !linked || syncing !== null;
+  const SyncButton = () => {
+    const disabled = !hasPimContent || !hasShopify || syncing;
     return (
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button
             type="button"
             size="sm"
-            variant={platform === "shopify" ? "default" : "outline"}
+            variant="default"
             disabled={disabled}
-            title={!linked ? `Produktet er ikke koblet til ${label}` : !hasPimContent ? "Gem en beskrivelse i PIM først" : `Skub PIM-beskrivelsen til ${label}`}
+            title={!hasShopify ? "Produktet er ikke koblet til Shopify" : !hasPimContent ? "Gem en beskrivelse i PIM først" : "Skub PIM-beskrivelsen til Shopify"}
           >
-            {isSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            Synk beskrivelse til {label}
+            {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            Synk beskrivelse til Shopify
           </Button>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Skub beskrivelse til {label}?</AlertDialogTitle>
+            <AlertDialogTitle>Skub beskrivelse til Shopify?</AlertDialogTitle>
             <AlertDialogDescription>
-              Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i {label} lige nu.
+              Den nuværende kort + lang beskrivelse fra PIM overskriver det der ligger i Shopify lige nu.
               Handlingen kan ikke fortrydes automatisk.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Annullér</AlertDialogCancel>
-            <AlertDialogAction onClick={() => syncToShop(platform)}>Ja, synk nu</AlertDialogAction>
+            <AlertDialogAction onClick={() => syncToShop()}>Ja, synk nu</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     );
   };
+
 
   return (
     <>
