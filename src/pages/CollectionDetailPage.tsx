@@ -63,7 +63,37 @@ export default function CollectionDetailPage() {
 
   const isSmart = collection?.collection_type === "smart";
 
+  const runAi = async () => {
+    setAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-rewrite-collection", {
+        body: { collection_id: id },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      setAiDraft({
+        description_html: (data as any).description_html ?? "",
+        meta_title: (data as any).meta_title ?? "",
+        meta_description: (data as any).meta_description ?? "",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "AI fejlede");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const applyAiDraft = () => {
+    if (!aiDraft) return;
+    setDescHtml(aiDraft.description_html);
+    setMetaTitle(aiDraft.meta_title);
+    setMetaDesc(aiDraft.meta_description);
+    setAiDraft(null);
+    toast.success("AI-forslag indsat – husk at gemme");
+  };
+
   const handleSave = async () => {
+
     setSaving(true);
     try {
       const { error } = await supabase.functions.invoke("shopify-collections-update", {
