@@ -22,6 +22,9 @@ export default function CollectionDetailPage() {
   const [descHtml, setDescHtml] = useState("");
   const [metaTitle, setMetaTitle] = useState("");
   const [metaDesc, setMetaDesc] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiDraft, setAiDraft] = useState<null | { description_html: string; meta_title: string; meta_description: string }>(null);
+
 
   const { data: collection, isLoading } = useQuery({
     queryKey: ["shopify_collection", id],
