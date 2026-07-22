@@ -132,6 +132,41 @@ export default function CollectionDetailPage() {
     }
   };
 
+  const handleAdd = async (masterProductId: string) => {
+    if (isSmart) return;
+    setAdding(masterProductId);
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-collection-add-product", {
+        body: { collection_id: id, master_product_id: masterProductId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success("Produkt tilføjet og synket til Shopify");
+      queryClient.invalidateQueries({ queryKey: ["collection_products", id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Kunne ikke tilføje");
+    } finally {
+      setAdding(null);
+    }
+  };
+
+  const existingIds = new Set(products.map((p: any) => p.id));
+  const { data: searchResults = [], isFetching: searching } = useQuery({
+    queryKey: ["collection_add_search", addQuery],
+    enabled: addOpen && addQuery.trim().length >= 2,
+    queryFn: async () => {
+      const q = addQuery.trim();
+      const { data, error } = await supabase
+        .from("master_products")
+        .select("id, title, ean, sku, image_url, shopify_product_id")
+        .not("shopify_product_id", "is", null)
+        .or(`title.ilike.%${q}%,ean.ilike.%${q}%,sku.ilike.%${q}%`)
+        .limit(20);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   if (isLoading || !collection) {
     return (
       <div className="p-8 flex items-center justify-center">
