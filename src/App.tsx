@@ -15,14 +15,12 @@ import SupplierDetailPage from "@/pages/SupplierDetailPage";
 import SettingsPage from "@/pages/SettingsPage";
 import DuplicateEansPage from "@/pages/DuplicateEansPage";
 import EanSuggestionsPage from "@/pages/EanSuggestionsPage";
-import ImportPage from "@/pages/ImportPage";
 import MonitoringPage from "@/pages/MonitoringPage";
 import AiInsightsPage from "@/pages/AiInsightsPage";
 import N8nWorkflowsPage from "@/pages/N8nWorkflowsPage";
 import ShopifyPage from "@/pages/ShopifyPage";
 import QuoteListPage from "@/pages/QuoteListPage";
 import QuoteEditorPage from "@/pages/QuoteEditorPage";
-import FeedsPage from "@/pages/FeedsPage";
 import CollectionsListPage from "@/pages/CollectionsListPage";
 import CollectionDetailPage from "@/pages/CollectionDetailPage";
 import CampaignListPage from "@/pages/CampaignListPage";
@@ -74,7 +72,7 @@ function AuthenticatedApp() {
         <Route path="/products/:id" element={<ProductDetailPage />} />
         <Route path="/suppliers" element={<SupplierListPage />} />
         <Route path="/suppliers/:id" element={<SupplierDetailPage />} />
-        <Route path="/import" element={<ImportPage />} />
+        
         <Route path="/monitoring" element={<MonitoringPage />} />
         <Route path="/ai-insights" element={<AiInsightsPage />} />
         <Route path="/automations/n8n" element={<N8nWorkflowsPage />} />
@@ -82,7 +80,7 @@ function AuthenticatedApp() {
         <Route path="/quotes" element={<QuoteListPage />} />
         <Route path="/quotes/new" element={<QuoteEditorPage />} />
         <Route path="/quotes/:id" element={<QuoteEditorPage />} />
-        <Route path="/feeds" element={<FeedsPage />} />
+        
         <Route path="/collections" element={<CollectionsListPage />} />
         <Route path="/collections/:id" element={<CollectionDetailPage />} />
         <Route path="/campaigns" element={<CampaignListPage />} />

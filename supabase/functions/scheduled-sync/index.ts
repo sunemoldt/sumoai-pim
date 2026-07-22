@@ -68,42 +68,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2. Check WC import schedule
-    const { data: wcSetting } = await supabase
-      .from("price_settings")
-      .select("scope_value")
-      .eq("scope", "wc_schedule")
-      .maybeSingle();
+    // WooCommerce sync er permanent deaktiveret — hele blokken er fjernet.
 
-    if (wcSetting?.scope_value && wcSetting.scope_value !== "manual") {
-      if (shouldRunNow(wcSetting.scope_value)) {
-        try {
-          const response = await fetch(
-            `${supabaseUrl}/functions/v1/wc-import`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${serviceKey}`,
-              },
-              body: JSON.stringify({}),
-            }
-          );
-          const data = await response.json();
-          results.push({
-            type: "wc-import",
-            success: data.success ?? !data.error,
-            imported: data.imported ?? 0,
-          });
-        } catch (err) {
-          results.push({
-            type: "wc-import",
-            success: false,
-            error: String(err),
-          });
-        }
-      }
-    }
 
     // 3. Auto stock sync — safety-net sweep. DB triggers keep stock live;
     // this only runs at minute 0 to avoid 60x duplicate work per hour.
