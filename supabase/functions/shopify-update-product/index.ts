@@ -380,6 +380,13 @@ Deno.serve(async (req) => {
       } else { skippedFields.push("backorders_allowed"); }
     }
 
+    // Always ensure Shopify tracks inventory for this variant — otherwise stock
+    // qty we send is ignored and the item can be sold forever. Merges with weight below.
+    variantInput.inventoryItem = {
+      ...(variantInput.inventoryItem as Record<string, unknown> ?? {}),
+      tracked: true,
+    };
+
     // Weight (kg) — send to Shopify via inventoryItem measurement. Defaults to 1 kg if no value set in PIM.
     {
       const effectiveWeight = effectiveWeightKg !== undefined && effectiveWeightKg !== null
@@ -399,6 +406,7 @@ Deno.serve(async (req) => {
         } else { skippedFields.push("weight_kg"); }
       }
     }
+
     // Barcode (EAN). Default to PIM's current ean unless caller overrode. Skip fallback 'wc-' EANs.
     {
       const eanCandidate = effectiveEan !== undefined ? effectiveEan : product.ean;

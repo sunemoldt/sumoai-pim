@@ -18,6 +18,8 @@ import FieldSyncPolicyCard from "@/components/FieldSyncPolicyCard";
 import AttributeDefinitionsCard from "@/components/AttributeDefinitionsCard";
 import ShopifyBulkPullCard from "@/components/ShopifyBulkPullCard";
 import CleanupAuditCard from "@/components/CleanupAuditCard";
+import ShopifyTrackingAuditCard from "@/components/ShopifyTrackingAuditCard";
+
 import DuplicateEansCard from "@/components/DuplicateEansCard";
 import EanSuggestionsCard from "@/components/EanSuggestionsCard";
 import ShopifyQueueCard from "@/components/ShopifyQueueCard";
@@ -425,6 +427,9 @@ export default function SettingsPage() {
 
 
       <CleanupAuditCard />
+
+      <ShopifyTrackingAuditCard />
+
 
       <DuplicateEansCard />
 
