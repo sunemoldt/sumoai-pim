@@ -34,14 +34,21 @@ Deno.serve(async (req) => {
       .not("feed_schedule", "is", null);
 
     if (suppliers && suppliers.length > 0) {
+      let staggerIndex = 0;
       for (const supplier of suppliers) {
         if (!supplier.feed_url || supplier.feed_type === "manual") continue;
         if (!shouldRunNow(supplier.feed_schedule)) continue;
 
+        // Stagger starts by 3s per supplier to spread load on external feeds
+        // and our own DB. Fire-and-forget with async:true, so scheduled-sync
+        // still returns quickly.
+        const delayMs = staggerIndex * 3000;
+        staggerIndex++;
+
         try {
-          // Fire-and-forget: supplier-feed-import runs in background via
-          // EdgeRuntime.waitUntil, so scheduled-sync doesn't time out waiting
-          // for slow feeds (Aurdel/Kosatec can take 30-60s each).
+          if (delayMs > 0) {
+            await new Promise((r) => setTimeout(r, delayMs));
+          }
           const response = await fetch(
             `${supabaseUrl}/functions/v1/supplier-feed-import`,
             {
@@ -59,6 +66,7 @@ Deno.serve(async (req) => {
             name: supplier.name,
             success: response.ok && !data.error,
             started: data.started ?? false,
+            delay_ms: delayMs,
           });
         } catch (err) {
           results.push({
