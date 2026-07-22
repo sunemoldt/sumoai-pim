@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSuppliers } from "@/hooks/use-products";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Truck, Plus, Pencil, Play } from "lucide-react";
 import SupplierFormDialog from "@/components/SupplierFormDialog";
@@ -20,6 +21,32 @@ export default function SupplierListPage() {
   const [mappingSupplier, setMappingSupplier] = useState<Supplier | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const [priorityDraft, setPriorityDraft] = useState<Record<string, string>>({});
+  const [savingPriority, setSavingPriority] = useState<string | null>(null);
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const s of suppliers) next[s.id] = String((s as any).priority ?? 100);
+    setPriorityDraft(next);
+  }, [suppliers]);
+
+  const savePriority = async (s: Supplier) => {
+    const raw = priorityDraft[s.id];
+    const parsed = parseInt(raw, 10);
+    if (Number.isNaN(parsed)) { toast.error("Prioritet skal være et tal"); return; }
+    if (parsed === ((s as any).priority ?? 100)) return;
+    setSavingPriority(s.id);
+    try {
+      const { error } = await supabase.from("suppliers").update({ priority: parsed } as any).eq("id", s.id);
+      if (error) throw error;
+      toast.success(`Prioritet gemt for ${s.name}`);
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Kunne ikke gemme prioritet");
+    } finally {
+      setSavingPriority(null);
+    }
+  };
 
   const feedTypeLabels: Record<string, string> = {
     xml: "XML Feed",
@@ -77,6 +104,7 @@ export default function SupplierListPage() {
             <TableHeader>
               <TableRow className="bg-secondary/50">
                 <TableHead>Navn</TableHead>
+                <TableHead className="w-32" title="Lavere tal = højere prioritet ved lager/pris-valg">Prioritet</TableHead>
                 <TableHead>Feed type</TableHead>
                 <TableHead>Feed URL / Fil</TableHead>
                 <TableHead>Frekvens</TableHead>
@@ -88,11 +116,11 @@ export default function SupplierListPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Indlæser...</TableCell>
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Indlæser...</TableCell>
                 </TableRow>
               ) : suppliers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     <Truck className="mx-auto h-8 w-8 mb-2 opacity-40" />
                     Ingen leverandører konfigureret endnu
                   </TableCell>
@@ -104,6 +132,17 @@ export default function SupplierListPage() {
                       <Link to={`/suppliers/${s.id}`} className="hover:text-primary hover:underline">
                         {s.name}
                       </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        className="h-8 w-20"
+                        value={priorityDraft[s.id] ?? String((s as any).priority ?? 100)}
+                        onChange={(e) => setPriorityDraft((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                        onBlur={() => savePriority(s)}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        disabled={savingPriority === s.id}
+                      />
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{feedTypeLabels[s.feed_type] ?? s.feed_type}</Badge>

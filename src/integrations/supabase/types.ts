@@ -256,6 +256,7 @@ export type Database = {
           sku: string | null
           stock_quantity: number | null
           stock_status: string | null
+          stock_supplier_order_override: boolean
           stock_sync_interval: string | null
           stock_sync_supplier_id: string | null
           stock_sync_supplier_ids: string[] | null
@@ -299,6 +300,7 @@ export type Database = {
           sku?: string | null
           stock_quantity?: number | null
           stock_status?: string | null
+          stock_supplier_order_override?: boolean
           stock_sync_interval?: string | null
           stock_sync_supplier_id?: string | null
           stock_sync_supplier_ids?: string[] | null
@@ -342,6 +344,7 @@ export type Database = {
           sku?: string | null
           stock_quantity?: number | null
           stock_status?: string | null
+          stock_supplier_order_override?: boolean
           stock_sync_interval?: string | null
           stock_sync_supplier_id?: string | null
           stock_sync_supplier_ids?: string[] | null
@@ -1330,6 +1333,7 @@ export type Database = {
           is_active: boolean
           last_sync_at: string | null
           name: string
+          priority: number
           updated_at: string
         }
         Insert: {
@@ -1342,6 +1346,7 @@ export type Database = {
           is_active?: boolean
           last_sync_at?: string | null
           name: string
+          priority?: number
           updated_at?: string
         }
         Update: {
@@ -1354,6 +1359,7 @@ export type Database = {
           is_active?: boolean
           last_sync_at?: string | null
           name?: string
+          priority?: number
           updated_at?: string
         }
         Relationships: []
