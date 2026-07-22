@@ -21,6 +21,32 @@ export default function SupplierListPage() {
   const [mappingSupplier, setMappingSupplier] = useState<Supplier | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const [priorityDraft, setPriorityDraft] = useState<Record<string, string>>({});
+  const [savingPriority, setSavingPriority] = useState<string | null>(null);
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const s of suppliers) next[s.id] = String((s as any).priority ?? 100);
+    setPriorityDraft(next);
+  }, [suppliers]);
+
+  const savePriority = async (s: Supplier) => {
+    const raw = priorityDraft[s.id];
+    const parsed = parseInt(raw, 10);
+    if (Number.isNaN(parsed)) { toast.error("Prioritet skal være et tal"); return; }
+    if (parsed === ((s as any).priority ?? 100)) return;
+    setSavingPriority(s.id);
+    try {
+      const { error } = await supabase.from("suppliers").update({ priority: parsed } as any).eq("id", s.id);
+      if (error) throw error;
+      toast.success(`Prioritet gemt for ${s.name}`);
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Kunne ikke gemme prioritet");
+    } finally {
+      setSavingPriority(null);
+    }
+  };
 
   const feedTypeLabels: Record<string, string> = {
     xml: "XML Feed",
