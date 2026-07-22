@@ -1254,68 +1254,93 @@ export default function ProductDetailPage() {
                     </Select>
                   </div>
                 </div>
-                {/* Stock recommendation from suppliers */}
+                {/* Stock recommendation from suppliers — cheapest selected safe supplier drives total */}
                 {(() => {
-                  // Strictly respect the selected stock sources — no fallback to all suppliers.
                   const selectedIds = stockSyncSupplierIds ?? [];
                   if (selectedIds.length === 0) {
                     return (
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant="outline" className="text-muted-foreground border-muted-foreground/30">
-                          Ingen lagerkilde valgt
+                          Ingen lagerkilde valgt — lager sat til 0
                         </Badge>
                       </div>
                     );
                   }
-                  const relevantSuppliers = product.supplier_products.filter(sp => selectedIds.includes(sp.supplier_id));
-                  const totalSupplierStock = relevantSuppliers
-                    .filter(sp => sp.in_stock)
-                    .reduce((sum, sp) => sum + (sp.stock_quantity ?? 0), 0);
-                  const anyInStock = relevantSuppliers.some(sp => sp.in_stock);
-                  const suggestedStatus = anyInStock ? "instock" : "outofstock";
+                  const activePriceIncl = product.sale_price ?? product.webshop_price ?? 0;
+                  const activeEx = activePriceIncl > 0 ? activePriceIncl / 1.25 : 0;
+                  const minMargin = product.min_sync_margin ?? 15;
+                  const relevant = product.supplier_products
+                    .filter(sp => selectedIds.includes(sp.supplier_id))
+                    .map(sp => {
+                      const price = Number(sp.purchase_price ?? 0);
+                      const margin = activeEx > 0 && price > 0 ? ((activeEx - price) / activeEx) * 100 : null;
+                      const safe = margin === null ? true : margin >= minMargin;
+                      return { sp, price, margin, safe };
+                    })
+                    .sort((a, b) => a.price - b.price);
+                  const inStockSafe = relevant.filter(r => r.sp.in_stock && (r.sp.stock_quantity == null || r.sp.stock_quantity > 0) && r.safe);
+                  const active = inStockSafe[0] ?? null;
+                  const suggestedQty = active ? (active.sp.stock_quantity ?? 1) : 0;
+                  const suggestedStatus = active ? "instock" : "outofstock";
                   const suggestedBackorder = backorderMode === "yes" ? "yes" : backorderMode === "notify" ? "notify" : "no";
-                  
+
                   return (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {anyInStock && totalSupplierStock > 0 && (
-                        <>
-                          <Badge variant="outline" className="text-primary border-primary/30">
-                            Leverandørlager: {totalSupplierStock} stk.
-                          </Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setPushStockQty(totalSupplierStock.toString());
-                              setPushStockStatus(suggestedStatus);
-                              setPushBackorders(suggestedBackorder);
-                            }}
-                          >
-                            Brug leverandørlager
-                          </Button>
-                        </>
-                      )}
-                      {!anyInStock && (
-                        <>
-                          <Badge variant="outline" className="text-warning border-warning/30">
-                            Ingen leverandør på lager
-                          </Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setPushStockQty("0");
-                              setPushStockStatus("onbackorder");
-                              setPushBackorders(suggestedBackorder);
-                            }}
-                          >
-                            Sæt på restordre
-                          </Button>
-                        </>
-                      )}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {active ? (
+                          <>
+                            <Badge variant="outline" className="text-primary border-primary/30">
+                              Leverandørlager: {suggestedQty} stk. (billigste sikre kilde)
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setPushStockQty(String(suggestedQty));
+                                setPushStockStatus(suggestedStatus);
+                                setPushBackorders(suggestedBackorder);
+                              }}
+                            >
+                              Brug leverandørlager
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Badge variant="outline" className="text-warning border-warning/30">
+                              Ingen valgt leverandør på lager med sikker margin
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setPushStockQty("0");
+                                setPushStockStatus("outofstock");
+                                setPushBackorders(suggestedBackorder);
+                              }}
+                            >
+                              Sæt udsolgt
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        {relevant.map((r, i) => {
+                          const isActive = active && r.sp.id === active.sp.id;
+                          const qty = r.sp.stock_quantity ?? (r.sp.in_stock ? "?" : 0);
+                          const marginTxt = r.margin === null ? "—" : `${r.margin.toFixed(1)}%`;
+                          let label = "";
+                          if (!r.sp.in_stock || (r.sp.stock_quantity != null && r.sp.stock_quantity <= 0)) label = " · udsolgt";
+                          else if (!r.safe) label = ` · margin < ${minMargin}%`;
+                          else if (isActive) label = " · aktiv kilde";
+                          return (
+                            <div key={r.sp.id} className={isActive ? "text-primary font-medium" : ""}>
+                              {(r.sp as any).suppliers?.name ?? "Leverandør"} — {qty} stk. @ {r.price.toFixed(2)} kr · margin {marginTxt}{label}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
-
                 })()}
               </div>
 

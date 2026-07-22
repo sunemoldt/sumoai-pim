@@ -1,56 +1,51 @@
-# Plan: Pilot-drænet + BF payload-merge (revideret)
+## Ny lager-regel (opsummeret fra dig)
 
-Sekvensen er nu strikt: trin 1-3 kører først, du verificerer i Shopify, og først ved grønt lys deployes trin 4.
+- Kun **valgte** leverandører må bidrage til lager og pris.
+- Er alle valgte leverandører udsolgt → produktet er **udsolgt**.
+- Total lager = **den billigste valgte leverandørs lager** (ikke summen). Når den er solgt tomt, hopper vi over til næste billigste og bruger dens lager.
+- Formålet: aldrig sælge under indkøbspris fordi en dyrere leverandør har lager.
 
-## Trin 1 — Prioritér pilot + BF-rækker (én migration)
+Eksempel: to valgte leverandører har hver 1 stk. → PIM viser 1 stk. Sælges den, går varen udsolgt indtil næste feed-opdatering; så bliver total = 1 igen fra leverandør 2.
 
-To updates i samme migration, ingen INSERT'er, ingen nye rækker.
+## Bekræftet på 810084698426
 
-**1a. Pilot (11 master_product_ids) — 60 min tilbage:**
-```sql
-UPDATE public.shopify_update_queue
-SET next_attempt_at = now() - interval '60 minutes',
-    updated_at = now()
-WHERE status = 'pending'
-  AND master_product_id IN ( … 11 pilot-UUIDs … );
-```
+DCS-feedet melder i morges 12 stk. Der er *ingen* skjult sammenlægning i det aktuelle recompute — DCS'ens 12 er ægte. Men reglerne skal alligevel skærpes så det aldrig kan blive galt.
 
-**1b. BF (17 PIM-rækker bag 11 shopify_product_ids) — 55 min tilbage + payload-merge:**
+## Ændringer
 
-For hver eksisterende pending-række på de 17 master_product_ids:
-- `changed_fields` unioneres med `["long_description", "short_description"]` via `jsonb_agg(DISTINCT …)` (samme mønster som `auto_enqueue_shopify_update`).
-- `payload.long_description` og `payload.short_description` sættes fra `master_products` — så worker sender aktuelle DB-værdier og `descriptionHtml` bygges som short+long concat.
-- `source` sættes til `seo-bf-merge` for sporbarhed.
-- `next_attempt_at = now() - interval '55 minutes'` — deterministisk bag piloten.
+### 1. Ny `recompute_product_stock` (migration)
 
-BF-produkter: KeyPad Outdoor, 2× Apple Watch-opladere, USB-Lightning, 20W-oplader, 11-i-1 dock, 33W Nano, HDMI-dock, PD nylon sort + hvid, MFi-kabel.
+- Kun leverandører i `stock_sync_supplier_ids` tælles.
+- Sortér valgte in‑stock leverandører **billigst først** (ex‑moms indkøbspris).
+- Filtrér dem der ikke opfylder `min_sync_margin` (produkt eller globalt default).
+- **Total lager = lageret hos den billigste tilbageværende leverandør**, ikke summen.
+- Ingen valgte leverandører / alle udsolgte / alle under margin → `stock_quantity = 0`, `stock_status = 'outofstock'`.
+- Ingen fallback til uvalgte leverandører — nogensinde.
 
-Hvis et af de 17 mod forventning ikke har en pending række, logges det i migration-output — ingen INSERT-fallback i denne runde (håndteres separat hvis nødvendigt).
+### 2. `apply_low_margin_guard` (migration)
 
-## Trin 2 — Manuel worker-kørsel
+- Fjern fallback‑grenen der scanner alle in‑stock leverandører når `stock_sync_supplier_ids` er tom/NULL. Tom udvælgelse → guarden gør intet (recompute har allerede sat 0).
+- Beholder cheapest‑first walk, men over samme snævre kandidat‑pulje.
+- Cap lageret til den billigste sikre leverandørs lager (samme "hop til næste når tom" princip).
 
-`POST /shopify-queue-worker?batch=25`, én gang. Piloten (11) ligger deterministisk forrest pga. den ældre timestamp, så de 25 dækker alle 11 pilot + 14 af 17 BF. Sidste 3 BF-rækker plukkes af næste automatiske cron-kørsel (≤15 min).
+### 3. Én‑gangs rebuild efter migration
 
-## Trin 3 — Status-rapport til dig
+- Kald `recompute_product_stock` på alle aktive produkter med Shopify‑link, så eventuelle spøgelsestal fra tidligere sum‑logik ryddes.
+- `change_source = 'stock-sync'`, så eksisterende auto‑push til Shopify tager de ændrede rækker.
 
-Jeg poster:
-- Queue-state for de 11 pilot + 17 BF master_product_ids (done/failed/pending, evt. fejlbeskeder).
-- Payload-verificering på et par BF-rækker efter merge: bekræfter at `changed_fields` indeholder både `long_description` og `short_description`, og at `payload` har DB-friske tekster.
+### 4. UI på ProductDetailPage (kun præsentation)
 
-**Herefter stopper jeg og venter på dit grønt/rødt lys** fra Shopify-verificeringen (4 pilot-tilstande + BF-links væk fra 11 live-beskrivelser).
+- Under "Lagerstyring" vises pr. valgt leverandør: `navn — X stk. @ pris kr — margin %` med farve for aktiv (bidrager) vs. udsolgt/afvist.
+- Badge "Leverandørlager: N stk." forklarer at N er lageret hos den aktive (billigste sikre) kilde, ikke en sum.
+- Ingen ændring i knappen "Brug leverandørlager" — den bruger nu det nye tal.
 
-## Trin 4 — Throughput (KUN efter dit grønne lys — separat deploy)
+### 5. Verifikation
 
-`supabase/functions/shopify-queue-worker/index.ts`:
-- default `batchSize` 10 → 25
-- item-sleep 1200 ms → 400 ms
+- Query der lister produkter hvor gammelt `stock_quantity` var større end den nye billigste‑kilde‑værdi (dvs. hvor sum‑logikken oppustede lager). Rapport til dig før Shopify‑køen drænes.
+- Spotcheck på 810084698426: efter migration bør stock forblive 12 (DCS er billigste sikre og har 12).
 
-Ingen ændringer i rate-limit-guards eller mapping-logik. Deployes først når du siger grønt — indtil da drænes køen med nuværende hastighed (10/15 min).
+## Teknik
 
-## Teknisk
-
-- Trin 1: `supabase--migration` (én samlet migration for 1a + 1b).
-- Trin 2: `supabase--curl_edge_functions` mod `/shopify-queue-worker?batch=25`.
-- Trin 3: `supabase--read_query` for status + payload-inspection.
-- Trin 4: `supabase--deploy_edge_functions` — kun efter dit grønne lys.
-- Ingen skema-ændringer, ingen RLS, ingen nye kodepaths i worker.
+- Rører kun `recompute_product_stock` og `apply_low_margin_guard`. Triggere og queue‑logik uændret.
+- `attach_own_stock_supplier` triggeren rører jeg ikke — den er INSERT‑only, og Eget‑lager uden supplier_products‑række bidrager naturligt 0 i den nye logik.
+- Bulk‑recompute køres i migrationen med `set_bulk_supplier_import(true)` for at undgå N synkron trigger‑storm; efterfølges af én samlet queue‑poke.
