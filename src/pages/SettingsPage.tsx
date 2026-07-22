@@ -428,6 +428,9 @@ export default function SettingsPage() {
 
       <CleanupAuditCard />
 
+      <ShopifyTrackingAuditCard />
+
+
       <DuplicateEansCard />
 
       <EanSuggestionsCard />
