@@ -1,0 +1,2 @@
+ALTER TABLE public.price_alerts DROP CONSTRAINT IF EXISTS price_alerts_severity_check;
+ALTER TABLE public.price_alerts ADD CONSTRAINT price_alerts_severity_check CHECK (severity IN ('below_cost','low_margin','margin_blocked'));
