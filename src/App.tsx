@@ -80,7 +80,7 @@ function AuthenticatedApp() {
         <Route path="/quotes" element={<QuoteListPage />} />
         <Route path="/quotes/new" element={<QuoteEditorPage />} />
         <Route path="/quotes/:id" element={<QuoteEditorPage />} />
-        <Route path="/feeds" element={<FeedsPage />} />
+        
         <Route path="/collections" element={<CollectionsListPage />} />
         <Route path="/collections/:id" element={<CollectionDetailPage />} />
         <Route path="/campaigns" element={<CampaignListPage />} />
