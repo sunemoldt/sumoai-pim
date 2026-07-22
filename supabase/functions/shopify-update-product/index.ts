@@ -446,42 +446,30 @@ Deno.serve(async (req) => {
       } else { skippedFields.push("short_description"); }
     }
     // SEO: Page title + Meta description (Shopify-side: product.seo)
-    // Always send SEO from DB when available so Shopify doesn't drift out of sync.
+    // Only push when the caller explicitly provided (or queued) a value.
+    // Never fall back to DB values on unrelated pushes — that would clobber
+    // manual SEO edits made in Shopify Admin.
     {
       const seoObj: Record<string, unknown> = {};
-      const dbMetaTitle = (product as any).meta_title as string | null | undefined;
-      const dbMetaDescription = (product as any).meta_description as string | null | undefined;
 
-      // Title: prefer explicit/queued value, else fall back to DB value.
-      const metaTitleToPush = effectiveMetaTitle !== undefined && effectiveMetaTitle !== null
-        ? effectiveMetaTitle
-        : (dbMetaTitle ?? undefined);
-      if (metaTitleToPush !== undefined && metaTitleToPush !== null && String(metaTitleToPush).length > 0) {
+      if (effectiveMetaTitle !== undefined && effectiveMetaTitle !== null) {
         if (canPush("meta_title")) {
-          seoObj.title = String(metaTitleToPush);
-          // Only log/track as a change when the caller explicitly set the field.
-          if (effectiveMetaTitle !== undefined && effectiveMetaTitle !== null) {
-            dbUpdate.meta_title = effectiveMetaTitle;
-            logChange("meta_title", product.meta_title, effectiveMetaTitle, "seo_update");
-            updatedFields.push("seo.title");
-          }
-        } else if (effectiveMetaTitle !== undefined && effectiveMetaTitle !== null) {
+          seoObj.title = String(effectiveMetaTitle);
+          dbUpdate.meta_title = effectiveMetaTitle;
+          logChange("meta_title", product.meta_title, effectiveMetaTitle, "seo_update");
+          updatedFields.push("seo.title");
+        } else {
           skippedFields.push("meta_title");
         }
       }
 
-      const metaDescToPush = effectiveMetaDescription !== undefined && effectiveMetaDescription !== null
-        ? effectiveMetaDescription
-        : (dbMetaDescription ?? undefined);
-      if (metaDescToPush !== undefined && metaDescToPush !== null && String(metaDescToPush).length > 0) {
+      if (effectiveMetaDescription !== undefined && effectiveMetaDescription !== null) {
         if (canPush("meta_description")) {
-          seoObj.description = String(metaDescToPush);
-          if (effectiveMetaDescription !== undefined && effectiveMetaDescription !== null) {
-            dbUpdate.meta_description = effectiveMetaDescription;
-            logChange("meta_description", product.meta_description, effectiveMetaDescription, "seo_update");
-            updatedFields.push("seo.description");
-          }
-        } else if (effectiveMetaDescription !== undefined && effectiveMetaDescription !== null) {
+          seoObj.description = String(effectiveMetaDescription);
+          dbUpdate.meta_description = effectiveMetaDescription;
+          logChange("meta_description", product.meta_description, effectiveMetaDescription, "seo_update");
+          updatedFields.push("seo.description");
+        } else {
           skippedFields.push("meta_description");
         }
       }
@@ -490,6 +478,7 @@ Deno.serve(async (req) => {
         productInput.seo = seoObj;
       }
     }
+
 
     if (status !== undefined && status !== null) {
       const s = String(status).toUpperCase();
@@ -617,10 +606,16 @@ Deno.serve(async (req) => {
     const isThrottle = /rate.?limit|throttl|429|too many requests|exceeded for trace/i.test(message);
     const shouldEnqueue = isThrottle && enqueue_on_throttle !== false && queued !== true;
 
-    // Detect stale Shopify link: the product no longer exists in Shopify.
-    // Clear the stale IDs so future edits don't keep failing, and attempt an
-    // automatic re-match by EAN via the shopify-match function.
-    const isStaleLink = /product does not exist|does not exist|not\s*found/i.test(message);
+    // Narrowly detect a stale product link. Only clear the link when Shopify
+    // explicitly reports the *product* (or its variant referenced by the
+    // productSet/variant mutation) as missing — NOT for unrelated "not found"
+    // errors like missing Location, InventoryItem, Metafield, etc., which
+    // routinely surface during stock/price pushes on healthy products.
+    const isStaleLink =
+      /\bProduct(?: with id [^\s]+)? does not exist\b/i.test(message) ||
+      /\bproduct(?: with id)?\s+not\s*found\b/i.test(message) ||
+      /gid:\/\/shopify\/Product\/[^\s'"]+\s+(?:does not exist|not found)/i.test(message);
+
     if (isStaleLink && master_product_id) {
       try {
         const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
