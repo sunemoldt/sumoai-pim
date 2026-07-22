@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Loader2, Save, Sparkles, X, Check } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Sparkles, X, Check, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 
@@ -24,6 +24,9 @@ export default function CollectionDetailPage() {
   const [metaDesc, setMetaDesc] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDraft, setAiDraft] = useState<null | { description_html: string; meta_title: string; meta_description: string }>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addQuery, setAddQuery] = useState("");
+  const [adding, setAdding] = useState<string | null>(null);
 
 
   const { data: collection, isLoading } = useQuery({
@@ -129,6 +132,41 @@ export default function CollectionDetailPage() {
     }
   };
 
+  const handleAdd = async (masterProductId: string) => {
+    if (isSmart) return;
+    setAdding(masterProductId);
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-collection-add-product", {
+        body: { collection_id: id, master_product_id: masterProductId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success("Produkt tilføjet og synket til Shopify");
+      queryClient.invalidateQueries({ queryKey: ["collection_products", id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Kunne ikke tilføje");
+    } finally {
+      setAdding(null);
+    }
+  };
+
+  const existingIds = new Set(products.map((p: any) => p.id));
+  const { data: searchResults = [], isFetching: searching } = useQuery({
+    queryKey: ["collection_add_search", addQuery],
+    enabled: addOpen && addQuery.trim().length >= 2,
+    queryFn: async () => {
+      const q = addQuery.trim();
+      const { data, error } = await supabase
+        .from("master_products")
+        .select("id, title, ean, sku, image_url, shopify_product_id")
+        .not("shopify_product_id", "is", null)
+        .or(`title.ilike.%${q}%,ean.ilike.%${q}%,sku.ilike.%${q}%`)
+        .limit(20);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   if (isLoading || !collection) {
     return (
       <div className="p-8 flex items-center justify-center">
@@ -206,8 +244,13 @@ export default function CollectionDetailPage() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Produkter i kategorien ({products.length})</CardTitle>
+          {!isSmart && (
+            <Button size="sm" variant="outline" onClick={() => { setAddQuery(""); setAddOpen(true); }}>
+              <Plus className="h-4 w-4 mr-1" /> Tilføj produkt
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {products.length === 0 ? (
@@ -310,6 +353,66 @@ export default function CollectionDetailPage() {
               <Check className="h-4 w-4 mr-2" />
               Brug forslag
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Tilføj produkt til kategorien</DialogTitle>
+            <DialogDescription>
+              Søg på titel, EAN eller SKU. Kun produkter der er linket til Shopify vises. Tilføjelse synker med det samme til Shopify.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              autoFocus
+              value={addQuery}
+              onChange={(e) => setAddQuery(e.target.value)}
+              placeholder="Søg produkt…"
+              className="pl-9"
+            />
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto -mx-6 px-6 divide-y">
+            {addQuery.trim().length < 2 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">Indtast mindst 2 tegn for at søge.</p>
+            ) : searching ? (
+              <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : searchResults.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">Ingen produkter fundet.</p>
+            ) : (
+              searchResults.map((p: any) => {
+                const inCollection = existingIds.has(p.id);
+                return (
+                  <div key={p.id} className="flex items-center gap-3 py-2">
+                    {p.image_url ? (
+                      <img src={p.image_url} alt="" className="h-10 w-10 rounded object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="h-10 w-10 rounded bg-muted flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">{p.title}</p>
+                      <p className="text-xs text-muted-foreground">{p.ean} · {p.sku}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={inCollection ? "ghost" : "outline"}
+                      disabled={inCollection || adding === p.id}
+                      onClick={() => handleAdd(p.id)}
+                    >
+                      {adding === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> :
+                        inCollection ? <><Check className="h-4 w-4 mr-1" /> Tilføjet</> :
+                        <><Plus className="h-4 w-4 mr-1" /> Tilføj</>}
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddOpen(false)}>Luk</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
