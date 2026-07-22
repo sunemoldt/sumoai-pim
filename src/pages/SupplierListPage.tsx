@@ -134,6 +134,17 @@ export default function SupplierListPage() {
                       </Link>
                     </TableCell>
                     <TableCell>
+                      <Input
+                        type="number"
+                        className="h-8 w-20"
+                        value={priorityDraft[s.id] ?? String((s as any).priority ?? 100)}
+                        onChange={(e) => setPriorityDraft((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                        onBlur={() => savePriority(s)}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        disabled={savingPriority === s.id}
+                      />
+                    </TableCell>
+                    <TableCell>
                       <Badge variant="secondary">{feedTypeLabels[s.feed_type] ?? s.feed_type}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs font-mono max-w-[200px] truncate">
