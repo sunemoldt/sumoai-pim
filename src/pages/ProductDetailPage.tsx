@@ -1365,7 +1365,7 @@ export default function ProductDetailPage() {
                         {active ? (
                           <>
                             <Badge variant="outline" className="text-primary border-primary/30">
-                              Leverandørlager: {suggestedQty} stk. (billigste sikre kilde)
+                              Leverandørlager: {suggestedQty} stk. (aktiv kilde efter prioritet)
                             </Badge>
                             <Button
                               variant="ghost"
