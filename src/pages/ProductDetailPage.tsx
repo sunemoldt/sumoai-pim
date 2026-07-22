@@ -936,29 +936,95 @@ export default function ProductDetailPage() {
                 <div className="space-y-4 pl-7 max-w-lg">
                   <div className="space-y-2">
                     <Label>Leverandører til sync</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Rækkefølge = prioritet. Uden override bruges leverandørens globale prioritet (lavere tal = højere prioritet). Første match der er på lager og clearer margin bliver aktiv kilde.
+                    </p>
                     <div className="space-y-2 rounded-md border border-border p-3">
                       {product.supplier_products.length === 0 ? (
                         <p className="text-xs text-muted-foreground">Ingen leverandører tilknyttet</p>
                       ) : (
-                        product.supplier_products.map((sp) => (
-                          <div key={sp.supplier_id} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`sync-${sp.supplier_id}`}
-                              checked={stockSyncSupplierIds.includes(sp.supplier_id)}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setStockSyncSupplierIds((prev) => [...prev, sp.supplier_id]);
-                                } else {
-                                  setStockSyncSupplierIds((prev) => prev.filter((id) => id !== sp.supplier_id));
-                                }
-                              }}
-                            />
-                            <Label htmlFor={`sync-${sp.supplier_id}`} className="cursor-pointer text-sm">
-                              {sp.suppliers?.name ?? "Ukendt"}
-                            </Label>
-                          </div>
-                        ))
+                        (() => {
+                          const sortedSuppliers = [...product.supplier_products].sort((a, b) => {
+                            const ai = stockSyncSupplierIds.indexOf(a.supplier_id);
+                            const bi = stockSyncSupplierIds.indexOf(b.supplier_id);
+                            if (stockSupplierOrderOverride) {
+                              if (ai !== -1 && bi !== -1) return ai - bi;
+                              if (ai !== -1) return -1;
+                              if (bi !== -1) return 1;
+                            }
+                            const ap = (a.suppliers as any)?.priority ?? 100;
+                            const bp = (b.suppliers as any)?.priority ?? 100;
+                            if (ap !== bp) return ap - bp;
+                            return (a.suppliers?.name ?? "").localeCompare(b.suppliers?.name ?? "");
+                          });
+                          return sortedSuppliers.map((sp) => {
+                            const isSelected = stockSyncSupplierIds.includes(sp.supplier_id);
+                            const orderIdx = stockSyncSupplierIds.indexOf(sp.supplier_id);
+                            const globalPriority = (sp.suppliers as any)?.priority ?? 100;
+                            return (
+                              <div key={sp.supplier_id} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`sync-${sp.supplier_id}`}
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) setStockSyncSupplierIds((prev) => [...prev, sp.supplier_id]);
+                                    else setStockSyncSupplierIds((prev) => prev.filter((id) => id !== sp.supplier_id));
+                                  }}
+                                />
+                                <Label htmlFor={`sync-${sp.supplier_id}`} className="cursor-pointer text-sm flex-1">
+                                  {sp.suppliers?.name ?? "Ukendt"}
+                                  <span className="ml-2 text-xs text-muted-foreground">(global prio {globalPriority})</span>
+                                </Label>
+                                {stockSupplierOrderOverride && isSelected && (
+                                  <>
+                                    <span className="text-xs text-muted-foreground w-6 text-right">#{orderIdx + 1}</span>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      disabled={orderIdx <= 0}
+                                      onClick={() => {
+                                        setStockSyncSupplierIds((prev) => {
+                                          const next = [...prev];
+                                          [next[orderIdx - 1], next[orderIdx]] = [next[orderIdx], next[orderIdx - 1]];
+                                          return next;
+                                        });
+                                      }}
+                                      title="Op"
+                                    >↑</Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      disabled={orderIdx === -1 || orderIdx >= stockSyncSupplierIds.length - 1}
+                                      onClick={() => {
+                                        setStockSyncSupplierIds((prev) => {
+                                          const next = [...prev];
+                                          [next[orderIdx], next[orderIdx + 1]] = [next[orderIdx + 1], next[orderIdx]];
+                                          return next;
+                                        });
+                                      }}
+                                      title="Ned"
+                                    >↓</Button>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          });
+                        })()
                       )}
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <Checkbox
+                        id="stock-order-override"
+                        checked={stockSupplierOrderOverride}
+                        onCheckedChange={(checked) => setStockSupplierOrderOverride(!!checked)}
+                      />
+                      <Label htmlFor="stock-order-override" className="cursor-pointer text-sm">
+                        Brug egen rækkefølge for dette produkt (ignorér global prioritet)
+                      </Label>
                     </div>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
