@@ -43,14 +43,18 @@ Deno.serve(async (req) => {
   const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    // Threshold for low_margin (guard) alerts.
+    // Thresholds: low_margin (guard) + min_sync_margin (used by stock recompute).
     const { data: settings } = await svc
       .from("analytics_settings")
       .select("setting_key,setting_value")
-      .in("setting_key", ["low_margin_guard_threshold"]);
+      .in("setting_key", ["low_margin_guard_threshold", "min_sync_margin_default"]);
     const threshold = Number(
       settings?.find((s) => s.setting_key === "low_margin_guard_threshold")?.setting_value ?? 10,
     );
+    const minSyncMarginDefault = Number(
+      settings?.find((s) => s.setting_key === "min_sync_margin_default")?.setting_value ?? 15,
+    );
+
 
     const { data: conn } = await svc
       .from("shopify_connection")
@@ -83,7 +87,7 @@ Deno.serve(async (req) => {
     // Load PIM products that are synced with Shopify + their cheapest supplier.
     const { data: products } = await svc
       .from("master_products")
-      .select("id,title,sku,shopify_variant_id,shopify_product_id,lifecycle_status")
+      .select("id,title,sku,shopify_variant_id,shopify_product_id,lifecycle_status,webshop_price,sale_price,stock_quantity,auto_stock_sync,stock_sync_supplier_ids,min_sync_margin")
       .not("shopify_variant_id", "is", null)
       .neq("lifecycle_status", "archived");
 
@@ -96,13 +100,15 @@ Deno.serve(async (req) => {
     const productIds = products.map((p) => p.id);
     const { data: suppliers } = await svc
       .from("supplier_products")
-      .select("master_product_id,purchase_price,in_stock,stock_quantity")
+      .select("master_product_id,supplier_id,purchase_price,in_stock,stock_quantity")
       .in("master_product_id", productIds)
       .not("purchase_price", "is", null);
 
-    // Cheapest per product (prefer in-stock; else any).
+    // Cheapest per product (prefer in-stock; else any) — used for below_cost / low_margin.
     const cheapest = new Map<string, number>();
     const cheapestInStock = new Map<string, number>();
+    // Per-product supplier rows for margin_blocked detection (restricted to selected suppliers).
+    const byProduct = new Map<string, Array<{ supplier_id: string; pp: number; qty: number | null; in_stock: boolean }>>();
     for (const sp of suppliers ?? []) {
       const pp = Number(sp.purchase_price);
       if (!(pp > 0)) continue;
@@ -112,7 +118,11 @@ Deno.serve(async (req) => {
         const c2 = cheapestInStock.get(sp.master_product_id);
         if (c2 == null || pp < c2) cheapestInStock.set(sp.master_product_id, pp);
       }
+      const arr = byProduct.get(sp.master_product_id) ?? [];
+      arr.push({ supplier_id: sp.supplier_id, pp, qty: sp.stock_quantity, in_stock: !!sp.in_stock });
+      byProduct.set(sp.master_product_id, arr);
     }
+
 
     // Existing unresolved alerts to avoid duplicates.
     const { data: openAlerts } = await svc
@@ -163,6 +173,54 @@ Deno.serve(async (req) => {
         },
       });
     }
+
+    // === Second pass: margin_blocked ===
+    // Products where selected supplier(s) DO have stock, but recompute_product_stock
+    // silently sets PIM stock to 0 because every candidate's margin < min_sync_margin.
+    // Without this alert the product just disappears from the shop with no warning.
+    for (const p of products as any[]) {
+      if (!p.auto_stock_sync) continue;
+      const selected: string[] = p.stock_sync_supplier_ids ?? [];
+      if (!selected.length) continue;
+      if (openSet.has(p.id)) continue;
+      if ((p.stock_quantity ?? 0) > 0) continue; // not blocked
+
+      const rows = (byProduct.get(p.id) ?? []).filter(
+        (r) => selected.includes(r.supplier_id) && r.in_stock && (r.qty == null || r.qty > 0),
+      );
+      if (!rows.length) continue; // genuinely out of stock, not blocked
+
+      const activeInc = Number(p.sale_price ?? p.webshop_price ?? 0);
+      if (!(activeInc > 0)) continue;
+      const activeEx = activeInc / VAT;
+      const minMargin = Number(p.min_sync_margin ?? minSyncMarginDefault);
+
+      // If any selected supplier passes minMargin, product would be in stock — skip.
+      const anyPasses = rows.some((r) => ((activeEx - r.pp) / activeEx) * 100 >= minMargin);
+      if (anyPasses) continue;
+
+      const cheapestSel = rows.reduce((min, r) => (r.pp < min ? r.pp : min), rows[0].pp);
+      const marginPct = ((activeEx - cheapestSel) / activeEx) * 100;
+
+      inserts.push({
+        master_product_id: p.id,
+        shopify_price: activeInc,
+        shopify_compare_at_price: null,
+        cheapest_purchase_price: cheapestSel,
+        margin_pct: Number(marginPct.toFixed(2)),
+        severity: "margin_blocked",
+        source: "shopify-scanner",
+        details: {
+          title: p.title,
+          sku: p.sku,
+          shopify_variant_id: p.shopify_variant_id,
+          min_sync_margin_pct: minMargin,
+          reason: "Salg stoppet automatisk fordi margin er under min_sync_margin",
+        },
+      });
+      openSet.add(p.id);
+    }
+
 
     if (inserts.length) {
       const { error } = await svc.from("price_alerts").insert(inserts);

@@ -21,7 +21,7 @@ type Alert = {
   shopify_compare_at_price: number | null;
   cheapest_purchase_price: number;
   margin_pct: number;
-  severity: "below_cost" | "low_margin";
+  severity: "below_cost" | "low_margin" | "margin_blocked";
   details: any;
   resolved_at: string | null;
   created_at: string;
@@ -167,9 +167,12 @@ function AlertsTable({
               <TableCell>
                 {a.severity === "below_cost" ? (
                   <Badge variant="destructive">Under kost</Badge>
+                ) : a.severity === "margin_blocked" ? (
+                  <Badge variant="destructive">Salg stoppet (lav margin)</Badge>
                 ) : (
                   <Badge variant="secondary">Lav margin</Badge>
                 )}
+
               </TableCell>
               <TableCell className="text-right tabular-nums">
                 {Number(a.shopify_price).toFixed(2)} kr
