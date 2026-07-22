@@ -59,6 +59,7 @@ export default function ProductDetailPage() {
   const [pushInitialized, setPushInitialized] = useState(false);
   const [autoStockSync, setAutoStockSync] = useState(false);
   const [stockSyncSupplierIds, setStockSyncSupplierIds] = useState<string[]>([]);
+  const [stockSupplierOrderOverride, setStockSupplierOrderOverride] = useState(false);
   const [stockSyncInterval, setStockSyncInterval] = useState("daily");
   const [minSyncMargin, setMinSyncMargin] = useState<string>("15");
   const [savingSync, setSavingSync] = useState(false);
