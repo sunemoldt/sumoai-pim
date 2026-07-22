@@ -18,7 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import ManualSupplierPriceDialog from "@/components/ManualSupplierPriceDialog";
-import ProductTranslationsTab from "@/components/ProductTranslationsTab";
+
 import InlineEditField from "@/components/InlineEditField";
 import SyncTagsEditor from "@/components/SyncTagsEditor";
 import DescriptionAiActions from "@/components/DescriptionAiActions";
@@ -549,7 +549,7 @@ export default function ProductDetailPage() {
           </TabsTrigger>
           <TabsTrigger value="seo">SEO</TabsTrigger>
           <TabsTrigger value="collections"><FolderTree className="h-3.5 w-3.5 mr-1" />Kategorier</TabsTrigger>
-          <TabsTrigger value="translations">Oversættelser</TabsTrigger>
+          
           <TabsTrigger value="changelog">Ændringslog</TabsTrigger>
         </TabsList>
 
@@ -1694,9 +1694,6 @@ export default function ProductDetailPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="translations" className="space-y-4 mt-4">
-          <ProductTranslationsTab product={product} />
-        </TabsContent>
 
         <TabsContent value="variants" className="space-y-4 mt-4">
           <ProductVariantsTab masterProductId={product.id} hasShopify={Boolean(product.shopify_product_id)} shopifyProductId={product.shopify_product_id ?? null} />

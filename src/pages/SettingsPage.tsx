@@ -13,7 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import WebhookFormDialog from "@/components/WebhookFormDialog";
-import LanguageSettingsCard from "@/components/LanguageSettingsCard";
+
 import FieldSyncPolicyCard from "@/components/FieldSyncPolicyCard";
 import AttributeDefinitionsCard from "@/components/AttributeDefinitionsCard";
 import ShopifyBulkPullCard from "@/components/ShopifyBulkPullCard";
@@ -403,7 +403,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <LanguageSettingsCard />
 
       <FieldSyncPolicyCard />
 
