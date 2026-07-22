@@ -39,6 +39,9 @@ Deno.serve(async (req) => {
         if (!shouldRunNow(supplier.feed_schedule)) continue;
 
         try {
+          // Fire-and-forget: supplier-feed-import runs in background via
+          // EdgeRuntime.waitUntil, so scheduled-sync doesn't time out waiting
+          // for slow feeds (Aurdel/Kosatec can take 30-60s each).
           const response = await fetch(
             `${supabaseUrl}/functions/v1/supplier-feed-import`,
             {
@@ -47,15 +50,15 @@ Deno.serve(async (req) => {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${serviceKey}`,
               },
-              body: JSON.stringify({ supplier_id: supplier.id }),
+              body: JSON.stringify({ supplier_id: supplier.id, async: true }),
             }
           );
-          const data = await response.json();
+          const data = await response.json().catch(() => ({}));
           results.push({
             type: "supplier",
             name: supplier.name,
-            success: !data.error,
-            imported: data.imported ?? 0,
+            success: response.ok && !data.error,
+            started: data.started ?? false,
           });
         } catch (err) {
           results.push({
