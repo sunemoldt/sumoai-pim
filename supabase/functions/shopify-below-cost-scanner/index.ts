@@ -174,6 +174,54 @@ Deno.serve(async (req) => {
       });
     }
 
+    // === Second pass: margin_blocked ===
+    // Products where selected supplier(s) DO have stock, but recompute_product_stock
+    // silently sets PIM stock to 0 because every candidate's margin < min_sync_margin.
+    // Without this alert the product just disappears from the shop with no warning.
+    for (const p of products as any[]) {
+      if (!p.auto_stock_sync) continue;
+      const selected: string[] = p.stock_sync_supplier_ids ?? [];
+      if (!selected.length) continue;
+      if (openSet.has(p.id)) continue;
+      if ((p.stock_quantity ?? 0) > 0) continue; // not blocked
+
+      const rows = (byProduct.get(p.id) ?? []).filter(
+        (r) => selected.includes(r.supplier_id) && r.in_stock && (r.qty == null || r.qty > 0),
+      );
+      if (!rows.length) continue; // genuinely out of stock, not blocked
+
+      const activeInc = Number(p.sale_price ?? p.webshop_price ?? 0);
+      if (!(activeInc > 0)) continue;
+      const activeEx = activeInc / VAT;
+      const minMargin = Number(p.min_sync_margin ?? minSyncMarginDefault);
+
+      // If any selected supplier passes minMargin, product would be in stock — skip.
+      const anyPasses = rows.some((r) => ((activeEx - r.pp) / activeEx) * 100 >= minMargin);
+      if (anyPasses) continue;
+
+      const cheapestSel = rows.reduce((min, r) => (r.pp < min ? r.pp : min), rows[0].pp);
+      const marginPct = ((activeEx - cheapestSel) / activeEx) * 100;
+
+      inserts.push({
+        master_product_id: p.id,
+        shopify_price: activeInc,
+        shopify_compare_at_price: null,
+        cheapest_purchase_price: cheapestSel,
+        margin_pct: Number(marginPct.toFixed(2)),
+        severity: "margin_blocked",
+        source: "shopify-scanner",
+        details: {
+          title: p.title,
+          sku: p.sku,
+          shopify_variant_id: p.shopify_variant_id,
+          min_sync_margin_pct: minMargin,
+          reason: "Salg stoppet automatisk fordi margin er under min_sync_margin",
+        },
+      });
+      openSet.add(p.id);
+    }
+
+
     if (inserts.length) {
       const { error } = await svc.from("price_alerts").insert(inserts);
       if (error) throw error;
