@@ -244,8 +244,13 @@ export default function CollectionDetailPage() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Produkter i kategorien ({products.length})</CardTitle>
+          {!isSmart && (
+            <Button size="sm" variant="outline" onClick={() => { setAddQuery(""); setAddOpen(true); }}>
+              <Plus className="h-4 w-4 mr-1" /> Tilføj produkt
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {products.length === 0 ? (
