@@ -256,6 +256,64 @@ export default function CollectionDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={aiDraft !== null} onOpenChange={(o) => !o && setAiDraft(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>AI-forslag til kategoritekster</DialogTitle>
+            <DialogDescription>
+              Redigér forslaget hvis nødvendigt. Når du klikker "Brug forslag" indsættes det i felterne — du skal
+              stadig klikke "Gem & push til Shopify" bagefter.
+            </DialogDescription>
+          </DialogHeader>
+          {aiDraft && (
+            <div className="space-y-4">
+              <div>
+                <Label>Beskrivelse (HTML)</Label>
+                <Textarea
+                  value={aiDraft.description_html}
+                  onChange={(e) => setAiDraft({ ...aiDraft, description_html: e.target.value })}
+                  rows={12}
+                  className="mt-1 font-mono text-xs"
+                />
+              </div>
+              <div>
+                <Label>Meta titel</Label>
+                <Input
+                  value={aiDraft.meta_title}
+                  onChange={(e) => setAiDraft({ ...aiDraft, meta_title: e.target.value })}
+                  maxLength={70}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">{aiDraft.meta_title.length} / 70 tegn</p>
+              </div>
+              <div>
+                <Label>Meta beskrivelse</Label>
+                <Textarea
+                  value={aiDraft.meta_description}
+                  onChange={(e) => setAiDraft({ ...aiDraft, meta_description: e.target.value })}
+                  rows={3}
+                  maxLength={160}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">{aiDraft.meta_description.length} / 160 tegn</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAiDraft(null)}>Annullér</Button>
+            <Button variant="outline" onClick={runAi} disabled={aiLoading}>
+              {aiLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+              Generér igen
+            </Button>
+            <Button onClick={applyAiDraft}>
+              <Check className="h-4 w-4 mr-2" />
+              Brug forslag
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
