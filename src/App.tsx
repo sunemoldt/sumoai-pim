@@ -72,7 +72,7 @@ function AuthenticatedApp() {
         <Route path="/products/:id" element={<ProductDetailPage />} />
         <Route path="/suppliers" element={<SupplierListPage />} />
         <Route path="/suppliers/:id" element={<SupplierDetailPage />} />
-        <Route path="/import" element={<ImportPage />} />
+        
         <Route path="/monitoring" element={<MonitoringPage />} />
         <Route path="/ai-insights" element={<AiInsightsPage />} />
         <Route path="/automations/n8n" element={<N8nWorkflowsPage />} />
