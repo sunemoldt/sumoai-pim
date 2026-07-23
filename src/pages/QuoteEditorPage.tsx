@@ -296,6 +296,17 @@ export default function QuoteEditorPage() {
           >
             <XCircle className="h-4 w-4 mr-1" /> Afvist
           </Button>
+          {!isNew && quoteId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-1 md:flex-none"
+              onClick={deleteQuote}
+              disabled={saving}
+            >
+              <Trash2 className="h-4 w-4 mr-1" /> Slet
+            </Button>
+          )}
         </div>
       </div>
 
