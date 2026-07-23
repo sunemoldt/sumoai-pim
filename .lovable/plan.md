@@ -1,28 +1,52 @@
+## 1. Slet-funktion i Tilbud
 
-## Mål
-Fjerne oversættelsesmodulet fra PIM — kun dansk bruges. Ingen UI, hooks, edge functions eller database-rester tilbage.
+**`src/pages/QuoteListPage.tsx`**
+- Tilføj slet-knap (Trash2-ikon) i handling-kolonnen ved siden af Kopier.
+- Bekræft via `confirm()` dialog ("Slet tilbud #X?").
+- Sletter `quote_lines` først, derefter `quotes`-rækken, invaliderer `quotes-list`.
 
-## Ændringer
+**`src/pages/QuoteEditorPage.tsx`**
+- Tilføj tilsvarende slet-knap i topbar (kun når tilbuddet findes, ikke ved nyt).
+- Efter slet: naviger til `/quotes`.
 
-### UI
-- **`src/pages/ProductDetailPage.tsx`**: fjern import af `ProductTranslationsTab`, fjern faneknappen "Oversættelser" (`TabsTrigger value="translations"`) og det tilhørende `TabsContent`.
-- **`src/pages/SettingsPage.tsx`**: fjern import og render af `<LanguageSettingsCard />`.
-- **Slet filer**:
-  - `src/components/ProductTranslationsTab.tsx`
-  - `src/components/LanguageSettingsCard.tsx`
-  - `src/hooks/use-translations.ts`
+## 2. Ny "Salg"-side
 
-### Backend / database
-- **Migration**: `DROP TABLE public.product_translations CASCADE;` (fjerner også RLS-policies).
-- Fjern `"product_translations"` fra tabel-listen i `supabase/functions/nightly-backup/index.ts`, så backup ikke fejler.
-- Tjek om der findes en `translate-product` edge function; hvis ja, slettes den (ingen fundet i første scan, verificeres under implementering).
+Bruger den eksisterende `shopify_processed_orders` tabel (indeholder allerede `raw` jsonb med linjer + `total_decremented`).
 
-### Verifikation
-- Build passerer uden ubrugte imports.
-- Produktdetalje viser ikke længere "Oversættelser"-fanen.
-- Indstillinger viser ikke længere sprogkort.
-- Natlig backup kører uden reference til slettet tabel.
+**Ny route `/sales` i `src/App.tsx`** og menupunkt i `src/components/AppSidebar.tsx` (`ShoppingCart`-ikon, label "Salg", placeret efter Tilbud).
 
-## Ikke omfattet
-- Sidebar/nav (der er ingen top-level "Oversættelser"-menu).
-- Shopify-flow (ingen oversættelser sendes i dag).
+**Ny `src/pages/SalesListPage.tsx`**
+- Tabel a la QuoteList: ordrenummer, dato, antal linjer, omsætning (ex. moms), samlet indkøb, dækningsbidrag (kr og %).
+- Data hentes fra `shopify_processed_orders` order by `processed_at` desc, paginer 50 ad gangen.
+- Klik på række → `/sales/:orderId`.
+
+**Ny `src/pages/SalesDetailPage.tsx`** (read-only, layout inspireret af QuoteEditor)
+- Header: ordrenummer, dato, kunde (fra `raw.customer` hvis muligt), Shopify-link.
+- Linjetabel: produkt (title fra `raw.line_items[].title`), antal, salgspris pr. stk (ex. moms), linjeomsætning, indkøbspris (fundet via EAN/SKU-match i `master_products` + billigste `supplier_products.purchase_price` på salgstidspunktet — hvis ikke findes, vis "—").
+- Totaler nederst: omsætning, indkøb, DB kr, DB %.
+- Ingen redigering, ingen knapper udover "Åbn i Shopify".
+
+**Indkøbspris-logik**: For hver linje slå produkt op via `raw.line_items[].sku` → `master_products.sku` (eller `variant_id` / barcode). Hent aktuel cheapest purchase price fra `supplier_products` blandt `stock_sync_supplier_ids` (samme prioritering som `recompute_product_stock`). Bemærk: dette er *nuværende* indkøb, ikke historisk — noter dette i UI ("indkøb pr. i dag").
+
+## 3. Mobil-responsivt design
+
+Kritiske sider der skal gennemgås (viewport <768px):
+
+- **`AppLayout.tsx`** — bekræft sidebar bliver til drawer/sheet på mobil.
+- **`QuoteEditorPage.tsx`** — 2-kolonne grid → stack, tabel-linjer → kort-visning.
+- **Ny SalesListPage/SalesDetailPage** — bygges responsivt fra start (tabel → kort under `md:`).
+- **`ProductListPage.tsx`** — filter-bar wrapper og tabel horizontal scroll.
+- **`ProductDetailPage.tsx`** — tabs og pris/lager-kort skal stacke.
+- **`CampaignEditorPage.tsx`** — allerede delvist ok, verificér knap-rækken øverst wrapper.
+
+Fælles patterns:
+- Erstat faste `grid-cols-2/3` med `grid-cols-1 md:grid-cols-2`.
+- Tabel-wrapper `overflow-x-auto` hvor tabel bevares; ellers card-list under `md:hidden`.
+- Top-action-bars: `flex-wrap gap-2`.
+- Skjul ikke-kritiske kolonner under `sm`.
+
+## Teknisk
+
+- Ingen DB-skemaændringer nødvendige (bruger eksisterende `shopify_processed_orders.raw`).
+- Ingen edge function-ændringer.
+- Alt sker klient-side med eksisterende Supabase-læsninger.
