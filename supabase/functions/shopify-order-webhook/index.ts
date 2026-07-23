@@ -213,7 +213,22 @@ Deno.serve(async (req) => {
   await sb.from("shopify_processed_orders")
     .update({
       total_decremented: totalDecremented,
-      raw: { line_results: lineResults, created_at: createdAtRaw },
+      raw: {
+        line_results: lineResults,
+        created_at: createdAtRaw,
+        subtotal_price: subtotalPrice,
+        total_price: totalPrice,
+        total_tax: totalTax,
+        shipping_total: shippingTotal,
+        currency,
+        customer: customer ? {
+          id: customer.id ?? null,
+          first_name: customer.first_name ?? null,
+          last_name: customer.last_name ?? null,
+          email: customer.email ?? null,
+        } : null,
+        order_status_url: (order as any).order_status_url ?? null,
+      },
     })
     .eq("order_id", orderId);
 
