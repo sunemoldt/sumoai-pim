@@ -112,26 +112,66 @@ Deno.serve(async (req) => {
   for (const item of lineItems) {
     const variantId = item.variant_id ? String(item.variant_id) : null;
     const qty = Number(item.quantity ?? 0);
+    const title = String(item.title ?? item.name ?? "");
+    const variantTitle = item.variant_title ? String(item.variant_title) : null;
+    const sku = item.sku ? String(item.sku) : null;
+    // price is per unit, incl or excl VAT depending on Shopify config; we snapshot both
+    const unitPrice = Number(item.price ?? 0);
+    const totalDiscount = Number(item.total_discount ?? 0);
+    const lineTotal = unitPrice * qty - totalDiscount;
+
+    const baseLine: Record<string, unknown> = {
+      variant_id: variantId,
+      title,
+      variant_title: variantTitle,
+      sku,
+      quantity: qty,
+      unit_price: unitPrice,
+      total_discount: totalDiscount,
+      line_total: lineTotal,
+    };
 
     if (!variantId || !/^\d+$/.test(variantId)) {
-      lineResults.push({ variant_id: variantId, skipped: "invalid_variant_id" });
+      lineResults.push({ ...baseLine, skipped: "invalid_variant_id" });
       continue;
     }
     if (qty <= 0) {
-      lineResults.push({ variant_id: variantId, skipped: "invalid_qty" });
+      lineResults.push({ ...baseLine, skipped: "invalid_qty" });
       continue;
     }
 
     // Find produkt via shopify_variant_id (numeric eller GID)
     const { data: products } = await sb
       .from("master_products")
-      .select("id, title")
+      .select("id, title, image_url, ean, stock_sync_supplier_ids")
       .or(`shopify_variant_id.eq.${variantId},shopify_variant_id.eq.gid://shopify/ProductVariant/${variantId}`)
       .limit(1);
     const product = products?.[0];
 
+    // Snapshot cheapest purchase price at time of sale, from selected suppliers if any
+    let purchasePrice: number | null = null;
+    if (product) {
+      const supplierIds = Array.isArray(product.stock_sync_supplier_ids) ? product.stock_sync_supplier_ids : [];
+      let q = sb.from("supplier_products").select("purchase_price").eq("master_product_id", product.id);
+      if (supplierIds.length > 0) q = q.in("supplier_id", supplierIds);
+      const { data: sps } = await q;
+      const prices = (sps ?? [])
+        .map((r: any) => Number(r.purchase_price))
+        .filter((n: number) => Number.isFinite(n) && n > 0);
+      if (prices.length > 0) purchasePrice = Math.min(...prices);
+    }
+
+    const enriched: Record<string, unknown> = {
+      ...baseLine,
+      product_id: product?.id ?? null,
+      product_title: product?.title ?? null,
+      product_image: product?.image_url ?? null,
+      product_ean: product?.ean ?? null,
+      purchase_price: purchasePrice,
+    };
+
     if (!product) {
-      lineResults.push({ variant_id: variantId, skipped: "product_not_found" });
+      lineResults.push({ ...enriched, skipped: "product_not_found" });
       continue;
     }
 
@@ -141,32 +181,54 @@ Deno.serve(async (req) => {
     });
 
     if (rpcErr) {
-      lineResults.push({ variant_id: variantId, product_id: product.id, error: rpcErr.message });
+      lineResults.push({ ...enriched, error: rpcErr.message });
       continue;
     }
 
     const result = (rpcResult ?? {}) as Record<string, unknown>;
     if (result.skipped) {
-      lineResults.push({ variant_id: variantId, product_id: product.id, skipped: result.skipped });
+      lineResults.push({ ...enriched, skipped: result.skipped });
       continue;
     }
 
     const dec = Number(result.decremented ?? 0);
     totalDecremented += dec;
     lineResults.push({
-      variant_id: variantId,
-      product_id: product.id,
+      ...enriched,
       decremented: dec,
       old_qty: result.old,
       new_qty: result.new,
     });
   }
 
+  const subtotalPrice = Number((order as any).subtotal_price ?? 0);
+  const totalPrice = Number((order as any).total_price ?? 0);
+  const totalTax = Number((order as any).total_tax ?? 0);
+  const currency = String((order as any).currency ?? "DKK");
+  const customer = (order as any).customer ?? null;
+  const shippingLines = Array.isArray((order as any).shipping_lines) ? (order as any).shipping_lines : [];
+  const shippingTotal = shippingLines.reduce((s: number, l: any) => s + Number(l.price ?? 0), 0);
+
   // 4) Opdater claim-rækken med slutresultat
   await sb.from("shopify_processed_orders")
     .update({
       total_decremented: totalDecremented,
-      raw: { line_results: lineResults, created_at: createdAtRaw },
+      raw: {
+        line_results: lineResults,
+        created_at: createdAtRaw,
+        subtotal_price: subtotalPrice,
+        total_price: totalPrice,
+        total_tax: totalTax,
+        shipping_total: shippingTotal,
+        currency,
+        customer: customer ? {
+          id: customer.id ?? null,
+          first_name: customer.first_name ?? null,
+          last_name: customer.last_name ?? null,
+          email: customer.email ?? null,
+        } : null,
+        order_status_url: (order as any).order_status_url ?? null,
+      },
     })
     .eq("order_id", orderId);
 

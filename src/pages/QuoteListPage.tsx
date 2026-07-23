@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { Plus, Copy } from "lucide-react";
+import { Plus, Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -91,6 +91,21 @@ export default function QuoteListPage() {
     }
   };
 
+  const handleDelete = async (quoteId: string, quoteNumber: number) => {
+    if (!confirm(`Slet tilbud #${quoteNumber}? Handlingen kan ikke fortrydes.`)) return;
+    try {
+      const { error: linesErr } = await supabase.from("quote_lines" as any).delete().eq("quote_id", quoteId);
+      if (linesErr) throw linesErr;
+      const { error } = await supabase.from("quotes" as any).delete().eq("id", quoteId);
+      if (error) throw error;
+      toast.success("Tilbud slettet");
+      queryClient.invalidateQueries({ queryKey: ["quotes-list"] });
+    } catch (err: any) {
+      toast.error("Kunne ikke slette tilbud", { description: err?.message });
+    }
+  };
+
+
 
   const statusBadge = (status: string) => {
     if (status === "approved") return <Badge variant="outline" className="text-green-700 border-green-400 bg-green-50">Godkendt</Badge>;
@@ -129,7 +144,7 @@ export default function QuoteListPage() {
                 <span>{q.quote_date ? format(new Date(q.quote_date), "dd-MM-yyyy") : "—"} · {q.line_count} linje{q.line_count === 1 ? "" : "r"}</span>
                 <span className="font-mono text-foreground">{(Number(q.total_excl_vat || 0) * 1.25).toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.</span>
               </div>
-              <div className="pt-1">
+              <div className="flex gap-2 pt-1">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -137,6 +152,14 @@ export default function QuoteListPage() {
                   onClick={(e) => { e.stopPropagation(); handleDuplicate(q.id); }}
                 >
                   <Copy className="h-3.5 w-3.5 mr-1" /> Dupliker
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-destructive hover:text-destructive"
+                  onClick={(e) => { e.stopPropagation(); handleDelete(q.id, q.quote_number); }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Slet
                 </Button>
               </div>
             </CardContent>
@@ -156,7 +179,7 @@ export default function QuoteListPage() {
                 <TableHead className="text-right">Linjer</TableHead>
                 <TableHead className="text-right">Total inkl. moms</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right w-20">Handling</TableHead>
+                <TableHead className="text-right w-28">Handling</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -174,18 +197,33 @@ export default function QuoteListPage() {
                   <TableCell>{statusBadge(q.status)}</TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => { e.stopPropagation(); handleDuplicate(q.id); }}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Dupliker</TooltipContent>
-                      </Tooltip>
+                      <div className="flex justify-end gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => { e.stopPropagation(); handleDuplicate(q.id); }}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Dupliker</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={(e) => { e.stopPropagation(); handleDelete(q.id, q.quote_number); }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Slet</TooltipContent>
+                        </Tooltip>
+                      </div>
                     </TooltipProvider>
                   </TableCell>
                 </TableRow>

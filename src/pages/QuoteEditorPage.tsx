@@ -232,6 +232,23 @@ export default function QuoteEditorPage() {
     qc.invalidateQueries({ queryKey: ["quotes-list"] });
   };
 
+  const deleteQuote = async () => {
+    if (!quoteId) return;
+    if (!confirm(`Slet tilbud #${quoteNumber ?? ""}? Handlingen kan ikke fortrydes.`)) return;
+    try {
+      const { error: linesErr } = await supabase.from("quote_lines" as any).delete().eq("quote_id", quoteId);
+      if (linesErr) throw linesErr;
+      const { error } = await supabase.from("quotes" as any).delete().eq("id", quoteId);
+      if (error) throw error;
+      toast({ title: "Tilbud slettet" });
+      qc.invalidateQueries({ queryKey: ["quotes-list"] });
+      navigate("/quotes");
+    } catch (err: any) {
+      toast({ title: "Fejl", description: err?.message, variant: "destructive" });
+    }
+  };
+
+
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" /></div>;
 
   return (
@@ -279,6 +296,17 @@ export default function QuoteEditorPage() {
           >
             <XCircle className="h-4 w-4 mr-1" /> Afvist
           </Button>
+          {!isNew && quoteId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-1 md:flex-none"
+              onClick={deleteQuote}
+              disabled={saving}
+            >
+              <Trash2 className="h-4 w-4 mr-1" /> Slet
+            </Button>
+          )}
         </div>
       </div>
 
