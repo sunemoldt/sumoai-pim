@@ -179,14 +179,6 @@ export default function QuoteListPage() {
                 <TableHead className="text-right">Linjer</TableHead>
                 <TableHead className="text-right">Total inkl. moms</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right w-20">Handling</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Indlæser…</TableCell></TableRow>
-              ) : quotes.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Ingen tilbud endnu</TableCell></TableRow>
                 <TableHead className="text-right w-28">Handling</TableHead>
               </TableRow>
             </TableHeader>
