@@ -1,7 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,12 +11,17 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2 } from "lucide-react";
 
+
 const VAT = 0.25;
 const fmt = (n: number) => n.toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 
 export default function SalesDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [enriching, setEnriching] = useState(false);
+  const [autoTried, setAutoTried] = useState(false);
 
   const { data: order, isLoading } = useQuery({
     queryKey: ["sales-order", orderId],
@@ -29,6 +36,40 @@ export default function SalesDetailPage() {
       return data;
     },
   });
+
+  const enrich = async () => {
+    if (!orderId) return;
+    setEnriching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sales-enrich-order", {
+        body: { order_id: Number(orderId) },
+      });
+      if (error) throw error;
+      const first = data?.results?.[0];
+      if (first?.error) throw new Error(first.error);
+      toast.success(`Beriget ${first?.matched ?? 0}/${first?.lines ?? 0} linjer fra Shopify`);
+      qc.invalidateQueries({ queryKey: ["sales-order", orderId] });
+      qc.invalidateQueries({ queryKey: ["sales-orders-list"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Kunne ikke berige ordre");
+    } finally {
+      setEnriching(false);
+    }
+  };
+
+  // Auto-enrich once if raw is empty/stub
+  useEffect(() => {
+    if (autoTried || !order) return;
+    const lines = (order.raw as any)?.line_results;
+    const needsEnrich = !Array.isArray(lines) || lines.length === 0
+      || lines.some((l: any) => l.title === undefined && l.quantity === undefined);
+    if (needsEnrich) {
+      setAutoTried(true);
+      enrich();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order, autoTried]);
+
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" /></div>;
@@ -78,13 +119,20 @@ export default function SalesDetailPage() {
             </p>
           </div>
         </div>
-        {raw.order_status_url && (
-          <Button variant="outline" size="sm" asChild>
-            <a href={raw.order_status_url} target="_blank" rel="noreferrer">
-              <ExternalLink className="h-4 w-4 mr-1" /> Åbn i Shopify
-            </a>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={enrich} disabled={enriching}>
+            {enriching ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+            Berig fra Shopify
           </Button>
-        )}
+          {raw.order_status_url && (
+            <Button variant="outline" size="sm" asChild>
+              <a href={raw.order_status_url} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-4 w-4 mr-1" /> Åbn i Shopify
+              </a>
+            </Button>
+          )}
+        </div>
+
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

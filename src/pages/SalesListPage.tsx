@@ -1,11 +1,15 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Loader2, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 
 type OrderRow = {
   order_id: number;
@@ -43,6 +47,8 @@ function computeTotals(raw: any) {
 
 export default function SalesListPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [enriching, setEnriching] = useState(false);
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["sales-orders-list"],
     queryFn: async () => {
@@ -64,14 +70,39 @@ export default function SalesListPage() {
   const marginColor = (pct: number) =>
     pct < 10 ? "text-destructive" : pct < 20 ? "text-yellow-600" : "text-green-600";
 
+  const enrichAll = async () => {
+    setEnriching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sales-enrich-order", {
+        body: { missing_only: true, limit: 100 },
+      });
+      if (error) throw error;
+      const enriched = data?.enriched ?? 0;
+      toast.success(`${enriched} ordre${enriched === 1 ? "" : "r"} beriget fra Shopify`);
+      qc.invalidateQueries({ queryKey: ["sales-orders-list"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Kunne ikke berige ordrer");
+    } finally {
+      setEnriching(false);
+    }
+  };
+
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Salg</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Ordrer fra Shopify med omsætning, indkøb og dækningsbidrag (indkøbspris pr. i dag)
-        </p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Salg</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Ordrer fra Shopify med omsætning, indkøb og dækningsbidrag
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={enrichAll} disabled={enriching}>
+          {enriching ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+          Berig manglende fra Shopify
+        </Button>
       </div>
+
 
       {/* Mobile cards */}
       <div className="space-y-2 md:hidden">
