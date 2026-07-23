@@ -159,6 +159,8 @@ async function enrichOne(sb: any, shop: string, token: string, orderId: number) 
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (!(await requireUser(req))) return json({ error: "Unauthorized" }, 401);
+
 
   const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
