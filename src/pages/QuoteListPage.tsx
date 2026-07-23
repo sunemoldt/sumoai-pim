@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { Plus, Copy } from "lucide-react";
+import { Plus, Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,21 @@ export default function QuoteListPage() {
       toast.error("Kunne ikke kopiere tilbud", { description: err?.message });
     }
   };
+
+  const handleDelete = async (quoteId: string, quoteNumber: number) => {
+    if (!confirm(`Slet tilbud #${quoteNumber}? Handlingen kan ikke fortrydes.`)) return;
+    try {
+      const { error: linesErr } = await supabase.from("quote_lines" as any).delete().eq("quote_id", quoteId);
+      if (linesErr) throw linesErr;
+      const { error } = await supabase.from("quotes" as any).delete().eq("id", quoteId);
+      if (error) throw error;
+      toast.success("Tilbud slettet");
+      queryClient.invalidateQueries({ queryKey: ["quotes-list"] });
+    } catch (err: any) {
+      toast.error("Kunne ikke slette tilbud", { description: err?.message });
+    }
+  };
+
 
 
   const statusBadge = (status: string) => {
