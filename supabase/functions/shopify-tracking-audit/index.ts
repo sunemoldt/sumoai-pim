@@ -56,6 +56,12 @@ const UPDATE_MUTATION = `#graphql
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (!(await requireUser(req))) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
 
   const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   let mode: "audit" | "fix" = "audit";
