@@ -27,6 +27,8 @@ import CampaignListPage from "@/pages/CampaignListPage";
 import CampaignEditorPage from "@/pages/CampaignEditorPage";
 import PriceAlertsPage from "@/pages/PriceAlertsPage";
 import EanLookupPage from "@/pages/EanLookupPage";
+import SalesListPage from "@/pages/SalesListPage";
+import SalesDetailPage from "@/pages/SalesDetailPage";
 
 import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
@@ -80,6 +82,9 @@ function AuthenticatedApp() {
         <Route path="/quotes" element={<QuoteListPage />} />
         <Route path="/quotes/new" element={<QuoteEditorPage />} />
         <Route path="/quotes/:id" element={<QuoteEditorPage />} />
+        <Route path="/sales" element={<SalesListPage />} />
+        <Route path="/sales/:orderId" element={<SalesDetailPage />} />
+        
         
         <Route path="/collections" element={<CollectionsListPage />} />
         <Route path="/collections/:id" element={<CollectionDetailPage />} />
