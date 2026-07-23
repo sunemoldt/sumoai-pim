@@ -73,12 +73,18 @@ export default function SalesListPage() {
   const enrichAll = async () => {
     setEnriching(true);
     try {
-      const { data, error } = await supabase.functions.invoke("sales-enrich-order", {
-        body: { missing_only: true, limit: 100 },
-      });
-      if (error) throw error;
-      const enriched = data?.enriched ?? 0;
-      toast.success(`${enriched} ordre${enriched === 1 ? "" : "r"} beriget fra Shopify`);
+      let totalEnriched = 0;
+      // Loop batches until no more missing orders (cap iterations to prevent runaway).
+      for (let i = 0; i < 20; i++) {
+        const { data, error } = await supabase.functions.invoke("sales-enrich-order", {
+          body: { missing_only: true, limit: 100 },
+        });
+        if (error) throw error;
+        const enriched = Number(data?.enriched ?? 0);
+        totalEnriched += enriched;
+        if (enriched < 100) break;
+      }
+      toast.success(`${totalEnriched} ordre${totalEnriched === 1 ? "" : "r"} beriget fra Shopify`);
       qc.invalidateQueries({ queryKey: ["sales-orders-list"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Kunne ikke berige ordrer");
