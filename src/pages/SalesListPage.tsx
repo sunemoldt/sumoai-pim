@@ -90,12 +90,19 @@ export default function SalesListPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Salg</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Ordrer fra Shopify med omsætning, indkøb og dækningsbidrag (indkøbspris pr. i dag)
-        </p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Salg</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Ordrer fra Shopify med omsætning, indkøb og dækningsbidrag
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={enrichAll} disabled={enriching}>
+          {enriching ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+          Berig manglende fra Shopify
+        </Button>
       </div>
+
 
       {/* Mobile cards */}
       <div className="space-y-2 md:hidden">
