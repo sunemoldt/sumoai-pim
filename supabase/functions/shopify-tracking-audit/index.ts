@@ -7,8 +7,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const API_VERSION = "2026-04";
+
+async function requireUser(req: Request): Promise<boolean> {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader) return false;
+  if (authHeader.includes(SUPABASE_SERVICE_ROLE_KEY)) return true;
+  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: { user }, error } = await anon.auth.getUser();
+  return !error && Boolean(user);
+}
 
 async function gql(shop: string, token: string, query: string, variables: Record<string, unknown>) {
   const res = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
@@ -44,6 +56,12 @@ const UPDATE_MUTATION = `#graphql
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (!(await requireUser(req))) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
 
   const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   let mode: "audit" | "fix" = "audit";
