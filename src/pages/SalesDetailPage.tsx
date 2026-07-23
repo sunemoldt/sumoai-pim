@@ -19,6 +19,13 @@ export default function SalesDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
 
+export default function SalesDetailPage() {
+  const { orderId } = useParams<{ orderId: string }>();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [enriching, setEnriching] = useState(false);
+  const [autoTried, setAutoTried] = useState(false);
+
   const { data: order, isLoading } = useQuery({
     queryKey: ["sales-order", orderId],
     enabled: !!orderId,
@@ -32,6 +39,40 @@ export default function SalesDetailPage() {
       return data;
     },
   });
+
+  const enrich = async () => {
+    if (!orderId) return;
+    setEnriching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sales-enrich-order", {
+        body: { order_id: Number(orderId) },
+      });
+      if (error) throw error;
+      const first = data?.results?.[0];
+      if (first?.error) throw new Error(first.error);
+      toast.success(`Beriget ${first?.matched ?? 0}/${first?.lines ?? 0} linjer fra Shopify`);
+      qc.invalidateQueries({ queryKey: ["sales-order", orderId] });
+      qc.invalidateQueries({ queryKey: ["sales-orders-list"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Kunne ikke berige ordre");
+    } finally {
+      setEnriching(false);
+    }
+  };
+
+  // Auto-enrich once if raw is empty/stub
+  useEffect(() => {
+    if (autoTried || !order) return;
+    const lines = (order.raw as any)?.line_results;
+    const needsEnrich = !Array.isArray(lines) || lines.length === 0
+      || lines.some((l: any) => l.title === undefined && l.quantity === undefined);
+    if (needsEnrich) {
+      setAutoTried(true);
+      enrich();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order, autoTried]);
+
 
   if (isLoading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin" /></div>;
