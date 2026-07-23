@@ -47,6 +47,8 @@ function computeTotals(raw: any) {
 
 export default function SalesListPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [enriching, setEnriching] = useState(false);
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["sales-orders-list"],
     queryFn: async () => {
@@ -67,6 +69,24 @@ export default function SalesListPage() {
 
   const marginColor = (pct: number) =>
     pct < 10 ? "text-destructive" : pct < 20 ? "text-yellow-600" : "text-green-600";
+
+  const enrichAll = async () => {
+    setEnriching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sales-enrich-order", {
+        body: { missing_only: true, limit: 100 },
+      });
+      if (error) throw error;
+      const enriched = data?.enriched ?? 0;
+      toast.success(`${enriched} ordre${enriched === 1 ? "" : "r"} beriget fra Shopify`);
+      qc.invalidateQueries({ queryKey: ["sales-orders-list"] });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Kunne ikke berige ordrer");
+    } finally {
+      setEnriching(false);
+    }
+  };
+
 
   return (
     <div className="space-y-6">
