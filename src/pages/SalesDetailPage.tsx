@@ -122,13 +122,20 @@ export default function SalesDetailPage() {
             </p>
           </div>
         </div>
-        {raw.order_status_url && (
-          <Button variant="outline" size="sm" asChild>
-            <a href={raw.order_status_url} target="_blank" rel="noreferrer">
-              <ExternalLink className="h-4 w-4 mr-1" /> Åbn i Shopify
-            </a>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={enrich} disabled={enriching}>
+            {enriching ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+            Berig fra Shopify
           </Button>
-        )}
+          {raw.order_status_url && (
+            <Button variant="outline" size="sm" asChild>
+              <a href={raw.order_status_url} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-4 w-4 mr-1" /> Åbn i Shopify
+              </a>
+            </Button>
+          )}
+        </div>
+
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
