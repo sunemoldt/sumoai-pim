@@ -15,9 +15,6 @@ import { Loader2 } from "lucide-react";
 const VAT = 0.25;
 const fmt = (n: number) => n.toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function SalesDetailPage() {
-  const { orderId } = useParams<{ orderId: string }>();
-  const navigate = useNavigate();
 
 export default function SalesDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
