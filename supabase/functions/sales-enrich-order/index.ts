@@ -12,8 +12,20 @@ const corsHeaders = {
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const API_VERSION = "2026-04";
+
+async function requireUser(req: Request): Promise<boolean> {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader) return false;
+  if (authHeader.includes(SUPABASE_SERVICE_ROLE_KEY)) return true;
+  const anon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: { user }, error } = await anon.auth.getUser();
+  return !error && Boolean(user);
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
