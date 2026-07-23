@@ -144,7 +144,7 @@ export default function QuoteListPage() {
                 <span>{q.quote_date ? format(new Date(q.quote_date), "dd-MM-yyyy") : "—"} · {q.line_count} linje{q.line_count === 1 ? "" : "r"}</span>
                 <span className="font-mono text-foreground">{(Number(q.total_excl_vat || 0) * 1.25).toLocaleString("da-DK", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.</span>
               </div>
-              <div className="pt-1">
+              <div className="flex gap-2 pt-1">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -152,6 +152,14 @@ export default function QuoteListPage() {
                   onClick={(e) => { e.stopPropagation(); handleDuplicate(q.id); }}
                 >
                   <Copy className="h-3.5 w-3.5 mr-1" /> Dupliker
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-destructive hover:text-destructive"
+                  onClick={(e) => { e.stopPropagation(); handleDelete(q.id, q.quote_number); }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Slet
                 </Button>
               </div>
             </CardContent>
@@ -179,6 +187,14 @@ export default function QuoteListPage() {
                 <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Indlæser…</TableCell></TableRow>
               ) : quotes.length === 0 ? (
                 <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Ingen tilbud endnu</TableCell></TableRow>
+                <TableHead className="text-right w-28">Handling</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Indlæser…</TableCell></TableRow>
+              ) : quotes.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Ingen tilbud endnu</TableCell></TableRow>
               ) : quotes.map((q) => (
                 <TableRow key={q.id} className="cursor-pointer" onClick={() => navigate(`/quotes/${q.id}`)}>
                   <TableCell className="font-medium">#{q.quote_number}</TableCell>
@@ -189,18 +205,33 @@ export default function QuoteListPage() {
                   <TableCell>{statusBadge(q.status)}</TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => { e.stopPropagation(); handleDuplicate(q.id); }}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Dupliker</TooltipContent>
-                      </Tooltip>
+                      <div className="flex justify-end gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => { e.stopPropagation(); handleDuplicate(q.id); }}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Dupliker</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={(e) => { e.stopPropagation(); handleDelete(q.id, q.quote_number); }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Slet</TooltipContent>
+                        </Tooltip>
+                      </div>
                     </TooltipProvider>
                   </TableCell>
                 </TableRow>
