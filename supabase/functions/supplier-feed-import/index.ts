@@ -535,10 +535,13 @@ Deno.serve(async (req) => {
         let inStock = true;
         if (mapping.in_stock) {
           const v = row[mapping.in_stock]?.trim().toLowerCase();
-          inStock = v === "1" || v === "yes" || v === "ja" || v === "true" || v === "in stock" || v === "på lager";
+          const truthy = v === "1" || v === "yes" || v === "ja" || v === "true" || v === "in stock" || v === "på lager" || v === "a" || v === "y";
+          const falsy = v === "0" || v === "no" || v === "nej" || v === "false" || v === "out of stock" || v === "udsolgt" || v === "n";
+          inStock = truthy ? true : falsy ? false : (!isNaN(stockQty) ? stockQty > 0 : false);
         } else if (!isNaN(stockQty)) {
           inStock = stockQty > 0;
         }
+
         unmatched.push({
           ean,
           title: titleCol ? (row[titleCol]?.trim() || null) : null,
@@ -604,8 +607,11 @@ Deno.serve(async (req) => {
         let inStock = true;
         if (mapping.in_stock) {
           const v = row[mapping.in_stock]?.trim().toLowerCase();
-          inStock = v === "1" || v === "yes" || v === "ja" || v === "true" || v === "in stock" || v === "på lager";
+          const truthy = v === "1" || v === "yes" || v === "ja" || v === "true" || v === "in stock" || v === "på lager" || v === "a" || v === "y";
+          const falsy = v === "0" || v === "no" || v === "nej" || v === "false" || v === "out of stock" || v === "udsolgt" || v === "n";
+          inStock = truthy ? true : falsy ? false : (!isNaN(stockQty) ? stockQty > 0 : false);
         } else if (!isNaN(stockQty)) inStock = stockQty > 0;
+
         // Cap free-text length so odd feeds can't blow up the table.
         const trim = (s: string | undefined | null, n: number) =>
           s ? (s.length > n ? s.slice(0, n) : s) : null;
@@ -693,10 +699,13 @@ Deno.serve(async (req) => {
       let inStock = true;
       if (mapping.in_stock) {
         const val = row[mapping.in_stock]?.trim().toLowerCase();
-        inStock = val === "1" || val === "yes" || val === "ja" || val === "true" || val === "in stock" || val === "på lager";
+        const truthy = val === "1" || val === "yes" || val === "ja" || val === "true" || val === "in stock" || val === "på lager" || val === "a" || val === "y";
+        const falsy = val === "0" || val === "no" || val === "nej" || val === "false" || val === "out of stock" || val === "udsolgt" || val === "n";
+        inStock = truthy ? true : falsy ? false : (stockQty !== null && !isNaN(stockQty) ? stockQty > 0 : false);
       } else if (stockQty !== null && !isNaN(stockQty)) {
         inStock = stockQty > 0;
       }
+
 
       const supplierSku = mapping.sku ? row[mapping.sku]?.trim() || null : null;
 
