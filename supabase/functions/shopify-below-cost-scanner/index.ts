@@ -124,12 +124,21 @@ Deno.serve(async (req) => {
     }
 
 
-    // Existing unresolved alerts to avoid duplicates.
+    // Existing unresolved alerts — keyed by (product_id, severity) so we can
+    // auto-resolve those that no longer trigger this scan.
     const { data: openAlerts } = await svc
       .from("price_alerts")
-      .select("master_product_id")
+      .select("id,master_product_id,severity")
       .is("resolved_at", null);
-    const openSet = new Set((openAlerts ?? []).map((a) => a.master_product_id));
+    const openByKey = new Map<string, string>(); // key -> alert id
+    const openByProduct = new Map<string, string[]>(); // product -> severities
+    for (const a of openAlerts ?? []) {
+      openByKey.set(`${a.master_product_id}::${a.severity}`, a.id);
+      const arr = openByProduct.get(a.master_product_id) ?? [];
+      arr.push(a.severity);
+      openByProduct.set(a.master_product_id, arr);
+    }
+    const stillTriggered = new Set<string>(); // keys still valid this scan
 
     const inserts: any[] = [];
     let scanned = 0;
@@ -154,7 +163,9 @@ Deno.serve(async (req) => {
       else if (marginPct < threshold) severity = "low_margin";
       if (!severity) continue;
 
-      if (openSet.has(p.id)) continue; // already flagged
+      const key = `${p.id}::${severity}`;
+      stillTriggered.add(key);
+      if (openByKey.has(key)) continue; // already flagged
 
       inserts.push({
         master_product_id: p.id,
@@ -175,14 +186,10 @@ Deno.serve(async (req) => {
     }
 
     // === Second pass: margin_blocked ===
-    // Products where selected supplier(s) DO have stock, but recompute_product_stock
-    // silently sets PIM stock to 0 because every candidate's margin < min_sync_margin.
-    // Without this alert the product just disappears from the shop with no warning.
     for (const p of products as any[]) {
       if (!p.auto_stock_sync) continue;
       const selected: string[] = p.stock_sync_supplier_ids ?? [];
       if (!selected.length) continue;
-      if (openSet.has(p.id)) continue;
       if ((p.stock_quantity ?? 0) > 0) continue; // not blocked
 
       const rows = (byProduct.get(p.id) ?? []).filter(
@@ -195,12 +202,15 @@ Deno.serve(async (req) => {
       const activeEx = activeInc / VAT;
       const minMargin = Number(p.min_sync_margin ?? minSyncMarginDefault);
 
-      // If any selected supplier passes minMargin, product would be in stock — skip.
       const anyPasses = rows.some((r) => ((activeEx - r.pp) / activeEx) * 100 >= minMargin);
       if (anyPasses) continue;
 
       const cheapestSel = rows.reduce((min, r) => (r.pp < min ? r.pp : min), rows[0].pp);
       const marginPct = ((activeEx - cheapestSel) / activeEx) * 100;
+
+      const key = `${p.id}::margin_blocked`;
+      stillTriggered.add(key);
+      if (openByKey.has(key)) continue;
 
       inserts.push({
         master_product_id: p.id,
@@ -218,19 +228,36 @@ Deno.serve(async (req) => {
           reason: "Salg stoppet automatisk fordi margin er under min_sync_margin",
         },
       });
-      openSet.add(p.id);
     }
-
 
     if (inserts.length) {
       const { error } = await svc.from("price_alerts").insert(inserts);
       if (error) throw error;
     }
 
+    // Auto-resolve open alerts that no longer trigger.
+    const toResolve: string[] = [];
+    for (const [key, id] of openByKey.entries()) {
+      if (!stillTriggered.has(key)) toResolve.push(id);
+    }
+    if (toResolve.length) {
+      await svc
+        .from("price_alerts")
+        .update({ resolved_at: new Date().toISOString() })
+        .in("id", toResolve);
+    }
+
     return new Response(
-      JSON.stringify({ ok: true, scanned, alerts: inserts.length, variants_pulled: variantPrices.size }),
+      JSON.stringify({
+        ok: true,
+        scanned,
+        alerts: inserts.length,
+        auto_resolved: toResolve.length,
+        variants_pulled: variantPrices.size,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+
   } catch (e) {
     console.error("shopify-below-cost-scanner error:", e);
     return new Response(JSON.stringify({ error: (e as Error).message }), {
