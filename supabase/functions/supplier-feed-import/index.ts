@@ -67,6 +67,107 @@ function parseXml(text: string): Record<string, string>[] {
   return rows;
 }
 
+/** Stream a ReadableStream<Uint8Array> as CSV rows line-by-line so we never
+ *  build the whole file as a single JS string. Callback is invoked per data row. */
+async function streamCsvFromReadable(
+  body: ReadableStream<Uint8Array>,
+  delimiter: string,
+  onRow: (row: Record<string, string>) => void,
+): Promise<{ rows: number; headers: string[] | null }> {
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  let pending = "";
+  let headers: string[] | null = null;
+  let bomStripped = false;
+  let rowCount = 0;
+
+  const emitLine = (raw: string) => {
+    if (!raw.trim()) return;
+    if (headers === null) {
+      headers = raw.split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
+      return;
+    }
+    const vals = raw.split(delimiter);
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => {
+      row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
+    });
+    onRow(row);
+    rowCount++;
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    pending += value;
+    if (!bomStripped) {
+      if (pending.charCodeAt(0) === 0xFEFF) pending = pending.slice(1);
+      bomStripped = true;
+    }
+    let nl: number;
+    while ((nl = pending.indexOf("\n")) !== -1) {
+      const line = pending.slice(0, nl).replace(/\r$/, "");
+      pending = pending.slice(nl + 1);
+      emitLine(line);
+    }
+  }
+  if (pending.length > 0) emitLine(pending.replace(/\r$/, ""));
+  return { rows: rowCount, headers };
+}
+
+/** Stream <item …>…</item> blocks from a ReadableStream, invoking callback per
+ *  item so we don't buffer the entire XML file in memory. */
+async function streamXmlItemsFromReadable(
+  body: ReadableStream<Uint8Array>,
+  onItem: (attrs: Record<string, string>, inner: string) => void,
+): Promise<number> {
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "";
+  let count = 0;
+
+  const flush = (final: boolean) => {
+    const re = /<item\s+([^>]*)>([\s\S]*?)<\/item>/gi;
+    let m;
+    let lastEnd = 0;
+    while ((m = re.exec(buf)) !== null) {
+      const attrs: Record<string, string> = {};
+      const attrRe = /(\w+)="([^"]*)"/g;
+      let am;
+      while ((am = attrRe.exec(m[1])) !== null) attrs[am[1]] = am[2];
+      onItem(attrs, m[2]);
+      count++;
+      lastEnd = m.index + m[0].length;
+    }
+    if (lastEnd > 0) buf = buf.slice(lastEnd);
+    if (final) buf = "";
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += value;
+    if (buf.length > 200_000) flush(false);
+  }
+  flush(true);
+  return count;
+}
+
+/** Extract Aurdel item fields from the <item …> inner XML block. */
+function extractAurdelItemFields(inner: string, attrs: Record<string, string>): Record<string, string> {
+  const row: Record<string, string> = { supplier_sku: attrs.id ?? "" };
+  const eanMatch = inner.match(/<ean>([^<]*)<\/ean>/i);
+  if (eanMatch) row.ean = eanMatch[1].trim().replace(/^0+/, "") || eanMatch[1].trim();
+  const netMatch = inner.match(/<net[^>]*>([^<]*)<\/net>/i);
+  if (netMatch) row.purchase_price = netMatch[1].trim().replace(",", ".");
+  const stockMatch = inner.match(/<stock\s+quantity="([^"]*)"/i);
+  if (stockMatch) row.stock_quantity = stockMatch[1].trim();
+  const shortDesc = inner.match(/<short>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/short>/i);
+  if (shortDesc) row.short_description = shortDesc[1].trim();
+  const mfgMatch = inner.match(/<manufacturer[^>]*><description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
+  if (mfgMatch) row.manufacturer = mfgMatch[1].trim();
+  return row;
+}
+
+
 /** Aurdel-specific XML parser for their item/stock database format */
 function parseAurdelItemXml(text: string): Record<string, string>[] {
   const rows: Record<string, string>[] = [];
@@ -273,9 +374,10 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   let asyncMode = false;
+  let importLogId: string | null = null;
   try {
     const body = await req.json();
-    const { supplier_id, target_ean: rawTargetEan, mode: rawMode, async: rawAsync } = body;
+    const { supplier_id, target_ean: rawTargetEan, mode: rawMode, async: rawAsync, _import_log_id: rawLogId } = body;
     if (!supplier_id) {
       return new Response(JSON.stringify({ error: "supplier_id is required" }), {
         status: 400,
@@ -284,6 +386,7 @@ Deno.serve(async (req) => {
     }
     const mode: "import" | "unmatched" = rawMode === "unmatched" ? "unmatched" : "import";
     asyncMode = rawAsync === true && mode === "import";
+    importLogId = typeof rawLogId === "string" ? rawLogId : null;
     // Optional: only process rows matching this normalized EAN (used by supplier-rematch-product)
     const targetEan: string | null = rawTargetEan
       ? (String(rawTargetEan).trim().replace(/^0+/, "") || String(rawTargetEan).trim())
@@ -291,7 +394,20 @@ Deno.serve(async (req) => {
 
     // Async mode: kick off the work in the background and respond immediately so the
     // caller (and the API gateway) doesn't hit the 60s wall-clock timeout on large feeds.
+    // We also register an import_logs row so the actual outcome (success or resource-limit
+    // failure) is visible to the UI — previously all async errors were silently swallowed.
     if (asyncMode) {
+      const { data: logRow } = await supabase
+        .from("import_logs")
+        .insert({
+          source: `supplier-feed-import:${supplier_id}`,
+          status: "running",
+          started_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      const logId = logRow?.id ?? null;
+
       const work = (async () => {
         try {
           const r = await fetch(`${SUPABASE_URL}/functions/v1/supplier-feed-import`, {
@@ -301,21 +417,39 @@ Deno.serve(async (req) => {
               "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
               "apikey": SUPABASE_SERVICE_ROLE_KEY,
             },
-            body: JSON.stringify({ supplier_id, target_ean: rawTargetEan, mode: rawMode }),
+            body: JSON.stringify({ supplier_id, target_ean: rawTargetEan, mode: rawMode, _import_log_id: logId }),
           });
-          const j = await r.json().catch(() => ({}));
-          console.log(`[async import ${supplier_id}]`, r.status, JSON.stringify(j).slice(0, 200));
+          const bodyText = await r.text().catch(() => "");
+          let parsed: any = {};
+          try { parsed = bodyText ? JSON.parse(bodyText) : {}; } catch { parsed = { raw: bodyText.slice(0, 500) }; }
+          console.log(`[async import ${supplier_id}]`, r.status, JSON.stringify(parsed).slice(0, 200));
+          if (!r.ok && logId) {
+            await supabase.from("import_logs").update({
+              status: "failed",
+              completed_at: new Date().toISOString(),
+              errors: { http_status: r.status, response: parsed },
+            }).eq("id", logId);
+          }
+          // On success the child function is responsible for updating the log to `done`.
         } catch (e) {
           console.error(`[async import ${supplier_id}] failed`, e);
+          if (logId) {
+            await supabase.from("import_logs").update({
+              status: "failed",
+              completed_at: new Date().toISOString(),
+              errors: { message: (e as Error).message ?? String(e) },
+            }).eq("id", logId);
+          }
         }
       })();
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Runtime
       if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(work);
-      return new Response(JSON.stringify({ success: true, async: true, started: true }), {
+      return new Response(JSON.stringify({ success: true, async: true, started: true, import_log_id: logId }), {
         status: 202,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
 
     // Get supplier
@@ -331,6 +465,21 @@ Deno.serve(async (req) => {
     let feedRows: Record<string, string>[];
     let eanToIdEarlyOuter: Map<string, string> | null = null;
 
+    // Pre-fetch master EANs once so we can filter on-the-fly for every code path
+    // that streams — this keeps peak memory bounded even for very large feeds.
+    {
+      const { data: mpsEarly, error: mpEarlyErr } = await supabase
+        .from("master_products").select("id, ean");
+      if (mpEarlyErr) throw new Error(`Failed to fetch master products: ${mpEarlyErr.message}`);
+      eanToIdEarlyOuter = new Map<string, string>();
+      for (const mp of mpsEarly ?? []) {
+        const raw = mp.ean;
+        if (!raw) continue;
+        const normEan = raw.replace(/^0+/, "") || raw;
+        eanToIdEarlyOuter.set(normEan, mp.id);
+      }
+    }
+
     if (supplier.feed_type === "api") {
       // Aurdel API: build URL from stored credentials
       const apiDbStr = mapping._api_database || "item";
@@ -342,9 +491,7 @@ Deno.serve(async (req) => {
       if (!apiCust || !apiComp) throw new Error("API credentials not configured (customerid, companyid)");
 
       feedRows = [];
-
-      // First pass: fetch all databases
-      let stockMap = new Map<string, string>(); // SKU -> quantity
+      const stockMap = new Map<string, string>(); // SKU -> quantity
 
       for (const db of apiDbs) {
         const params = new URLSearchParams({
@@ -358,16 +505,27 @@ Deno.serve(async (req) => {
         const apiUrl = `https://api.aurdel.com/Prices/getPrice?${params.toString()}`;
         console.log(`Fetching Aurdel API database=${db}...`);
         const res = await fetch(apiUrl);
-        if (!res.ok) throw new Error(`API returned status ${res.status} for database=${db}`);
-        const text = await res.text();
+        if (!res.ok || !res.body) throw new Error(`API returned status ${res.status} for database=${db}`);
 
         if (db === "stock") {
-          stockMap = parseAurdelStockXml(text);
-          console.log(`Stock database: ${stockMap.size} SKUs with stock data`);
+          const count = await streamXmlItemsFromReadable(res.body, (attrs, inner) => {
+            const sku = attrs.id;
+            const m = inner.match(/<stock\s+quantity="([^"]*)"/i)
+                   ?? inner.match(/quantity="([^"]*)"/i);
+            if (sku && m) stockMap.set(sku, m[1]);
+          });
+          console.log(`Stock database: streamed ${count} items, ${stockMap.size} SKUs with stock data`);
         } else {
-          const rows = parseAurdelItemXml(text);
-          console.log(`Item database: ${rows.length} items parsed`);
-          feedRows.push(...rows);
+          let items = 0;
+          await streamXmlItemsFromReadable(res.body, (attrs, inner) => {
+            items++;
+            const row = extractAurdelItemFields(inner, attrs);
+            if (!row.ean && !row.purchase_price) return;
+            const ean = row.ean ?? "";
+            if (targetEan && ean !== targetEan) return;
+            feedRows.push(row);
+          });
+          console.log(`Item database: streamed ${items} items, kept ${feedRows.length}`);
         }
       }
 
@@ -400,8 +558,7 @@ Deno.serve(async (req) => {
       if (!mapping.purchase_price) throw new Error("Purchase price mapping not configured");
 
       const delimiter = mapping._delimiter || ";";
-
-      let text: string | null = null;
+      const eanCol = mapping.ean;
 
       if (isFtp) {
         const host = mappingAny._ftp_host?.trim();
@@ -413,20 +570,9 @@ Deno.serve(async (req) => {
         const cleanPath = path.startsWith("/") ? path : `/${path}`;
         console.log(`FTP download from ${host}${cleanPath} as ${user || "anonymous"}`);
 
-        // Pre-fetch EANs so we can filter on-the-fly and avoid loading the whole CSV in memory
-        const { data: mpsEarly, error: mpEarlyErr } = await supabase
-          .from("master_products").select("id, ean");
-        if (mpEarlyErr) throw new Error(`Failed to fetch master products: ${mpEarlyErr.message}`);
-        eanToIdEarlyOuter = new Map<string, string>();
-        for (const mp of mpsEarly ?? []) {
-          const normEan = (mp.ean ?? "").replace(/^0+/, "") || (mp.ean ?? "");
-          if (normEan) eanToIdEarlyOuter.set(normEan, mp.id);
-        }
-
         feedRows = [];
         let headers: string[] | null = null;
         let eanIdx = -1;
-        const eanCol = mapping.ean;
         await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, (line: string) => {
           if (!line) return;
           if (headers === null) {
@@ -441,22 +587,21 @@ Deno.serve(async (req) => {
           if (!rawEan) return;
           const ean = rawEan.replace(/^0+/, "") || rawEan;
           if (targetEan && ean !== targetEan) return;
-          // Keep every row (matched or not) so we can build the supplier feed cache
-          // for cross-supplier EAN lookup. Downstream loops still skip unmatched rows
-          // for supplier_products import.
           const row: Record<string, string> = {};
           headers.forEach((h, idx) => {
             row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
           });
           feedRows.push(row);
         });
-        console.log(`Streamed CSV: kept ${feedRows.length} matching rows`);
+        console.log(`Streamed CSV (ftp): kept ${feedRows.length} rows`);
       } else {
-        // If URL points to our own supplier-feeds storage bucket, download via
-        // service role (bucket is private, so public fetch returns 400).
+        // Non-FTP feeds — HTTP URL or storage bucket. Stream both cases so we never
+        // materialise the full response body as one JS string (OOM on large feeds).
         const storagePrefix = `${SUPABASE_URL}/storage/v1/object/public/supplier-feeds/`;
         const signedPrefix = `${SUPABASE_URL}/storage/v1/object/sign/supplier-feeds/`;
         const url = supplier.feed_url!;
+
+        let bodyStream: ReadableStream<Uint8Array>;
         if (url.startsWith(storagePrefix) || url.startsWith(signedPrefix)) {
           const rawPath = url.startsWith(storagePrefix)
             ? url.slice(storagePrefix.length)
@@ -465,21 +610,42 @@ Deno.serve(async (req) => {
           const { data: blob, error: dlErr } = await supabase.storage
             .from("supplier-feeds").download(objectPath);
           if (dlErr || !blob) throw new Error(`Failed to download feed file: ${dlErr?.message ?? "unknown"}`);
-          text = await blob.text();
+          bodyStream = blob.stream();
         } else {
           assertSafeFeedUrl(url);
           const res = await fetch(url);
-          if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
-          text = await res.text();
+          if (!res.ok || !res.body) throw new Error(`Failed to fetch feed: ${res.status}`);
+          bodyStream = res.body;
         }
+
+        feedRows = [];
         if (supplier.feed_type === "xml") {
+          // Legacy generic-XML path: buffer to text and use the existing parser.
+          // Non-Aurdel XML feeds are typically small; if this ever grows we should
+          // add a generic streaming XML parser too.
+          const chunks: string[] = [];
+          const reader = bodyStream.pipeThrough(new TextDecoderStream()).getReader();
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+          }
+          const text = chunks.join("");
           feedRows = parseXml(text);
         } else {
-          // csv, txt (semikolon-separeret) og alt andet parses som CSV
-          feedRows = parseCsv(text, delimiter);
+          // csv, txt and everything else are streamed line-by-line.
+          const { rows } = await streamCsvFromReadable(bodyStream, delimiter, (row) => {
+            const rawEan = row[eanCol]?.trim() ?? "";
+            if (!rawEan) return;
+            const ean = rawEan.replace(/^0+/, "") || rawEan;
+            if (targetEan && ean !== targetEan) return;
+            feedRows.push(row);
+          });
+          console.log(`Streamed CSV (http): read ${rows} rows, kept ${feedRows.length}`);
         }
       }
     }
+
 
     if (feedRows.length === 0) throw new Error("No rows found in feed");
 
@@ -823,6 +989,18 @@ Deno.serve(async (req) => {
         .eq("id", supplier.id);
     }
 
+    // Mark the async parent's import_logs row as done (if any).
+    if (importLogId) {
+      await supabase.from("import_logs").update({
+        status: "done",
+        completed_at: new Date().toISOString(),
+        total_fetched: feedRows.length,
+        imported,
+        skipped,
+        errors: errors.length > 0 ? { batch_errors: errors } : null,
+      }).eq("id", importLogId);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -836,12 +1014,21 @@ Deno.serve(async (req) => {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("Supplier feed import error:", msg);
+    if (importLogId) {
+      const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await svc.from("import_logs").update({
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        errors: { message: msg },
+      }).eq("id", importLogId);
+    }
     return new Response(JSON.stringify({
       error: msg,
       success: false,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
+
     });
   }
 });

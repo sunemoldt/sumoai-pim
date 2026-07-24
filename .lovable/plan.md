@@ -1,52 +1,40 @@
-## 1. Slet-funktion i Tilbud
+## Bekræftet problem
 
-**`src/pages/QuoteListPage.tsx`**
-- Tilføj slet-knap (Trash2-ikon) i handling-kolonnen ved siden af Kopier.
-- Bekræft via `confirm()` dialog ("Slet tilbud #X?").
-- Sletter `quote_lines` først, derefter `quotes`-rækken, invaliderer `quotes-list`.
+`supplier-feed-import` fejler på store feeds med `WORKER_RESOURCE_LIMIT` (546) og 503. Årsag i `supabase/functions/supplier-feed-import/index.ts`:
 
-**`src/pages/QuoteEditorPage.tsx`**
-- Tilføj tilsvarende slet-knap i topbar (kun når tilbuddet findes, ikke ved nyt).
-- Efter slet: naviger til `/quotes`.
+1. **Non-FTP feeds læses helt ind i hukommelsen** (linje 471–473): `text = await res.text()` for hele CSV/XML-svaret, og derefter bygger `parseCsv`/`parseXml`/`parseAurdelItemXml` endnu et fuldt array med alle rækker. Store feeds → OOM.
+2. **Dobbelt-iteration af `feedRows`** (cache-loop 595–629 + hoved-loop 679–752) beholder både `feedRows`, `cacheRows` og `spRows` i hukommelsen samtidig.
+3. **Async self-invoke sluger fejl** (linje 297–317): svarer altid 202 `{success:true, started:true}`, uanset om det interne kald returnerer 546/503. Brugeren tror import lykkedes.
+4. **Mindre bug**: linje 497 `mp.ean.replace(...)` crasher hvis `mp.ean` er `null` (masterProducts-select tillader null).
 
-## 2. Ny "Salg"-side
+## Rettelser
 
-Bruger den eksisterende `shopify_processed_orders` tabel (indeholder allerede `raw` jsonb med linjer + `total_decremented`).
+### 1. Streaming for HTTP/storage feeds (CSV)
+- Erstat `text = await res.text()` med en linje-baseret stream (`res.body!.pipeThrough(new TextDecoderStream())` + akkumulér til `\n`), samme mønster som FTP-`onLine`-stien (linje 203–226).
+- Genbrug den eksisterende `eanToIdEarlyOuter`-forfiltrering: kun rækker med EAN der matcher `master_products` (eller matcher `targetEan`) beholdes i `feedRows`. Store feeds med mange ikke-relevante rækker slipper for at fylde hukommelsen op.
+- Gælder både `res.body` (ekstern URL) og storage-bucket downloads (skift `blob.text()` → `blob.stream()`).
 
-**Ny route `/sales` i `src/App.tsx`** og menupunkt i `src/components/AppSidebar.tsx` (`ShoppingCart`-ikon, label "Salg", placeret efter Tilbud).
+### 2. Streaming for Aurdel XML API
+- `parseAurdelItemXml`/`parseAurdelStockXml` kører regex på hele filen. Skift til en scanner der læser stream chunk-vis og finder `<item …>…</item>` grænser, så vi kan pushe rækker inkrementelt i stedet for at holde hele XML-teksten + fuldt array.
 
-**Ny `src/pages/SalesListPage.tsx`**
-- Tabel a la QuoteList: ordrenummer, dato, antal linjer, omsætning (ex. moms), samlet indkøb, dækningsbidrag (kr og %).
-- Data hentes fra `shopify_processed_orders` order by `processed_at` desc, paginer 50 ad gangen.
-- Klik på række → `/sales/:orderId`.
+### 3. Fjern dobbelt-loop
+- Byg `supplier_feed_cache`-rækker i **samme** loop som `spRows`, så `feedRows` kan itereres én gang og `cacheRows` slipper for at være en separat kopi. Reducerer peak-memory markant.
 
-**Ny `src/pages/SalesDetailPage.tsx`** (read-only, layout inspireret af QuoteEditor)
-- Header: ordrenummer, dato, kunde (fra `raw.customer` hvis muligt), Shopify-link.
-- Linjetabel: produkt (title fra `raw.line_items[].title`), antal, salgspris pr. stk (ex. moms), linjeomsætning, indkøbspris (fundet via EAN/SKU-match i `master_products` + billigste `supplier_products.purchase_price` på salgstidspunktet — hvis ikke findes, vis "—").
-- Totaler nederst: omsætning, indkøb, DB kr, DB %.
-- Ingen redigering, ingen knapper udover "Åbn i Shopify".
+### 4. Surface async fejl
+- I async-blokken (linje 294–318): opret et `import_logs`-row med `status='running'` inden `EdgeRuntime.waitUntil`, og opdater det til `status='failed'` med `errors` når det interne kald returnerer non-2xx eller kaster. Returnér `import_log_id` i 202-svaret, så UI kan pulle status.
 
-**Indkøbspris-logik**: For hver linje slå produkt op via `raw.line_items[].sku` → `master_products.sku` (eller `variant_id` / barcode). Hent aktuel cheapest purchase price fra `supplier_products` blandt `stock_sync_supplier_ids` (samme prioritering som `recompute_product_stock`). Bemærk: dette er *nuværende* indkøb, ikke historisk — noter dette i UI ("indkøb pr. i dag").
+### 5. Null-guard bugfix
+- Linje 497: `const rawEan = mp.ean; if (!rawEan) continue; const normEan = rawEan.replace(/^0+/, '') || rawEan;`
 
-## 3. Mobil-responsivt design
+## Ude af scope
 
-Kritiske sider der skal gennemgås (viewport <768px):
+- Køre importen som en dedikeret worker/queue (større arkitektur-ændring).
+- Ændringer i UI ud over evt. at læse `import_log_id` fra svaret.
 
-- **`AppLayout.tsx`** — bekræft sidebar bliver til drawer/sheet på mobil.
-- **`QuoteEditorPage.tsx`** — 2-kolonne grid → stack, tabel-linjer → kort-visning.
-- **Ny SalesListPage/SalesDetailPage** — bygges responsivt fra start (tabel → kort under `md:`).
-- **`ProductListPage.tsx`** — filter-bar wrapper og tabel horizontal scroll.
-- **`ProductDetailPage.tsx`** — tabs og pris/lager-kort skal stacke.
-- **`CampaignEditorPage.tsx`** — allerede delvist ok, verificér knap-rækken øverst wrapper.
+## Verifikation
 
-Fælles patterns:
-- Erstat faste `grid-cols-2/3` med `grid-cols-1 md:grid-cols-2`.
-- Tabel-wrapper `overflow-x-auto` hvor tabel bevares; ellers card-list under `md:hidden`.
-- Top-action-bars: `flex-wrap gap-2`.
-- Skjul ikke-kritiske kolonner under `sm`.
-
-## Teknisk
-
-- Ingen DB-skemaændringer nødvendige (bruger eksisterende `shopify_processed_orders.raw`).
-- Ingen edge function-ændringer.
-- Alt sker klient-side med eksisterende Supabase-læsninger.
+- Deploy edge function.
+- Kør en manuel import af det største feed (Kosatec eller DCS) og bekræft:
+  - Ingen 546/503 i edge-logs.
+  - `import_logs`-row markeret `done`/`failed` korrekt.
+  - `supplier_feed_cache` og `supplier_products` opdateret som før.
