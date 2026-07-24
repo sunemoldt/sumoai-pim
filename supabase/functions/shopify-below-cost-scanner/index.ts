@@ -176,7 +176,19 @@ Deno.serve(async (req) => {
       if (openByKey.has(key)) continue; // already flagged
 
       inserts.push({
-...
+        master_product_id: p.id,
+        shopify_price: activeInc,
+        shopify_compare_at_price: v.compareAt,
+        cheapest_purchase_price: purchase,
+        margin_pct: Number(marginPct.toFixed(2)),
+        severity,
+        source: "shopify-scanner",
+        details: {
+          title: p.title,
+          sku: p.sku,
+          shopify_variant_id: p.shopify_variant_id,
+          shopify_status: v.status,
+          threshold_pct: threshold,
         },
       });
     }
