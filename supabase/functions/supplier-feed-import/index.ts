@@ -989,6 +989,18 @@ Deno.serve(async (req) => {
         .eq("id", supplier.id);
     }
 
+    // Mark the async parent's import_logs row as done (if any).
+    if (importLogId) {
+      await supabase.from("import_logs").update({
+        status: "done",
+        completed_at: new Date().toISOString(),
+        total_fetched: feedRows.length,
+        imported,
+        skipped,
+        errors: errors.length > 0 ? { batch_errors: errors } : null,
+      }).eq("id", importLogId);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -1002,12 +1014,21 @@ Deno.serve(async (req) => {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error("Supplier feed import error:", msg);
+    if (importLogId) {
+      const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      await svc.from("import_logs").update({
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        errors: { message: msg },
+      }).eq("id", importLogId);
+    }
     return new Response(JSON.stringify({
       error: msg,
       success: false,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
+
     });
   }
 });
