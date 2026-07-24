@@ -156,10 +156,13 @@ function AlertsTable({
               <TableCell>
                 <Link
                   to={`/products/${a.master_product_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="font-medium hover:underline"
                 >
                   {a.details?.title ?? a.master_product_id}
                 </Link>
+
                 {a.details?.sku && (
                   <div className="text-xs text-muted-foreground">{a.details.sku}</div>
                 )}
