@@ -193,9 +193,11 @@ Deno.serve(async (req) => {
       // We successfully evaluated this product for below_cost/low_margin.
       evaluatedPrice.add(p.id);
 
+      const guardOff = p.low_margin_guard === "off";
+
       let severity: "below_cost" | "low_margin" | null = null;
       if (activeEx + 0.005 < purchase) severity = "below_cost";
-      else if (marginPct < threshold) severity = "low_margin";
+      else if (!guardOff && marginPct < threshold) severity = "low_margin";
       if (!severity) continue;
 
       const key = `${p.id}::${severity}`;
