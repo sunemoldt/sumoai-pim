@@ -139,6 +139,11 @@ Deno.serve(async (req) => {
       openByProduct.set(a.master_product_id, arr);
     }
     const stillTriggered = new Set<string>(); // keys still valid this scan
+    // Track which products we actually evaluated per severity family — we only
+    // auto-resolve alerts we successfully re-checked, so a missing Shopify
+    // variant or missing supplier data never silently clears an alarm.
+    const evaluatedPrice = new Set<string>();        // below_cost + low_margin
+    const evaluatedMarginBlocked = new Set<string>(); // margin_blocked
 
     const inserts: any[] = [];
     let scanned = 0;
@@ -158,6 +163,9 @@ Deno.serve(async (req) => {
       const activeEx = activeInc / VAT;
       const marginPct = ((activeEx - purchase) / activeEx) * 100;
 
+      // We successfully evaluated this product for below_cost/low_margin.
+      evaluatedPrice.add(p.id);
+
       let severity: "below_cost" | "low_margin" | null = null;
       if (activeEx + 0.005 < purchase) severity = "below_cost";
       else if (marginPct < threshold) severity = "low_margin";
@@ -168,19 +176,7 @@ Deno.serve(async (req) => {
       if (openByKey.has(key)) continue; // already flagged
 
       inserts.push({
-        master_product_id: p.id,
-        shopify_price: activeInc,
-        shopify_compare_at_price: v.compareAt,
-        cheapest_purchase_price: purchase,
-        margin_pct: Number(marginPct.toFixed(2)),
-        severity,
-        source: "shopify-scanner",
-        details: {
-          title: p.title,
-          sku: p.sku,
-          shopify_variant_id: p.shopify_variant_id,
-          shopify_status: v.status,
-          threshold_pct: threshold,
+...
         },
       });
     }
@@ -190,6 +186,10 @@ Deno.serve(async (req) => {
       if (!p.auto_stock_sync) continue;
       const selected: string[] = p.stock_sync_supplier_ids ?? [];
       if (!selected.length) continue;
+
+      // We evaluated this product's margin_blocked status (result may be "not blocked").
+      evaluatedMarginBlocked.add(p.id);
+
       if ((p.stock_quantity ?? 0) > 0) continue; // not blocked
 
       const rows = (byProduct.get(p.id) ?? []).filter(
@@ -235,10 +235,16 @@ Deno.serve(async (req) => {
       if (error) throw error;
     }
 
-    // Auto-resolve open alerts that no longer trigger.
+    // Auto-resolve only alerts we actually re-evaluated this scan. Alerts whose
+    // product we couldn't check (missing variant, missing supplier data, etc.)
+    // stay open so nothing gets silently cleared.
     const toResolve: string[] = [];
     for (const [key, id] of openByKey.entries()) {
-      if (!stillTriggered.has(key)) toResolve.push(id);
+      if (stillTriggered.has(key)) continue;
+      const [pid, sev] = key.split("::");
+      const wasEvaluated =
+        sev === "margin_blocked" ? evaluatedMarginBlocked.has(pid) : evaluatedPrice.has(pid);
+      if (wasEvaluated) toResolve.push(id);
     }
     if (toResolve.length) {
       await svc
