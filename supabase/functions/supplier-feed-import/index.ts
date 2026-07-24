@@ -374,9 +374,10 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   let asyncMode = false;
+  let importLogId: string | null = null;
   try {
     const body = await req.json();
-    const { supplier_id, target_ean: rawTargetEan, mode: rawMode, async: rawAsync } = body;
+    const { supplier_id, target_ean: rawTargetEan, mode: rawMode, async: rawAsync, _import_log_id: rawLogId } = body;
     if (!supplier_id) {
       return new Response(JSON.stringify({ error: "supplier_id is required" }), {
         status: 400,
@@ -385,6 +386,7 @@ Deno.serve(async (req) => {
     }
     const mode: "import" | "unmatched" = rawMode === "unmatched" ? "unmatched" : "import";
     asyncMode = rawAsync === true && mode === "import";
+    importLogId = typeof rawLogId === "string" ? rawLogId : null;
     // Optional: only process rows matching this normalized EAN (used by supplier-rematch-product)
     const targetEan: string | null = rawTargetEan
       ? (String(rawTargetEan).trim().replace(/^0+/, "") || String(rawTargetEan).trim())
@@ -392,7 +394,20 @@ Deno.serve(async (req) => {
 
     // Async mode: kick off the work in the background and respond immediately so the
     // caller (and the API gateway) doesn't hit the 60s wall-clock timeout on large feeds.
+    // We also register an import_logs row so the actual outcome (success or resource-limit
+    // failure) is visible to the UI — previously all async errors were silently swallowed.
     if (asyncMode) {
+      const { data: logRow } = await supabase
+        .from("import_logs")
+        .insert({
+          source: `supplier-feed-import:${supplier_id}`,
+          status: "running",
+          started_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      const logId = logRow?.id ?? null;
+
       const work = (async () => {
         try {
           const r = await fetch(`${SUPABASE_URL}/functions/v1/supplier-feed-import`, {
@@ -402,21 +417,39 @@ Deno.serve(async (req) => {
               "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
               "apikey": SUPABASE_SERVICE_ROLE_KEY,
             },
-            body: JSON.stringify({ supplier_id, target_ean: rawTargetEan, mode: rawMode }),
+            body: JSON.stringify({ supplier_id, target_ean: rawTargetEan, mode: rawMode, _import_log_id: logId }),
           });
-          const j = await r.json().catch(() => ({}));
-          console.log(`[async import ${supplier_id}]`, r.status, JSON.stringify(j).slice(0, 200));
+          const bodyText = await r.text().catch(() => "");
+          let parsed: any = {};
+          try { parsed = bodyText ? JSON.parse(bodyText) : {}; } catch { parsed = { raw: bodyText.slice(0, 500) }; }
+          console.log(`[async import ${supplier_id}]`, r.status, JSON.stringify(parsed).slice(0, 200));
+          if (!r.ok && logId) {
+            await supabase.from("import_logs").update({
+              status: "failed",
+              completed_at: new Date().toISOString(),
+              errors: { http_status: r.status, response: parsed },
+            }).eq("id", logId);
+          }
+          // On success the child function is responsible for updating the log to `done`.
         } catch (e) {
           console.error(`[async import ${supplier_id}] failed`, e);
+          if (logId) {
+            await supabase.from("import_logs").update({
+              status: "failed",
+              completed_at: new Date().toISOString(),
+              errors: { message: (e as Error).message ?? String(e) },
+            }).eq("id", logId);
+          }
         }
       })();
       // @ts-ignore EdgeRuntime is provided by Supabase Edge Runtime
       if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(work);
-      return new Response(JSON.stringify({ success: true, async: true, started: true }), {
+      return new Response(JSON.stringify({ success: true, async: true, started: true, import_log_id: logId }), {
         status: 202,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
 
     // Get supplier
