@@ -465,6 +465,21 @@ Deno.serve(async (req) => {
     let feedRows: Record<string, string>[];
     let eanToIdEarlyOuter: Map<string, string> | null = null;
 
+    // Pre-fetch master EANs once so we can filter on-the-fly for every code path
+    // that streams — this keeps peak memory bounded even for very large feeds.
+    {
+      const { data: mpsEarly, error: mpEarlyErr } = await supabase
+        .from("master_products").select("id, ean");
+      if (mpEarlyErr) throw new Error(`Failed to fetch master products: ${mpEarlyErr.message}`);
+      eanToIdEarlyOuter = new Map<string, string>();
+      for (const mp of mpsEarly ?? []) {
+        const raw = mp.ean;
+        if (!raw) continue;
+        const normEan = raw.replace(/^0+/, "") || raw;
+        eanToIdEarlyOuter.set(normEan, mp.id);
+      }
+    }
+
     if (supplier.feed_type === "api") {
       // Aurdel API: build URL from stored credentials
       const apiDbStr = mapping._api_database || "item";
@@ -476,9 +491,7 @@ Deno.serve(async (req) => {
       if (!apiCust || !apiComp) throw new Error("API credentials not configured (customerid, companyid)");
 
       feedRows = [];
-
-      // First pass: fetch all databases
-      let stockMap = new Map<string, string>(); // SKU -> quantity
+      const stockMap = new Map<string, string>(); // SKU -> quantity
 
       for (const db of apiDbs) {
         const params = new URLSearchParams({
@@ -492,16 +505,27 @@ Deno.serve(async (req) => {
         const apiUrl = `https://api.aurdel.com/Prices/getPrice?${params.toString()}`;
         console.log(`Fetching Aurdel API database=${db}...`);
         const res = await fetch(apiUrl);
-        if (!res.ok) throw new Error(`API returned status ${res.status} for database=${db}`);
-        const text = await res.text();
+        if (!res.ok || !res.body) throw new Error(`API returned status ${res.status} for database=${db}`);
 
         if (db === "stock") {
-          stockMap = parseAurdelStockXml(text);
-          console.log(`Stock database: ${stockMap.size} SKUs with stock data`);
+          const count = await streamXmlItemsFromReadable(res.body, (attrs, inner) => {
+            const sku = attrs.id;
+            const m = inner.match(/<stock\s+quantity="([^"]*)"/i)
+                   ?? inner.match(/quantity="([^"]*)"/i);
+            if (sku && m) stockMap.set(sku, m[1]);
+          });
+          console.log(`Stock database: streamed ${count} items, ${stockMap.size} SKUs with stock data`);
         } else {
-          const rows = parseAurdelItemXml(text);
-          console.log(`Item database: ${rows.length} items parsed`);
-          feedRows.push(...rows);
+          let items = 0;
+          await streamXmlItemsFromReadable(res.body, (attrs, inner) => {
+            items++;
+            const row = extractAurdelItemFields(inner, attrs);
+            if (!row.ean && !row.purchase_price) return;
+            const ean = row.ean ?? "";
+            if (targetEan && ean !== targetEan) return;
+            feedRows.push(row);
+          });
+          console.log(`Item database: streamed ${items} items, kept ${feedRows.length}`);
         }
       }
 
@@ -534,8 +558,7 @@ Deno.serve(async (req) => {
       if (!mapping.purchase_price) throw new Error("Purchase price mapping not configured");
 
       const delimiter = mapping._delimiter || ";";
-
-      let text: string | null = null;
+      const eanCol = mapping.ean;
 
       if (isFtp) {
         const host = mappingAny._ftp_host?.trim();
@@ -547,20 +570,9 @@ Deno.serve(async (req) => {
         const cleanPath = path.startsWith("/") ? path : `/${path}`;
         console.log(`FTP download from ${host}${cleanPath} as ${user || "anonymous"}`);
 
-        // Pre-fetch EANs so we can filter on-the-fly and avoid loading the whole CSV in memory
-        const { data: mpsEarly, error: mpEarlyErr } = await supabase
-          .from("master_products").select("id, ean");
-        if (mpEarlyErr) throw new Error(`Failed to fetch master products: ${mpEarlyErr.message}`);
-        eanToIdEarlyOuter = new Map<string, string>();
-        for (const mp of mpsEarly ?? []) {
-          const normEan = (mp.ean ?? "").replace(/^0+/, "") || (mp.ean ?? "");
-          if (normEan) eanToIdEarlyOuter.set(normEan, mp.id);
-        }
-
         feedRows = [];
         let headers: string[] | null = null;
         let eanIdx = -1;
-        const eanCol = mapping.ean;
         await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, (line: string) => {
           if (!line) return;
           if (headers === null) {
@@ -575,22 +587,21 @@ Deno.serve(async (req) => {
           if (!rawEan) return;
           const ean = rawEan.replace(/^0+/, "") || rawEan;
           if (targetEan && ean !== targetEan) return;
-          // Keep every row (matched or not) so we can build the supplier feed cache
-          // for cross-supplier EAN lookup. Downstream loops still skip unmatched rows
-          // for supplier_products import.
           const row: Record<string, string> = {};
           headers.forEach((h, idx) => {
             row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
           });
           feedRows.push(row);
         });
-        console.log(`Streamed CSV: kept ${feedRows.length} matching rows`);
+        console.log(`Streamed CSV (ftp): kept ${feedRows.length} rows`);
       } else {
-        // If URL points to our own supplier-feeds storage bucket, download via
-        // service role (bucket is private, so public fetch returns 400).
+        // Non-FTP feeds — HTTP URL or storage bucket. Stream both cases so we never
+        // materialise the full response body as one JS string (OOM on large feeds).
         const storagePrefix = `${SUPABASE_URL}/storage/v1/object/public/supplier-feeds/`;
         const signedPrefix = `${SUPABASE_URL}/storage/v1/object/sign/supplier-feeds/`;
         const url = supplier.feed_url!;
+
+        let bodyStream: ReadableStream<Uint8Array>;
         if (url.startsWith(storagePrefix) || url.startsWith(signedPrefix)) {
           const rawPath = url.startsWith(storagePrefix)
             ? url.slice(storagePrefix.length)
@@ -599,21 +610,42 @@ Deno.serve(async (req) => {
           const { data: blob, error: dlErr } = await supabase.storage
             .from("supplier-feeds").download(objectPath);
           if (dlErr || !blob) throw new Error(`Failed to download feed file: ${dlErr?.message ?? "unknown"}`);
-          text = await blob.text();
+          bodyStream = blob.stream();
         } else {
           assertSafeFeedUrl(url);
           const res = await fetch(url);
-          if (!res.ok) throw new Error(`Failed to fetch feed: ${res.status}`);
-          text = await res.text();
+          if (!res.ok || !res.body) throw new Error(`Failed to fetch feed: ${res.status}`);
+          bodyStream = res.body;
         }
+
+        feedRows = [];
         if (supplier.feed_type === "xml") {
+          // Legacy generic-XML path: buffer to text and use the existing parser.
+          // Non-Aurdel XML feeds are typically small; if this ever grows we should
+          // add a generic streaming XML parser too.
+          const chunks: string[] = [];
+          const reader = bodyStream.pipeThrough(new TextDecoderStream()).getReader();
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+          }
+          const text = chunks.join("");
           feedRows = parseXml(text);
         } else {
-          // csv, txt (semikolon-separeret) og alt andet parses som CSV
-          feedRows = parseCsv(text, delimiter);
+          // csv, txt and everything else are streamed line-by-line.
+          const { rows } = await streamCsvFromReadable(bodyStream, delimiter, (row) => {
+            const rawEan = row[eanCol]?.trim() ?? "";
+            if (!rawEan) return;
+            const ean = rawEan.replace(/^0+/, "") || rawEan;
+            if (targetEan && ean !== targetEan) return;
+            feedRows.push(row);
+          });
+          console.log(`Streamed CSV (http): read ${rows} rows, kept ${feedRows.length}`);
         }
       }
     }
+
 
     if (feedRows.length === 0) throw new Error("No rows found in feed");
 
