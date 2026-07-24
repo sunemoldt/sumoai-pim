@@ -231,6 +231,7 @@ Deno.serve(async (req) => {
       // We evaluated this product's margin_blocked status (result may be "not blocked").
       evaluatedMarginBlocked.add(p.id);
 
+      if (p.low_margin_guard === "off") continue; // guard forced off — never alert
       if ((p.stock_quantity ?? 0) > 0) continue; // not blocked
 
       const rows = (byProduct.get(p.id) ?? []).filter(
