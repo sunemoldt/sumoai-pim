@@ -607,8 +607,11 @@ Deno.serve(async (req) => {
         let inStock = true;
         if (mapping.in_stock) {
           const v = row[mapping.in_stock]?.trim().toLowerCase();
-          inStock = v === "1" || v === "yes" || v === "ja" || v === "true" || v === "in stock" || v === "på lager";
+          const truthy = v === "1" || v === "yes" || v === "ja" || v === "true" || v === "in stock" || v === "på lager" || v === "a" || v === "y";
+          const falsy = v === "0" || v === "no" || v === "nej" || v === "false" || v === "out of stock" || v === "udsolgt" || v === "n";
+          inStock = truthy ? true : falsy ? false : (!isNaN(stockQty) ? stockQty > 0 : false);
         } else if (!isNaN(stockQty)) inStock = stockQty > 0;
+
         // Cap free-text length so odd feeds can't blow up the table.
         const trim = (s: string | undefined | null, n: number) =>
           s ? (s.length > n ? s.slice(0, n) : s) : null;
