@@ -67,6 +67,107 @@ function parseXml(text: string): Record<string, string>[] {
   return rows;
 }
 
+/** Stream a ReadableStream<Uint8Array> as CSV rows line-by-line so we never
+ *  build the whole file as a single JS string. Callback is invoked per data row. */
+async function streamCsvFromReadable(
+  body: ReadableStream<Uint8Array>,
+  delimiter: string,
+  onRow: (row: Record<string, string>) => void,
+): Promise<{ rows: number; headers: string[] | null }> {
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  let pending = "";
+  let headers: string[] | null = null;
+  let bomStripped = false;
+  let rowCount = 0;
+
+  const emitLine = (raw: string) => {
+    if (!raw.trim()) return;
+    if (headers === null) {
+      headers = raw.split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
+      return;
+    }
+    const vals = raw.split(delimiter);
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => {
+      row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
+    });
+    onRow(row);
+    rowCount++;
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    pending += value;
+    if (!bomStripped) {
+      if (pending.charCodeAt(0) === 0xFEFF) pending = pending.slice(1);
+      bomStripped = true;
+    }
+    let nl: number;
+    while ((nl = pending.indexOf("\n")) !== -1) {
+      const line = pending.slice(0, nl).replace(/\r$/, "");
+      pending = pending.slice(nl + 1);
+      emitLine(line);
+    }
+  }
+  if (pending.length > 0) emitLine(pending.replace(/\r$/, ""));
+  return { rows: rowCount, headers };
+}
+
+/** Stream <item …>…</item> blocks from a ReadableStream, invoking callback per
+ *  item so we don't buffer the entire XML file in memory. */
+async function streamXmlItemsFromReadable(
+  body: ReadableStream<Uint8Array>,
+  onItem: (attrs: Record<string, string>, inner: string) => void,
+): Promise<number> {
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = "";
+  let count = 0;
+
+  const flush = (final: boolean) => {
+    const re = /<item\s+([^>]*)>([\s\S]*?)<\/item>/gi;
+    let m;
+    let lastEnd = 0;
+    while ((m = re.exec(buf)) !== null) {
+      const attrs: Record<string, string> = {};
+      const attrRe = /(\w+)="([^"]*)"/g;
+      let am;
+      while ((am = attrRe.exec(m[1])) !== null) attrs[am[1]] = am[2];
+      onItem(attrs, m[2]);
+      count++;
+      lastEnd = m.index + m[0].length;
+    }
+    if (lastEnd > 0) buf = buf.slice(lastEnd);
+    if (final) buf = "";
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += value;
+    if (buf.length > 200_000) flush(false);
+  }
+  flush(true);
+  return count;
+}
+
+/** Extract Aurdel item fields from the <item …> inner XML block. */
+function extractAurdelItemFields(inner: string, attrs: Record<string, string>): Record<string, string> {
+  const row: Record<string, string> = { supplier_sku: attrs.id ?? "" };
+  const eanMatch = inner.match(/<ean>([^<]*)<\/ean>/i);
+  if (eanMatch) row.ean = eanMatch[1].trim().replace(/^0+/, "") || eanMatch[1].trim();
+  const netMatch = inner.match(/<net[^>]*>([^<]*)<\/net>/i);
+  if (netMatch) row.purchase_price = netMatch[1].trim().replace(",", ".");
+  const stockMatch = inner.match(/<stock\s+quantity="([^"]*)"/i);
+  if (stockMatch) row.stock_quantity = stockMatch[1].trim();
+  const shortDesc = inner.match(/<short>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/short>/i);
+  if (shortDesc) row.short_description = shortDesc[1].trim();
+  const mfgMatch = inner.match(/<manufacturer[^>]*><description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
+  if (mfgMatch) row.manufacturer = mfgMatch[1].trim();
+  return row;
+}
+
+
 /** Aurdel-specific XML parser for their item/stock database format */
 function parseAurdelItemXml(text: string): Record<string, string>[] {
   const rows: Record<string, string>[] = [];
