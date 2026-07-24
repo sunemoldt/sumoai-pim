@@ -13,6 +13,24 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const API_VERSION = "2026-04";
 const VAT = 1.25;
 
+async function fetchAll<T>(makeQuery: () => any, pageSize = 1000): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await makeQuery().range(from, from + pageSize - 1);
+    if (error) throw error;
+    const page = (data ?? []) as T[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
+function chunks<T>(items: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let i = 0; i < items.length; i += size) result.push(items.slice(i, i + size));
+  return result;
+}
+
 async function gql(shop: string, token: string, query: string, variables: Record<string, unknown>) {
   const res = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
     method: "POST",
@@ -85,11 +103,13 @@ Deno.serve(async (req) => {
     } while (cursor);
 
     // Load PIM products that are synced with Shopify + their cheapest supplier.
-    const { data: products } = await svc
-      .from("master_products")
-      .select("id,title,sku,shopify_variant_id,shopify_product_id,lifecycle_status,webshop_price,sale_price,stock_quantity,auto_stock_sync,stock_sync_supplier_ids,min_sync_margin")
-      .not("shopify_variant_id", "is", null)
-      .neq("lifecycle_status", "archived");
+    const products = await fetchAll<any>(() =>
+      svc
+        .from("master_products")
+        .select("id,title,sku,shopify_variant_id,shopify_product_id,lifecycle_status,webshop_price,sale_price,stock_quantity,auto_stock_sync,stock_sync_supplier_ids,min_sync_margin")
+        .not("shopify_variant_id", "is", null)
+        .neq("lifecycle_status", "archived")
+    );
 
     if (!products?.length) {
       return new Response(JSON.stringify({ ok: true, scanned: 0, alerts: 0 }), {
@@ -98,11 +118,18 @@ Deno.serve(async (req) => {
     }
 
     const productIds = products.map((p) => p.id);
-    const { data: suppliers } = await svc
-      .from("supplier_products")
-      .select("master_product_id,supplier_id,purchase_price,in_stock,stock_quantity")
-      .in("master_product_id", productIds)
-      .not("purchase_price", "is", null);
+    const suppliers: any[] = [];
+    for (const ids of chunks(productIds, 150)) {
+      suppliers.push(
+        ...(await fetchAll<any>(() =>
+          svc
+            .from("supplier_products")
+            .select("master_product_id,supplier_id,purchase_price,in_stock,stock_quantity")
+            .in("master_product_id", ids)
+            .not("purchase_price", "is", null)
+        )),
+      );
+    }
 
     // Cheapest per product (prefer in-stock; else any) — used for below_cost / low_margin.
     const cheapest = new Map<string, number>();
