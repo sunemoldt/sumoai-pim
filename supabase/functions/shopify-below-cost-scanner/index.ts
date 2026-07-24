@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     const products = await fetchAll<any>(() =>
       svc
         .from("master_products")
-        .select("id,title,sku,shopify_variant_id,shopify_product_id,lifecycle_status,webshop_price,sale_price,stock_quantity,auto_stock_sync,stock_sync_supplier_ids,min_sync_margin")
+        .select("id,title,sku,shopify_variant_id,shopify_product_id,lifecycle_status,webshop_price,sale_price,stock_quantity,auto_stock_sync,stock_sync_supplier_ids,min_sync_margin,low_margin_guard")
         .not("shopify_variant_id", "is", null)
         .neq("lifecycle_status", "archived")
     );
@@ -193,9 +193,11 @@ Deno.serve(async (req) => {
       // We successfully evaluated this product for below_cost/low_margin.
       evaluatedPrice.add(p.id);
 
+      const guardOff = p.low_margin_guard === "off";
+
       let severity: "below_cost" | "low_margin" | null = null;
       if (activeEx + 0.005 < purchase) severity = "below_cost";
-      else if (marginPct < threshold) severity = "low_margin";
+      else if (!guardOff && marginPct < threshold) severity = "low_margin";
       if (!severity) continue;
 
       const key = `${p.id}::${severity}`;
@@ -229,6 +231,7 @@ Deno.serve(async (req) => {
       // We evaluated this product's margin_blocked status (result may be "not blocked").
       evaluatedMarginBlocked.add(p.id);
 
+      if (p.low_margin_guard === "off") continue; // guard forced off — never alert
       if ((p.stock_quantity ?? 0) > 0) continue; // not blocked
 
       const rows = (byProduct.get(p.id) ?? []).filter(
