@@ -72,7 +72,7 @@ function parseXml(text: string): Record<string, string>[] {
 async function streamCsvFromReadable(
   body: ReadableStream<Uint8Array>,
   delimiter: string,
-  onRow: (row: Record<string, string>) => void,
+  onRow: (row: Record<string, string>) => void | Promise<void>,
 ): Promise<{ rows: number; headers: string[] | null }> {
   const reader = body.pipeThrough(new TextDecoderStream()).getReader();
   let pending = "";
@@ -80,7 +80,7 @@ async function streamCsvFromReadable(
   let bomStripped = false;
   let rowCount = 0;
 
-  const emitLine = (raw: string) => {
+  const emitLine = async (raw: string) => {
     if (!raw.trim()) return;
     if (headers === null) {
       headers = raw.split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
@@ -91,7 +91,7 @@ async function streamCsvFromReadable(
     headers.forEach((h, idx) => {
       row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
     });
-    onRow(row);
+    await onRow(row);
     rowCount++;
   };
 
@@ -107,10 +107,10 @@ async function streamCsvFromReadable(
     while ((nl = pending.indexOf("\n")) !== -1) {
       const line = pending.slice(0, nl).replace(/\r$/, "");
       pending = pending.slice(nl + 1);
-      emitLine(line);
+      await emitLine(line);
     }
   }
-  if (pending.length > 0) emitLine(pending.replace(/\r$/, ""));
+  if (pending.length > 0) await emitLine(pending.replace(/\r$/, ""));
   return { rows: rowCount, headers };
 }
 
@@ -118,13 +118,13 @@ async function streamCsvFromReadable(
  *  item so we don't buffer the entire XML file in memory. */
 async function streamXmlItemsFromReadable(
   body: ReadableStream<Uint8Array>,
-  onItem: (attrs: Record<string, string>, inner: string) => void,
+  onItem: (attrs: Record<string, string>, inner: string) => void | Promise<void>,
 ): Promise<number> {
   const reader = body.pipeThrough(new TextDecoderStream()).getReader();
   let buf = "";
   let count = 0;
 
-  const flush = (final: boolean) => {
+  const flush = async (final: boolean) => {
     const re = /<item\s+([^>]*)>([\s\S]*?)<\/item>/gi;
     let m;
     let lastEnd = 0;
@@ -133,7 +133,7 @@ async function streamXmlItemsFromReadable(
       const attrRe = /(\w+)="([^"]*)"/g;
       let am;
       while ((am = attrRe.exec(m[1])) !== null) attrs[am[1]] = am[2];
-      onItem(attrs, m[2]);
+      await onItem(attrs, m[2]);
       count++;
       lastEnd = m.index + m[0].length;
     }
@@ -145,10 +145,150 @@ async function streamXmlItemsFromReadable(
     const { value, done } = await reader.read();
     if (done) break;
     buf += value;
-    if (buf.length > 200_000) flush(false);
+    if (buf.length > 200_000) await flush(false);
   }
-  flush(true);
+  await flush(true);
   return count;
+}
+
+async function streamGenericXmlRowsFromReadable(
+  body: ReadableStream<Uint8Array>,
+  onRow: (row: Record<string, string>) => void | Promise<void>,
+): Promise<number> {
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  const productTags = ["product", "item", "row", "Product", "Item", "Row"];
+  let buf = "";
+  let tag = "";
+  let count = 0;
+
+  const parseInner = (inner: string) => {
+    const row: Record<string, string> = {};
+    const fieldRegex = /<([a-zA-Z_][a-zA-Z0-9_.-]*)[^>]*>([^<]*)<\/\1>/g;
+    let fieldMatch;
+    while ((fieldMatch = fieldRegex.exec(inner)) !== null) {
+      row[fieldMatch[1]] = fieldMatch[2].trim();
+    }
+    return row;
+  };
+
+  const detectTag = () => {
+    if (tag) return;
+    for (const t of productTags) {
+      if (buf.includes(`<${t}`) || buf.includes(`<${t}>`)) {
+        tag = t;
+        return;
+      }
+    }
+  };
+
+  const flush = async (final: boolean) => {
+    detectTag();
+    if (!tag) {
+      if (!final && buf.length > 100_000) buf = buf.slice(-10_000);
+      if (final) buf = "";
+      return;
+    }
+
+    const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\/${tag}>`, "gi");
+    let match;
+    let lastEnd = 0;
+    while ((match = regex.exec(buf)) !== null) {
+      const row = parseInner(match[1]);
+      if (Object.keys(row).length > 0) {
+        await onRow(row);
+        count++;
+      }
+      lastEnd = match.index + match[0].length;
+    }
+    if (lastEnd > 0) buf = buf.slice(lastEnd);
+    if (!final && buf.length > 300_000) buf = buf.slice(-100_000);
+    if (final) buf = "";
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += value;
+    if (buf.length > 200_000) await flush(false);
+  }
+  await flush(true);
+  return count;
+}
+
+function normalizeEan(raw: string | null | undefined): string {
+  const trimmed = (raw ?? "").trim().replace(/^['"]|['"]$/g, "");
+  if (!trimmed) return "";
+  return trimmed.replace(/^0+/, "") || trimmed;
+}
+
+function parseMappedPrice(row: Record<string, string>, mapping: Record<string, string>): number | null {
+  const priceCol = mapping.purchase_price;
+  const priceStr = priceCol ? row[priceCol]?.trim().replace(",", ".") : "";
+  const parsedPrice = priceStr ? parseFloat(priceStr) : NaN;
+  if (isNaN(parsedPrice) || parsedPrice <= 0) return null;
+  if ((mapping as Record<string, unknown>)._currency === "EUR") {
+    const rawRate = ((mapping as Record<string, unknown>)._eur_rate ?? "7.46").toString().replace(",", ".");
+    const rate = parseFloat(rawRate) || 7.46;
+    return Math.round(parsedPrice * rate * 100) / 100;
+  }
+  return parsedPrice;
+}
+
+function parseStockQuantity(row: Record<string, string>, mapping: Record<string, string>): number | null {
+  const stockCol = mapping.stock_quantity;
+  const stockStr = stockCol ? row[stockCol]?.trim() : "";
+  const stockQty = stockStr ? parseInt(stockStr, 10) : NaN;
+  return isNaN(stockQty) ? null : stockQty;
+}
+
+function parseMappedInStock(row: Record<string, string>, mapping: Record<string, string>, stockQty: number | null): boolean {
+  if (mapping.in_stock) {
+    const val = row[mapping.in_stock]?.trim().toLowerCase();
+    const truthy = val === "1" || val === "yes" || val === "ja" || val === "true" || val === "in stock" || val === "på lager" || val === "a" || val === "y";
+    const falsy = val === "0" || val === "no" || val === "nej" || val === "false" || val === "out of stock" || val === "udsolgt" || val === "n";
+    return truthy ? true : falsy ? false : (stockQty !== null ? stockQty > 0 : false);
+  }
+  return stockQty !== null ? stockQty > 0 : true;
+}
+
+type SupplierFeedCacheRow = {
+  supplier_id: string;
+  ean: string;
+  product_title: string | null;
+  supplier_sku: string | null;
+  brand: string | null;
+  purchase_price: number;
+  stock_quantity: number | null;
+  in_stock: boolean;
+  last_seen_at: string;
+};
+
+function buildSupplierFeedCacheRow(
+  row: Record<string, string>,
+  mapping: Record<string, string>,
+  supplierId: string,
+  lastSeenAt: string,
+): SupplierFeedCacheRow | null {
+  const ean = normalizeEan(mapping.ean ? row[mapping.ean] : "");
+  if (!ean) return null;
+  const price = parseMappedPrice(row, mapping);
+  if (price === null) return null;
+  const stockQty = parseStockQuantity(row, mapping);
+  const titleCol = (mapping as Record<string, string>).title || (mapping as Record<string, string>).name || (mapping as Record<string, string>).short_description;
+  const brandCol = (mapping as Record<string, string>).brand || (mapping as Record<string, string>).manufacturer;
+  const skuCol = mapping.sku;
+  const trim = (s: string | undefined | null, n: number) => s ? (s.length > n ? s.slice(0, n) : s) : null;
+  return {
+    supplier_id: supplierId,
+    ean,
+    product_title: trim(titleCol ? row[titleCol]?.trim() : null, 300),
+    supplier_sku: trim(skuCol ? row[skuCol]?.trim() : null, 100),
+    brand: trim(brandCol ? row[brandCol]?.trim() : null, 100),
+    purchase_price: price,
+    stock_quantity: stockQty,
+    in_stock: parseMappedInStock(row, mapping, stockQty),
+    last_seen_at: lastSeenAt,
+  };
 }
 
 /** Extract Aurdel item fields from the <item …> inner XML block. */
