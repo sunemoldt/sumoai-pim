@@ -227,7 +227,7 @@ function parseMappedPrice(row: Record<string, string>, mapping: Record<string, s
   const parsedPrice = priceStr ? parseFloat(priceStr) : NaN;
   if (isNaN(parsedPrice) || parsedPrice <= 0) return null;
   if ((mapping as Record<string, unknown>)._currency === "EUR") {
-    const rawRate = ((mapping as Record<string, unknown>)._eur_rate ?? "7.46").toString().replace(",", ".");
+    const rawRate = String((mapping as Record<string, unknown>)._eur_rate ?? "7.46").replace(",", ".");
     const rate = parseFloat(rawRate) || 7.46;
     return Math.round(parsedPrice * rate * 100) / 100;
   }
@@ -839,7 +839,7 @@ Deno.serve(async (req) => {
     }
 
 
-    if (feedRows.length === 0) throw new Error("No rows found in feed");
+    if (feedRowCount === 0) throw new Error("No rows found in feed");
 
     // Get all existing EANs from master_products (skip if already loaded during streaming FTP path)
     let eanToId: Map<string, string>;
