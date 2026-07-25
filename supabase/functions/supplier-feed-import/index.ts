@@ -21,52 +21,6 @@ function assertSafeFeedUrl(raw: string): void {
   }
 }
 
-function parseCsv(text: string, delimiter: string): Record<string, string>[] {
-  // Strip UTF-8 BOM so the first header column is not "\uFEFFcolname".
-  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
-  const rows: Record<string, string>[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const vals = lines[i].split(delimiter).map((v) => v.trim().replace(/^["']|["']$/g, ""));
-    const row: Record<string, string> = {};
-    headers.forEach((h, idx) => {
-      row[h] = vals[idx] ?? "";
-    });
-    rows.push(row);
-  }
-  return rows;
-}
-
-function parseXml(text: string): Record<string, string>[] {
-  // Simple XML parser for product feeds - finds repeating elements
-  const rows: Record<string, string>[] = [];
-  const productTags = ["product", "item", "row", "Product", "Item", "Row"];
-  let tag = "";
-  for (const t of productTags) {
-    if (text.includes(`<${t}`) || text.includes(`<${t}>`)) {
-      tag = t;
-      break;
-    }
-  }
-  if (!tag) return rows;
-
-  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "gi");
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    const inner = match[1];
-    const row: Record<string, string> = {};
-    const fieldRegex = /<([a-zA-Z_][a-zA-Z0-9_.-]*)>([^<]*)<\/\1>/g;
-    let fieldMatch;
-    while ((fieldMatch = fieldRegex.exec(inner)) !== null) {
-      row[fieldMatch[1]] = fieldMatch[2].trim();
-    }
-    if (Object.keys(row).length > 0) rows.push(row);
-  }
-  return rows;
-}
-
 /** Stream a ReadableStream<Uint8Array> as CSV rows line-by-line so we never
  *  build the whole file as a single JS string. Callback is invoked per data row. */
 async function streamCsvFromReadable(
@@ -306,54 +260,6 @@ function extractAurdelItemFields(inner: string, attrs: Record<string, string>): 
   if (mfgMatch) row.manufacturer = mfgMatch[1].trim();
   return row;
 }
-
-
-/** Aurdel-specific XML parser for their item/stock database format */
-function parseAurdelItemXml(text: string): Record<string, string>[] {
-  const rows: Record<string, string>[] = [];
-  const itemRegex = /<item\s+id="([^"]*)">([\s\S]*?)<\/item>/gi;
-  let match;
-  while ((match = itemRegex.exec(text)) !== null) {
-    const sku = match[1];
-    const inner = match[2];
-    const row: Record<string, string> = { supplier_sku: sku };
-
-    // EAN
-    const eanMatch = inner.match(/<ean>([^<]*)<\/ean>/i);
-    if (eanMatch) row.ean = eanMatch[1].trim().replace(/^0+/, "") || eanMatch[1].trim();
-
-    // Price (net)
-    const netMatch = inner.match(/<net[^>]*>([^<]*)<\/net>/i);
-    if (netMatch) row.purchase_price = netMatch[1].trim().replace(",", ".");
-
-    // Stock quantity (attribute)
-    const stockMatch = inner.match(/<stock\s+quantity="([^"]*)"/i);
-    if (stockMatch) row.stock_quantity = stockMatch[1].trim();
-
-    // Short description (may have CDATA)
-    const shortDesc = inner.match(/<short>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/short>/i);
-    if (shortDesc) row.short_description = shortDesc[1].trim();
-
-    // Manufacturer
-    const mfgMatch = inner.match(/<manufacturer[^>]*><description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
-    if (mfgMatch) row.manufacturer = mfgMatch[1].trim();
-
-    if (row.ean || row.purchase_price) rows.push(row);
-  }
-  return rows;
-}
-
-/** Aurdel stock-only XML parser: <item id="SKU"><stock quantity="N"/></item> */
-function parseAurdelStockXml(text: string): Map<string, string> {
-  const stockMap = new Map<string, string>();
-  const itemRegex = /<item\s+id="([^"]*)">\s*<stock\s+quantity="([^"]*)"/gi;
-  let match;
-  while ((match = itemRegex.exec(text)) !== null) {
-    stockMap.set(match[1], match[2]);
-  }
-  return stockMap;
-}
-
 function buildFtpPathCandidates(path: string, user: string): string[] {
   const trimmed = path.trim();
   const noLeadingSlash = trimmed.replace(/^\/+/, "");
