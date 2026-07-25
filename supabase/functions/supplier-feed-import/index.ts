@@ -667,6 +667,12 @@ Deno.serve(async (req) => {
       const apiLang = mapping._api_language || "da";
       if (!apiCust || !apiComp) throw new Error("API credentials not configured (customerid, companyid)");
 
+      // Set auto-mapping before streaming so cache rows can be built incrementally.
+      mapping.ean = "ean";
+      mapping.purchase_price = "purchase_price";
+      mapping.stock_quantity = "stock_quantity";
+      mapping.sku = "supplier_sku";
+
       const stockMap = new Map<string, string>(); // SKU -> quantity
 
       for (const db of apiDbs) {
@@ -718,11 +724,6 @@ Deno.serve(async (req) => {
         console.log(`Merged stock data for ${merged} items by SKU`);
       }
 
-      // Set auto-mapping for Aurdel format
-      mapping.ean = "ean";
-      mapping.purchase_price = "purchase_price";
-      mapping.stock_quantity = "stock_quantity";
-      mapping.sku = "supplier_sku";
       if (!targetEan && mode === "import") {
         await flushCacheRows();
         cacheAlreadyBuilt = true;
@@ -752,8 +753,7 @@ Deno.serve(async (req) => {
 
         let headers: string[] | null = null;
         let eanIdx = -1;
-        const pendingRows: Record<string, string>[] = [];
-        await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, (line: string) => {
+        await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, async (line: string) => {
           if (!line) return;
           if (headers === null) {
             const hdrLine = line.charCodeAt(0) === 0xFEFF ? line.slice(1) : line;
@@ -771,12 +771,8 @@ Deno.serve(async (req) => {
           headers.forEach((h, idx) => {
             row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
           });
-          pendingRows.push(row);
-        });
-        for (const row of pendingRows) {
-          const ean = normalizeEan(row[eanCol]);
           await acceptFeedRow(row, ean, true);
-        }
+        });
         if (!targetEan && mode === "import") {
           await flushCacheRows();
           cacheAlreadyBuilt = true;
@@ -922,7 +918,7 @@ Deno.serve(async (req) => {
     // cross-supplier EAN-lookup can find prices even for products not yet in the PIM.
     // Skip rows without price (useless for lookup) and skip targeted (single-EAN) runs
     // so a rematch doesn't accidentally invalidate the whole supplier's cache below.
-    if (!targetEan) try {
+    if (!targetEan && !cacheAlreadyBuilt) try {
       const eanCol = mapping.ean;
       const priceCol = mapping.purchase_price;
       const stockCol = mapping.stock_quantity;
@@ -992,6 +988,7 @@ Deno.serve(async (req) => {
         .eq("supplier_id", supplier.id)
         .lt("last_seen_at", runStartedAt);
       if (pruneErr) console.error(`supplier_feed_cache prune failed: ${pruneErr.message}`);
+      cacheUpserted = cacheRows.length;
       console.log(`supplier_feed_cache: upserted ${cacheRows.length}, pruned ${pruned ?? "?"} stale rows for ${supplier.name}`);
     } catch (cacheErr) {
       console.error(`supplier_feed_cache build failed: ${(cacheErr as Error).message}`);
