@@ -828,6 +828,16 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (!targetEan && cacheAlreadyBuilt) {
+      const { error: pruneErr, count: pruned } = await supabase
+        .from("supplier_feed_cache")
+        .delete({ count: "estimated" })
+        .eq("supplier_id", supplier.id)
+        .lt("last_seen_at", runStartedAt);
+      if (pruneErr) console.error(`supplier_feed_cache prune failed: ${pruneErr.message}`);
+      console.log(`supplier_feed_cache: upserted ${cacheUpserted}, pruned ${pruned ?? "?"} stale rows for ${supplier.name}`);
+    }
+
 
     if (feedRows.length === 0) throw new Error("No rows found in feed");
 
@@ -905,7 +915,7 @@ Deno.serve(async (req) => {
           success: true,
           supplier_id: supplier.id,
           supplier_name: supplier.name,
-          total_rows: feedRows.length,
+          total_rows: feedRowCount,
           unmatched_count: unmatched.length,
           unmatched,
         }),
@@ -1177,7 +1187,7 @@ Deno.serve(async (req) => {
       await supabase.from("import_logs").update({
         status: "done",
         completed_at: new Date().toISOString(),
-        total_fetched: feedRows.length,
+        total_fetched: feedRowCount,
         imported,
         skipped,
         errors: errors.length > 0 ? { batch_errors: errors } : null,
@@ -1187,7 +1197,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        total_rows: feedRows.length,
+        total_rows: feedRowCount,
         imported,
         skipped,
         errors: errors.length > 0 ? errors : undefined,
