@@ -21,58 +21,12 @@ function assertSafeFeedUrl(raw: string): void {
   }
 }
 
-function parseCsv(text: string, delimiter: string): Record<string, string>[] {
-  // Strip UTF-8 BOM so the first header column is not "\uFEFFcolname".
-  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
-  const rows: Record<string, string>[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const vals = lines[i].split(delimiter).map((v) => v.trim().replace(/^["']|["']$/g, ""));
-    const row: Record<string, string> = {};
-    headers.forEach((h, idx) => {
-      row[h] = vals[idx] ?? "";
-    });
-    rows.push(row);
-  }
-  return rows;
-}
-
-function parseXml(text: string): Record<string, string>[] {
-  // Simple XML parser for product feeds - finds repeating elements
-  const rows: Record<string, string>[] = [];
-  const productTags = ["product", "item", "row", "Product", "Item", "Row"];
-  let tag = "";
-  for (const t of productTags) {
-    if (text.includes(`<${t}`) || text.includes(`<${t}>`)) {
-      tag = t;
-      break;
-    }
-  }
-  if (!tag) return rows;
-
-  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "gi");
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    const inner = match[1];
-    const row: Record<string, string> = {};
-    const fieldRegex = /<([a-zA-Z_][a-zA-Z0-9_.-]*)>([^<]*)<\/\1>/g;
-    let fieldMatch;
-    while ((fieldMatch = fieldRegex.exec(inner)) !== null) {
-      row[fieldMatch[1]] = fieldMatch[2].trim();
-    }
-    if (Object.keys(row).length > 0) rows.push(row);
-  }
-  return rows;
-}
-
 /** Stream a ReadableStream<Uint8Array> as CSV rows line-by-line so we never
  *  build the whole file as a single JS string. Callback is invoked per data row. */
 async function streamCsvFromReadable(
   body: ReadableStream<Uint8Array>,
   delimiter: string,
-  onRow: (row: Record<string, string>) => void,
+  onRow: (row: Record<string, string>) => void | Promise<void>,
 ): Promise<{ rows: number; headers: string[] | null }> {
   const reader = body.pipeThrough(new TextDecoderStream()).getReader();
   let pending = "";
@@ -80,7 +34,7 @@ async function streamCsvFromReadable(
   let bomStripped = false;
   let rowCount = 0;
 
-  const emitLine = (raw: string) => {
+  const emitLine = async (raw: string) => {
     if (!raw.trim()) return;
     if (headers === null) {
       headers = raw.split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ""));
@@ -91,7 +45,7 @@ async function streamCsvFromReadable(
     headers.forEach((h, idx) => {
       row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
     });
-    onRow(row);
+    await onRow(row);
     rowCount++;
   };
 
@@ -107,10 +61,10 @@ async function streamCsvFromReadable(
     while ((nl = pending.indexOf("\n")) !== -1) {
       const line = pending.slice(0, nl).replace(/\r$/, "");
       pending = pending.slice(nl + 1);
-      emitLine(line);
+      await emitLine(line);
     }
   }
-  if (pending.length > 0) emitLine(pending.replace(/\r$/, ""));
+  if (pending.length > 0) await emitLine(pending.replace(/\r$/, ""));
   return { rows: rowCount, headers };
 }
 
@@ -118,13 +72,13 @@ async function streamCsvFromReadable(
  *  item so we don't buffer the entire XML file in memory. */
 async function streamXmlItemsFromReadable(
   body: ReadableStream<Uint8Array>,
-  onItem: (attrs: Record<string, string>, inner: string) => void,
+  onItem: (attrs: Record<string, string>, inner: string) => void | Promise<void>,
 ): Promise<number> {
   const reader = body.pipeThrough(new TextDecoderStream()).getReader();
   let buf = "";
   let count = 0;
 
-  const flush = (final: boolean) => {
+  const flush = async (final: boolean) => {
     const re = /<item\s+([^>]*)>([\s\S]*?)<\/item>/gi;
     let m;
     let lastEnd = 0;
@@ -133,7 +87,7 @@ async function streamXmlItemsFromReadable(
       const attrRe = /(\w+)="([^"]*)"/g;
       let am;
       while ((am = attrRe.exec(m[1])) !== null) attrs[am[1]] = am[2];
-      onItem(attrs, m[2]);
+      await onItem(attrs, m[2]);
       count++;
       lastEnd = m.index + m[0].length;
     }
@@ -145,10 +99,150 @@ async function streamXmlItemsFromReadable(
     const { value, done } = await reader.read();
     if (done) break;
     buf += value;
-    if (buf.length > 200_000) flush(false);
+    if (buf.length > 200_000) await flush(false);
   }
-  flush(true);
+  await flush(true);
   return count;
+}
+
+async function streamGenericXmlRowsFromReadable(
+  body: ReadableStream<Uint8Array>,
+  onRow: (row: Record<string, string>) => void | Promise<void>,
+): Promise<number> {
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  const productTags = ["product", "item", "row", "Product", "Item", "Row"];
+  let buf = "";
+  let tag = "";
+  let count = 0;
+
+  const parseInner = (inner: string) => {
+    const row: Record<string, string> = {};
+    const fieldRegex = /<([a-zA-Z_][a-zA-Z0-9_.-]*)[^>]*>([^<]*)<\/\1>/g;
+    let fieldMatch;
+    while ((fieldMatch = fieldRegex.exec(inner)) !== null) {
+      row[fieldMatch[1]] = fieldMatch[2].trim();
+    }
+    return row;
+  };
+
+  const detectTag = () => {
+    if (tag) return;
+    for (const t of productTags) {
+      if (buf.includes(`<${t}`) || buf.includes(`<${t}>`)) {
+        tag = t;
+        return;
+      }
+    }
+  };
+
+  const flush = async (final: boolean) => {
+    detectTag();
+    if (!tag) {
+      if (!final && buf.length > 100_000) buf = buf.slice(-10_000);
+      if (final) buf = "";
+      return;
+    }
+
+    const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\/${tag}>`, "gi");
+    let match;
+    let lastEnd = 0;
+    while ((match = regex.exec(buf)) !== null) {
+      const row = parseInner(match[1]);
+      if (Object.keys(row).length > 0) {
+        await onRow(row);
+        count++;
+      }
+      lastEnd = match.index + match[0].length;
+    }
+    if (lastEnd > 0) buf = buf.slice(lastEnd);
+    if (!final && buf.length > 300_000) buf = buf.slice(-100_000);
+    if (final) buf = "";
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += value;
+    if (buf.length > 200_000) await flush(false);
+  }
+  await flush(true);
+  return count;
+}
+
+function normalizeEan(raw: string | null | undefined): string {
+  const trimmed = (raw ?? "").trim().replace(/^['"]|['"]$/g, "");
+  if (!trimmed) return "";
+  return trimmed.replace(/^0+/, "") || trimmed;
+}
+
+function parseMappedPrice(row: Record<string, string>, mapping: Record<string, string>): number | null {
+  const priceCol = mapping.purchase_price;
+  const priceStr = priceCol ? row[priceCol]?.trim().replace(",", ".") : "";
+  const parsedPrice = priceStr ? parseFloat(priceStr) : NaN;
+  if (isNaN(parsedPrice) || parsedPrice <= 0) return null;
+  if ((mapping as Record<string, unknown>)._currency === "EUR") {
+    const rawRate = String((mapping as Record<string, unknown>)._eur_rate ?? "7.46").replace(",", ".");
+    const rate = parseFloat(rawRate) || 7.46;
+    return Math.round(parsedPrice * rate * 100) / 100;
+  }
+  return parsedPrice;
+}
+
+function parseStockQuantity(row: Record<string, string>, mapping: Record<string, string>): number | null {
+  const stockCol = mapping.stock_quantity;
+  const stockStr = stockCol ? row[stockCol]?.trim() : "";
+  const stockQty = stockStr ? parseInt(stockStr, 10) : NaN;
+  return isNaN(stockQty) ? null : stockQty;
+}
+
+function parseMappedInStock(row: Record<string, string>, mapping: Record<string, string>, stockQty: number | null): boolean {
+  if (mapping.in_stock) {
+    const val = row[mapping.in_stock]?.trim().toLowerCase();
+    const truthy = val === "1" || val === "yes" || val === "ja" || val === "true" || val === "in stock" || val === "på lager" || val === "a" || val === "y";
+    const falsy = val === "0" || val === "no" || val === "nej" || val === "false" || val === "out of stock" || val === "udsolgt" || val === "n";
+    return truthy ? true : falsy ? false : (stockQty !== null ? stockQty > 0 : false);
+  }
+  return stockQty !== null ? stockQty > 0 : true;
+}
+
+type SupplierFeedCacheRow = {
+  supplier_id: string;
+  ean: string;
+  product_title: string | null;
+  supplier_sku: string | null;
+  brand: string | null;
+  purchase_price: number;
+  stock_quantity: number | null;
+  in_stock: boolean;
+  last_seen_at: string;
+};
+
+function buildSupplierFeedCacheRow(
+  row: Record<string, string>,
+  mapping: Record<string, string>,
+  supplierId: string,
+  lastSeenAt: string,
+): SupplierFeedCacheRow | null {
+  const ean = normalizeEan(mapping.ean ? row[mapping.ean] : "");
+  if (!ean) return null;
+  const price = parseMappedPrice(row, mapping);
+  if (price === null) return null;
+  const stockQty = parseStockQuantity(row, mapping);
+  const titleCol = (mapping as Record<string, string>).title || (mapping as Record<string, string>).name || (mapping as Record<string, string>).short_description;
+  const brandCol = (mapping as Record<string, string>).brand || (mapping as Record<string, string>).manufacturer;
+  const skuCol = mapping.sku;
+  const trim = (s: string | undefined | null, n: number) => s ? (s.length > n ? s.slice(0, n) : s) : null;
+  return {
+    supplier_id: supplierId,
+    ean,
+    product_title: trim(titleCol ? row[titleCol]?.trim() : null, 300),
+    supplier_sku: trim(skuCol ? row[skuCol]?.trim() : null, 100),
+    brand: trim(brandCol ? row[brandCol]?.trim() : null, 100),
+    purchase_price: price,
+    stock_quantity: stockQty,
+    in_stock: parseMappedInStock(row, mapping, stockQty),
+    last_seen_at: lastSeenAt,
+  };
 }
 
 /** Extract Aurdel item fields from the <item …> inner XML block. */
@@ -166,54 +260,6 @@ function extractAurdelItemFields(inner: string, attrs: Record<string, string>): 
   if (mfgMatch) row.manufacturer = mfgMatch[1].trim();
   return row;
 }
-
-
-/** Aurdel-specific XML parser for their item/stock database format */
-function parseAurdelItemXml(text: string): Record<string, string>[] {
-  const rows: Record<string, string>[] = [];
-  const itemRegex = /<item\s+id="([^"]*)">([\s\S]*?)<\/item>/gi;
-  let match;
-  while ((match = itemRegex.exec(text)) !== null) {
-    const sku = match[1];
-    const inner = match[2];
-    const row: Record<string, string> = { supplier_sku: sku };
-
-    // EAN
-    const eanMatch = inner.match(/<ean>([^<]*)<\/ean>/i);
-    if (eanMatch) row.ean = eanMatch[1].trim().replace(/^0+/, "") || eanMatch[1].trim();
-
-    // Price (net)
-    const netMatch = inner.match(/<net[^>]*>([^<]*)<\/net>/i);
-    if (netMatch) row.purchase_price = netMatch[1].trim().replace(",", ".");
-
-    // Stock quantity (attribute)
-    const stockMatch = inner.match(/<stock\s+quantity="([^"]*)"/i);
-    if (stockMatch) row.stock_quantity = stockMatch[1].trim();
-
-    // Short description (may have CDATA)
-    const shortDesc = inner.match(/<short>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/short>/i);
-    if (shortDesc) row.short_description = shortDesc[1].trim();
-
-    // Manufacturer
-    const mfgMatch = inner.match(/<manufacturer[^>]*><description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
-    if (mfgMatch) row.manufacturer = mfgMatch[1].trim();
-
-    if (row.ean || row.purchase_price) rows.push(row);
-  }
-  return rows;
-}
-
-/** Aurdel stock-only XML parser: <item id="SKU"><stock quantity="N"/></item> */
-function parseAurdelStockXml(text: string): Map<string, string> {
-  const stockMap = new Map<string, string>();
-  const itemRegex = /<item\s+id="([^"]*)">\s*<stock\s+quantity="([^"]*)"/gi;
-  let match;
-  while ((match = itemRegex.exec(text)) !== null) {
-    stockMap.set(match[1], match[2]);
-  }
-  return stockMap;
-}
-
 function buildFtpPathCandidates(path: string, user: string): string[] {
   const trimmed = path.trim();
   const noLeadingSlash = trimmed.replace(/^\/+/, "");
@@ -245,7 +291,7 @@ async function downloadViaFtp(
   user: string,
   pass: string,
   path: string,
-  onLine?: (line: string) => void,
+  onLine?: (line: string) => void | Promise<void>,
 ): Promise<string> {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -313,12 +359,12 @@ async function downloadViaFtp(
           while ((nl = pending.indexOf("\n")) !== -1) {
             const line = pending.slice(0, nl).replace(/\r$/, "");
             pending = pending.slice(nl + 1);
-            onLine(line);
+            await onLine(line);
             lineCount++;
           }
         }
         pending += streamDecoder.decode();
-        if (pending.length > 0) { onLine(pending.replace(/\r$/, "")); lineCount++; }
+        if (pending.length > 0) { await onLine(pending.replace(/\r$/, "")); lineCount++; }
         dataConn.close();
         await readResponse();
         try { await send("QUIT"); } catch { /* noop */ }
@@ -462,8 +508,45 @@ Deno.serve(async (req) => {
 
     const mapping = (supplier.column_mapping ?? {}) as Record<string, string>;
 
-    let feedRows: Record<string, string>[];
+    let feedRows: Record<string, string>[] = [];
     let eanToIdEarlyOuter: Map<string, string> | null = null;
+    let feedRowCount = 0;
+    let cacheAlreadyBuilt = false;
+    let cacheUpserted = 0;
+    const runStartedAt = new Date().toISOString();
+    const seenCache = new Set<string>();
+    const cacheBatch: SupplierFeedCacheRow[] = [];
+
+    const flushCacheRows = async () => {
+      if (cacheBatch.length === 0) return;
+      const rows = cacheBatch.splice(0, cacheBatch.length);
+      for (let i = 0; i < rows.length; i += 500) {
+        const batch = rows.slice(i, i + 500);
+        const { error: cacheErr } = await supabase
+          .from("supplier_feed_cache")
+          .upsert(batch, { onConflict: "supplier_id,ean" });
+        if (cacheErr) console.error(`supplier_feed_cache upsert failed at ${cacheUpserted + i}: ${cacheErr.message}`);
+      }
+      cacheUpserted += rows.length;
+    };
+
+    const shouldKeepFeedRow = (ean: string) => {
+      if (mode === "unmatched" || targetEan) return true;
+      return Boolean(ean && eanToIdEarlyOuter?.has(ean));
+    };
+
+    const acceptFeedRow = async (row: Record<string, string>, ean: string, allowAsyncFlush: boolean) => {
+      feedRowCount++;
+      if (!targetEan && mode === "import") {
+        const cacheRow = buildSupplierFeedCacheRow(row, mapping, supplier.id, runStartedAt);
+        if (cacheRow && !seenCache.has(cacheRow.ean)) {
+          seenCache.add(cacheRow.ean);
+          cacheBatch.push(cacheRow);
+          if (allowAsyncFlush && cacheBatch.length >= 500) await flushCacheRows();
+        }
+      }
+      if (shouldKeepFeedRow(ean)) feedRows.push(row);
+    };
 
     // Pre-fetch master EANs once so we can filter on-the-fly for every code path
     // that streams — this keeps peak memory bounded even for very large feeds.
@@ -490,7 +573,12 @@ Deno.serve(async (req) => {
       const apiLang = mapping._api_language || "da";
       if (!apiCust || !apiComp) throw new Error("API credentials not configured (customerid, companyid)");
 
-      feedRows = [];
+      // Set auto-mapping before streaming so cache rows can be built incrementally.
+      mapping.ean = "ean";
+      mapping.purchase_price = "purchase_price";
+      mapping.stock_quantity = "stock_quantity";
+      mapping.sku = "supplier_sku";
+
       const stockMap = new Map<string, string>(); // SKU -> quantity
 
       for (const db of apiDbs) {
@@ -517,13 +605,13 @@ Deno.serve(async (req) => {
           console.log(`Stock database: streamed ${count} items, ${stockMap.size} SKUs with stock data`);
         } else {
           let items = 0;
-          await streamXmlItemsFromReadable(res.body, (attrs, inner) => {
+          await streamXmlItemsFromReadable(res.body, async (attrs, inner) => {
             items++;
             const row = extractAurdelItemFields(inner, attrs);
             if (!row.ean && !row.purchase_price) return;
             const ean = row.ean ?? "";
             if (targetEan && ean !== targetEan) return;
-            feedRows.push(row);
+            await acceptFeedRow(row, ean, true);
           });
           console.log(`Item database: streamed ${items} items, kept ${feedRows.length}`);
         }
@@ -542,11 +630,10 @@ Deno.serve(async (req) => {
         console.log(`Merged stock data for ${merged} items by SKU`);
       }
 
-      // Set auto-mapping for Aurdel format
-      mapping.ean = "ean";
-      mapping.purchase_price = "purchase_price";
-      mapping.stock_quantity = "stock_quantity";
-      mapping.sku = "supplier_sku";
+      if (!targetEan && mode === "import") {
+        await flushCacheRows();
+        cacheAlreadyBuilt = true;
+      }
     } else {
       const mappingAny = mapping as Record<string, string>;
       const isFtp = supplier.feed_type === "ftp";
@@ -570,10 +657,9 @@ Deno.serve(async (req) => {
         const cleanPath = path.startsWith("/") ? path : `/${path}`;
         console.log(`FTP download from ${host}${cleanPath} as ${user || "anonymous"}`);
 
-        feedRows = [];
         let headers: string[] | null = null;
         let eanIdx = -1;
-        await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, (line: string) => {
+        await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, async (line: string) => {
           if (!line) return;
           if (headers === null) {
             const hdrLine = line.charCodeAt(0) === 0xFEFF ? line.slice(1) : line;
@@ -585,14 +671,18 @@ Deno.serve(async (req) => {
           const vals = line.split(delimiter);
           const rawEan = (vals[eanIdx] ?? "").trim().replace(/^["']|["']$/g, "");
           if (!rawEan) return;
-          const ean = rawEan.replace(/^0+/, "") || rawEan;
+          const ean = normalizeEan(rawEan);
           if (targetEan && ean !== targetEan) return;
           const row: Record<string, string> = {};
           headers.forEach((h, idx) => {
             row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
           });
-          feedRows.push(row);
+          await acceptFeedRow(row, ean, true);
         });
+        if (!targetEan && mode === "import") {
+          await flushCacheRows();
+          cacheAlreadyBuilt = true;
+        }
         console.log(`Streamed CSV (ftp): kept ${feedRows.length} rows`);
       } else {
         // Non-FTP feeds — HTTP URL or storage bucket. Stream both cases so we never
@@ -618,36 +708,44 @@ Deno.serve(async (req) => {
           bodyStream = res.body;
         }
 
-        feedRows = [];
         if (supplier.feed_type === "xml") {
-          // Legacy generic-XML path: buffer to text and use the existing parser.
-          // Non-Aurdel XML feeds are typically small; if this ever grows we should
-          // add a generic streaming XML parser too.
-          const chunks: string[] = [];
-          const reader = bodyStream.pipeThrough(new TextDecoderStream()).getReader();
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-          }
-          const text = chunks.join("");
-          feedRows = parseXml(text);
+          const rows = await streamGenericXmlRowsFromReadable(bodyStream, async (row) => {
+            const ean = normalizeEan(eanCol ? row[eanCol] : "");
+            if (!ean) return;
+            if (targetEan && ean !== targetEan) return;
+            await acceptFeedRow(row, ean, true);
+          });
+          console.log(`Streamed XML: read ${rows} rows, kept ${feedRows.length}`);
         } else {
           // csv, txt and everything else are streamed line-by-line.
-          const { rows } = await streamCsvFromReadable(bodyStream, delimiter, (row) => {
+          const { rows } = await streamCsvFromReadable(bodyStream, delimiter, async (row) => {
             const rawEan = row[eanCol]?.trim() ?? "";
             if (!rawEan) return;
-            const ean = rawEan.replace(/^0+/, "") || rawEan;
+            const ean = normalizeEan(rawEan);
             if (targetEan && ean !== targetEan) return;
-            feedRows.push(row);
+            await acceptFeedRow(row, ean, true);
           });
           console.log(`Streamed CSV (http): read ${rows} rows, kept ${feedRows.length}`);
+        }
+        if (!targetEan && mode === "import") {
+          await flushCacheRows();
+          cacheAlreadyBuilt = true;
         }
       }
     }
 
+    if (!targetEan && cacheAlreadyBuilt) {
+      const { error: pruneErr, count: pruned } = await supabase
+        .from("supplier_feed_cache")
+        .delete({ count: "estimated" })
+        .eq("supplier_id", supplier.id)
+        .lt("last_seen_at", runStartedAt);
+      if (pruneErr) console.error(`supplier_feed_cache prune failed: ${pruneErr.message}`);
+      console.log(`supplier_feed_cache: upserted ${cacheUpserted}, pruned ${pruned ?? "?"} stale rows for ${supplier.name}`);
+    }
 
-    if (feedRows.length === 0) throw new Error("No rows found in feed");
+
+    if (feedRowCount === 0) throw new Error("No rows found in feed");
 
     // Get all existing EANs from master_products (skip if already loaded during streaming FTP path)
     let eanToId: Map<string, string>;
@@ -660,7 +758,8 @@ Deno.serve(async (req) => {
       if (mpErr) throw new Error(`Failed to fetch master products: ${mpErr.message}`);
       eanToId = new Map<string, string>();
       for (const mp of masterProducts ?? []) {
-        const normEan = mp.ean.replace(/^0+/, "") || mp.ean;
+        const normEan = normalizeEan(mp.ean);
+        if (!normEan) continue;
         eanToId.set(normEan, mp.id);
       }
     }
@@ -723,95 +822,13 @@ Deno.serve(async (req) => {
           success: true,
           supplier_id: supplier.id,
           supplier_name: supplier.name,
-          total_rows: feedRows.length,
+          total_rows: feedRowCount,
           unmatched_count: unmatched.length,
           unmatched,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-
-
-    // --- Supplier feed cache: upsert rows with a valid EAN + purchase_price so
-    // cross-supplier EAN-lookup can find prices even for products not yet in the PIM.
-    // Skip rows without price (useless for lookup) and skip targeted (single-EAN) runs
-    // so a rematch doesn't accidentally invalidate the whole supplier's cache below.
-    if (!targetEan) try {
-      const eanCol = mapping.ean;
-      const priceCol = mapping.purchase_price;
-      const stockCol = mapping.stock_quantity;
-      const skuCol = mapping.sku;
-      const titleCol = (mapping as any).title || (mapping as any).name || (mapping as any).short_description;
-      const brandCol = (mapping as any).brand || (mapping as any).manufacturer;
-      const eurRate = parseFloat((((mapping as any)._eur_rate ?? "7.46") as string).toString().replace(",", ".")) || 7.46;
-      const isEur = (mapping as any)._currency === "EUR";
-      const runStartedAt = new Date().toISOString();
-      const seenCache = new Set<string>();
-      const cacheRows: Array<{
-        supplier_id: string;
-        ean: string;
-        product_title: string | null;
-        supplier_sku: string | null;
-        brand: string | null;
-        purchase_price: number;
-        stock_quantity: number | null;
-        in_stock: boolean;
-        last_seen_at: string;
-      }> = [];
-      for (const row of feedRows) {
-        const rawEan = eanCol ? row[eanCol]?.trim() : "";
-        if (!rawEan) continue;
-        const ean = rawEan.replace(/^0+/, "") || rawEan;
-        if (seenCache.has(ean)) continue;
-        const priceStr = priceCol ? row[priceCol]?.trim().replace(",", ".") : "";
-        const parsedPrice = priceStr ? parseFloat(priceStr) : NaN;
-        if (isNaN(parsedPrice) || parsedPrice <= 0) continue; // skip useless rows
-        const price = isEur ? Math.round(parsedPrice * eurRate * 100) / 100 : parsedPrice;
-        seenCache.add(ean);
-        const stockStr = stockCol ? row[stockCol]?.trim() : "";
-        const stockQty = stockStr ? parseInt(stockStr, 10) : NaN;
-        let inStock = true;
-        if (mapping.in_stock) {
-          const v = row[mapping.in_stock]?.trim().toLowerCase();
-          const truthy = v === "1" || v === "yes" || v === "ja" || v === "true" || v === "in stock" || v === "på lager" || v === "a" || v === "y";
-          const falsy = v === "0" || v === "no" || v === "nej" || v === "false" || v === "out of stock" || v === "udsolgt" || v === "n";
-          inStock = truthy ? true : falsy ? false : (!isNaN(stockQty) ? stockQty > 0 : false);
-        } else if (!isNaN(stockQty)) inStock = stockQty > 0;
-
-        // Cap free-text length so odd feeds can't blow up the table.
-        const trim = (s: string | undefined | null, n: number) =>
-          s ? (s.length > n ? s.slice(0, n) : s) : null;
-        cacheRows.push({
-          supplier_id: supplier.id,
-          ean,
-          product_title: trim(titleCol ? row[titleCol]?.trim() : null, 300),
-          supplier_sku: trim(skuCol ? row[skuCol]?.trim() : null, 100),
-          brand: trim(brandCol ? row[brandCol]?.trim() : null, 100),
-          purchase_price: price,
-          stock_quantity: isNaN(stockQty) ? null : stockQty,
-          in_stock: inStock,
-          last_seen_at: runStartedAt,
-        });
-      }
-      for (let i = 0; i < cacheRows.length; i += 500) {
-        const { error: cacheErr } = await supabase
-          .from("supplier_feed_cache")
-          .upsert(cacheRows.slice(i, i + 500), { onConflict: "supplier_id,ean" });
-        if (cacheErr) console.error(`supplier_feed_cache upsert failed at ${i}: ${cacheErr.message}`);
-      }
-      // Prune stale entries: anything not seen in this run is gone from the feed.
-      const { error: pruneErr, count: pruned } = await supabase
-        .from("supplier_feed_cache")
-        .delete({ count: "estimated" })
-        .eq("supplier_id", supplier.id)
-        .lt("last_seen_at", runStartedAt);
-      if (pruneErr) console.error(`supplier_feed_cache prune failed: ${pruneErr.message}`);
-      console.log(`supplier_feed_cache: upserted ${cacheRows.length}, pruned ${pruned ?? "?"} stale rows for ${supplier.name}`);
-    } catch (cacheErr) {
-      console.error(`supplier_feed_cache build failed: ${(cacheErr as Error).message}`);
-    }
-
-
     let imported = 0;
     let skipped = 0;
     const errors: string[] = [];
@@ -994,7 +1011,7 @@ Deno.serve(async (req) => {
       await supabase.from("import_logs").update({
         status: "done",
         completed_at: new Date().toISOString(),
-        total_fetched: feedRows.length,
+        total_fetched: feedRowCount,
         imported,
         skipped,
         errors: errors.length > 0 ? { batch_errors: errors } : null,
@@ -1004,7 +1021,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        total_rows: feedRows.length,
+        total_rows: feedRowCount,
         imported,
         skipped,
         errors: errors.length > 0 ? errors : undefined,

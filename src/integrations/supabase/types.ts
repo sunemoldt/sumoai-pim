@@ -796,6 +796,69 @@ export type Database = {
         }
         Relationships: []
       }
+      restock_signups: {
+        Row: {
+          consent_at: string
+          contacted_at: string | null
+          created_at: string
+          customer_message: string | null
+          email: string
+          id: string
+          inventory_item_id: number | null
+          notified_at: string | null
+          notify_error: string | null
+          product_gid: string
+          product_handle: string | null
+          product_title: string | null
+          request_type: string
+          source_url: string | null
+          status: string
+          variant_gid: string
+          variant_sku: string | null
+          variant_title: string | null
+        }
+        Insert: {
+          consent_at?: string
+          contacted_at?: string | null
+          created_at?: string
+          customer_message?: string | null
+          email: string
+          id?: string
+          inventory_item_id?: number | null
+          notified_at?: string | null
+          notify_error?: string | null
+          product_gid: string
+          product_handle?: string | null
+          product_title?: string | null
+          request_type: string
+          source_url?: string | null
+          status?: string
+          variant_gid: string
+          variant_sku?: string | null
+          variant_title?: string | null
+        }
+        Update: {
+          consent_at?: string
+          contacted_at?: string | null
+          created_at?: string
+          customer_message?: string | null
+          email?: string
+          id?: string
+          inventory_item_id?: number | null
+          notified_at?: string | null
+          notify_error?: string | null
+          product_gid?: string
+          product_handle?: string | null
+          product_title?: string | null
+          request_type?: string
+          source_url?: string | null
+          status?: string
+          variant_gid?: string
+          variant_sku?: string | null
+          variant_title?: string | null
+        }
+        Relationships: []
+      }
       sale_campaign_products: {
         Row: {
           applied_at: string | null
