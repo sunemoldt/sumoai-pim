@@ -385,7 +385,7 @@ async function downloadViaFtp(
   user: string,
   pass: string,
   path: string,
-  onLine?: (line: string) => void,
+  onLine?: (line: string) => void | Promise<void>,
 ): Promise<string> {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
@@ -453,12 +453,12 @@ async function downloadViaFtp(
           while ((nl = pending.indexOf("\n")) !== -1) {
             const line = pending.slice(0, nl).replace(/\r$/, "");
             pending = pending.slice(nl + 1);
-            onLine(line);
+            await onLine(line);
             lineCount++;
           }
         }
         pending += streamDecoder.decode();
-        if (pending.length > 0) { onLine(pending.replace(/\r$/, "")); lineCount++; }
+        if (pending.length > 0) { await onLine(pending.replace(/\r$/, "")); lineCount++; }
         dataConn.close();
         await readResponse();
         try { await send("QUIT"); } catch { /* noop */ }
