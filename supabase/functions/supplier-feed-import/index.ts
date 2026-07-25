@@ -602,8 +602,45 @@ Deno.serve(async (req) => {
 
     const mapping = (supplier.column_mapping ?? {}) as Record<string, string>;
 
-    let feedRows: Record<string, string>[];
+    let feedRows: Record<string, string>[] = [];
     let eanToIdEarlyOuter: Map<string, string> | null = null;
+    let feedRowCount = 0;
+    let cacheAlreadyBuilt = false;
+    let cacheUpserted = 0;
+    const runStartedAt = new Date().toISOString();
+    const seenCache = new Set<string>();
+    const cacheBatch: SupplierFeedCacheRow[] = [];
+
+    const flushCacheRows = async () => {
+      if (cacheBatch.length === 0) return;
+      const rows = cacheBatch.splice(0, cacheBatch.length);
+      for (let i = 0; i < rows.length; i += 500) {
+        const batch = rows.slice(i, i + 500);
+        const { error: cacheErr } = await supabase
+          .from("supplier_feed_cache")
+          .upsert(batch, { onConflict: "supplier_id,ean" });
+        if (cacheErr) console.error(`supplier_feed_cache upsert failed at ${cacheUpserted + i}: ${cacheErr.message}`);
+      }
+      cacheUpserted += rows.length;
+    };
+
+    const shouldKeepFeedRow = (ean: string) => {
+      if (mode === "unmatched" || targetEan) return true;
+      return Boolean(ean && eanToIdEarlyOuter?.has(ean));
+    };
+
+    const acceptFeedRow = async (row: Record<string, string>, ean: string, allowAsyncFlush: boolean) => {
+      feedRowCount++;
+      if (!targetEan && mode === "import") {
+        const cacheRow = buildSupplierFeedCacheRow(row, mapping, supplier.id, runStartedAt);
+        if (cacheRow && !seenCache.has(cacheRow.ean)) {
+          seenCache.add(cacheRow.ean);
+          cacheBatch.push(cacheRow);
+          if (allowAsyncFlush && cacheBatch.length >= 500) await flushCacheRows();
+        }
+      }
+      if (shouldKeepFeedRow(ean)) feedRows.push(row);
+    };
 
     // Pre-fetch master EANs once so we can filter on-the-fly for every code path
     // that streams — this keeps peak memory bounded even for very large feeds.
