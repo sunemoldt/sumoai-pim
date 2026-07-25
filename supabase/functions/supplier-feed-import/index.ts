@@ -667,7 +667,6 @@ Deno.serve(async (req) => {
       const apiLang = mapping._api_language || "da";
       if (!apiCust || !apiComp) throw new Error("API credentials not configured (customerid, companyid)");
 
-      feedRows = [];
       const stockMap = new Map<string, string>(); // SKU -> quantity
 
       for (const db of apiDbs) {
@@ -694,13 +693,13 @@ Deno.serve(async (req) => {
           console.log(`Stock database: streamed ${count} items, ${stockMap.size} SKUs with stock data`);
         } else {
           let items = 0;
-          await streamXmlItemsFromReadable(res.body, (attrs, inner) => {
+          await streamXmlItemsFromReadable(res.body, async (attrs, inner) => {
             items++;
             const row = extractAurdelItemFields(inner, attrs);
             if (!row.ean && !row.purchase_price) return;
             const ean = row.ean ?? "";
             if (targetEan && ean !== targetEan) return;
-            feedRows.push(row);
+            await acceptFeedRow(row, ean, true);
           });
           console.log(`Item database: streamed ${items} items, kept ${feedRows.length}`);
         }
@@ -724,6 +723,10 @@ Deno.serve(async (req) => {
       mapping.purchase_price = "purchase_price";
       mapping.stock_quantity = "stock_quantity";
       mapping.sku = "supplier_sku";
+      if (!targetEan && mode === "import") {
+        await flushCacheRows();
+        cacheAlreadyBuilt = true;
+      }
     } else {
       const mappingAny = mapping as Record<string, string>;
       const isFtp = supplier.feed_type === "ftp";
@@ -747,9 +750,9 @@ Deno.serve(async (req) => {
         const cleanPath = path.startsWith("/") ? path : `/${path}`;
         console.log(`FTP download from ${host}${cleanPath} as ${user || "anonymous"}`);
 
-        feedRows = [];
         let headers: string[] | null = null;
         let eanIdx = -1;
+        const pendingRows: Record<string, string>[] = [];
         await downloadViaFtp(host, user || "anonymous", pass || "", cleanPath, (line: string) => {
           if (!line) return;
           if (headers === null) {
@@ -762,14 +765,22 @@ Deno.serve(async (req) => {
           const vals = line.split(delimiter);
           const rawEan = (vals[eanIdx] ?? "").trim().replace(/^["']|["']$/g, "");
           if (!rawEan) return;
-          const ean = rawEan.replace(/^0+/, "") || rawEan;
+          const ean = normalizeEan(rawEan);
           if (targetEan && ean !== targetEan) return;
           const row: Record<string, string> = {};
           headers.forEach((h, idx) => {
             row[h] = (vals[idx] ?? "").trim().replace(/^["']|["']$/g, "");
           });
-          feedRows.push(row);
+          pendingRows.push(row);
         });
+        for (const row of pendingRows) {
+          const ean = normalizeEan(row[eanCol]);
+          await acceptFeedRow(row, ean, true);
+        }
+        if (!targetEan && mode === "import") {
+          await flushCacheRows();
+          cacheAlreadyBuilt = true;
+        }
         console.log(`Streamed CSV (ftp): kept ${feedRows.length} rows`);
       } else {
         // Non-FTP feeds — HTTP URL or storage bucket. Stream both cases so we never
@@ -795,30 +806,28 @@ Deno.serve(async (req) => {
           bodyStream = res.body;
         }
 
-        feedRows = [];
         if (supplier.feed_type === "xml") {
-          // Legacy generic-XML path: buffer to text and use the existing parser.
-          // Non-Aurdel XML feeds are typically small; if this ever grows we should
-          // add a generic streaming XML parser too.
-          const chunks: string[] = [];
-          const reader = bodyStream.pipeThrough(new TextDecoderStream()).getReader();
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-          }
-          const text = chunks.join("");
-          feedRows = parseXml(text);
+          const rows = await streamGenericXmlRowsFromReadable(bodyStream, async (row) => {
+            const ean = normalizeEan(eanCol ? row[eanCol] : "");
+            if (!ean) return;
+            if (targetEan && ean !== targetEan) return;
+            await acceptFeedRow(row, ean, true);
+          });
+          console.log(`Streamed XML: read ${rows} rows, kept ${feedRows.length}`);
         } else {
           // csv, txt and everything else are streamed line-by-line.
-          const { rows } = await streamCsvFromReadable(bodyStream, delimiter, (row) => {
+          const { rows } = await streamCsvFromReadable(bodyStream, delimiter, async (row) => {
             const rawEan = row[eanCol]?.trim() ?? "";
             if (!rawEan) return;
-            const ean = rawEan.replace(/^0+/, "") || rawEan;
+            const ean = normalizeEan(rawEan);
             if (targetEan && ean !== targetEan) return;
-            feedRows.push(row);
+            await acceptFeedRow(row, ean, true);
           });
           console.log(`Streamed CSV (http): read ${rows} rows, kept ${feedRows.length}`);
+        }
+        if (!targetEan && mode === "import") {
+          await flushCacheRows();
+          cacheAlreadyBuilt = true;
         }
       }
     }
