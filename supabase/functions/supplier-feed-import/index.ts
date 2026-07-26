@@ -535,13 +535,19 @@ Deno.serve(async (req) => {
       return Boolean(ean && eanToIdEarlyOuter?.has(ean));
     };
 
-    const acceptFeedRow = async (row: Record<string, string>, ean: string, allowAsyncFlush: boolean) => {
+    const acceptFeedRow = async (
+      row: Record<string, string>,
+      ean: string,
+      allowAsyncFlush: boolean,
+      onCacheRow?: (cacheRow: SupplierFeedCacheRow) => void,
+    ) => {
       feedRowCount++;
       if (!targetEan && mode === "import") {
         const cacheRow = buildSupplierFeedCacheRow(row, mapping, supplier.id, runStartedAt);
         if (cacheRow && !seenCache.has(cacheRow.ean)) {
           seenCache.add(cacheRow.ean);
           cacheBatch.push(cacheRow);
+          onCacheRow?.(cacheRow);
           if (allowAsyncFlush && cacheBatch.length >= 500) await flushCacheRows();
         }
       }
