@@ -586,6 +586,8 @@ Deno.serve(async (req) => {
       mapping.sku = "supplier_sku";
 
       const stockMap = new Map<string, string>(); // SKU -> quantity
+      const aurdelHasStock = apiDbs.includes("stock");
+      const skuToCacheRow: Map<string, SupplierFeedCacheRow> | null = aurdelHasStock ? new Map() : null;
 
       for (const db of apiDbs) {
         const params = new URLSearchParams({
@@ -617,7 +619,14 @@ Deno.serve(async (req) => {
             if (!row.ean && !row.purchase_price) return;
             const ean = row.ean ?? "";
             if (targetEan && ean !== targetEan) return;
-            await acceptFeedRow(row, ean, true);
+            // When a "stock" DB is also configured, defer flushing so we can
+            // patch cache rows with merged quantities before upsert.
+            await acceptFeedRow(row, ean, !aurdelHasStock, skuToCacheRow
+              ? (cr) => {
+                  const sku = row.supplier_sku;
+                  if (sku) skuToCacheRow.set(sku, cr);
+                }
+              : undefined);
           });
           console.log(`Item database: streamed ${items} items, kept ${feedRows.length}`);
         }
@@ -633,7 +642,24 @@ Deno.serve(async (req) => {
             merged++;
           }
         }
-        console.log(`Merged stock data for ${merged} items by SKU`);
+        console.log(`Merged stock data for ${merged} feedRows by SKU`);
+      }
+
+      // Patch already-built cache rows with merged stock so supplier_feed_cache
+      // reflects the true availability (item DB only exposes stock via <stock>
+      // inside <item>, which is often stale compared to the "stock" DB).
+      if (skuToCacheRow && stockMap.size > 0) {
+        let patched = 0;
+        for (const [sku, cacheRow] of skuToCacheRow) {
+          const qtyStr = stockMap.get(sku);
+          if (qtyStr == null) continue;
+          const qty = Number(qtyStr);
+          if (!Number.isFinite(qty)) continue;
+          cacheRow.stock_quantity = qty;
+          cacheRow.in_stock = qty > 0;
+          patched++;
+        }
+        console.log(`Patched stock on ${patched} cache rows from stock DB`);
       }
 
       if (!targetEan && mode === "import") {
