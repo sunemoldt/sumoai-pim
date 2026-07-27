@@ -393,7 +393,7 @@ async function downloadViaFtp(
   }
 }
 
-Deno.serve(async (req) => {
+const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -454,29 +454,32 @@ Deno.serve(async (req) => {
         .single();
       const logId = logRow?.id ?? null;
 
+      // Run the sync body IN-PROCESS via waitUntil so we get the ~400s
+      // background budget instead of hitting the 150s HTTP idle timeout that
+      // used to kill long imports like Aurdel (item+stock).
+      const childReq = new Request(req.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          "apikey": SUPABASE_SERVICE_ROLE_KEY,
+        },
+        body: JSON.stringify({ supplier_id, target_ean: rawTargetEan, mode: rawMode, _import_log_id: logId }),
+      });
       const work = (async () => {
         try {
-          const r = await fetch(`${SUPABASE_URL}/functions/v1/supplier-feed-import`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-              "apikey": SUPABASE_SERVICE_ROLE_KEY,
-            },
-            body: JSON.stringify({ supplier_id, target_ean: rawTargetEan, mode: rawMode, _import_log_id: logId }),
-          });
-          const bodyText = await r.text().catch(() => "");
+          const resp = await handler(childReq);
+          const bodyText = await resp.text().catch(() => "");
           let parsed: any = {};
           try { parsed = bodyText ? JSON.parse(bodyText) : {}; } catch { parsed = { raw: bodyText.slice(0, 500) }; }
-          console.log(`[async import ${supplier_id}]`, r.status, JSON.stringify(parsed).slice(0, 200));
-          if (!r.ok && logId) {
+          console.log(`[async import ${supplier_id}]`, resp.status, JSON.stringify(parsed).slice(0, 200));
+          if (!resp.ok && logId) {
             await supabase.from("import_logs").update({
               status: "failed",
               completed_at: new Date().toISOString(),
-              errors: { http_status: r.status, response: parsed },
+              errors: { http_status: resp.status, response: parsed },
             }).eq("id", logId);
           }
-          // On success the child function is responsible for updating the log to `done`.
         } catch (e) {
           console.error(`[async import ${supplier_id}] failed`, e);
           if (logId) {
@@ -514,12 +517,14 @@ Deno.serve(async (req) => {
     let cacheAlreadyBuilt = false;
     let cacheUpserted = 0;
     const runStartedAt = new Date().toISOString();
-    const seenCache = new Set<string>();
+    const seenCache = new Set<string>(); // per-batch dedup only; cleared on flush
     const cacheBatch: SupplierFeedCacheRow[] = [];
+    const FLUSH_AT = 200; // smaller batches → lower peak memory on huge feeds (DCS ~150k rows)
 
     const flushCacheRows = async () => {
       if (cacheBatch.length === 0) return;
       const rows = cacheBatch.splice(0, cacheBatch.length);
+      seenCache.clear();
       for (let i = 0; i < rows.length; i += 500) {
         const batch = rows.slice(i, i + 500);
         const { error: cacheErr } = await supabase
@@ -548,7 +553,7 @@ Deno.serve(async (req) => {
           seenCache.add(cacheRow.ean);
           cacheBatch.push(cacheRow);
           onCacheRow?.(cacheRow);
-          if (allowAsyncFlush && cacheBatch.length >= 500) await flushCacheRows();
+          if (allowAsyncFlush && cacheBatch.length >= FLUSH_AT) await flushCacheRows();
         }
       }
       if (shouldKeepFeedRow(ean)) feedRows.push(row);
@@ -1080,4 +1085,7 @@ Deno.serve(async (req) => {
 
     });
   }
-});
+};
+
+Deno.serve(handler);
+
