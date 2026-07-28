@@ -80,7 +80,14 @@ Deno.serve(async (req) => {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${serviceKey}`,
                 },
-                body: JSON.stringify({ supplier_id: supplier.id, async: true, skip_cache: true }),
+                // Only skip cache for known-huge feeds (DCS ~150k rows OOMs the worker).
+                // Everyone else must refresh supplier_feed_cache so EAN lookup and
+                // "find suppliers" stay accurate.
+                body: JSON.stringify({
+                  supplier_id: supplier.id,
+                  async: true,
+                  skip_cache: /dcs/i.test(supplier.name ?? ""),
+                }),
               }
             );
             const data = await response.json().catch(() => ({}));
