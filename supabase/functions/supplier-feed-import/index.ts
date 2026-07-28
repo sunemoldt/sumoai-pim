@@ -766,7 +766,7 @@ const handler = async (req: Request): Promise<Response> => {
           });
           console.log(`Streamed CSV (http): read ${rows} rows, kept ${feedRows.length}`);
         }
-        if (!targetEan && mode === "import") {
+        if (shouldBuildCache) {
           await flushCacheRows();
           cacheAlreadyBuilt = true;
         }
