@@ -669,7 +669,7 @@ const handler = async (req: Request): Promise<Response> => {
         console.log(`Patched stock on ${patched} cache rows from stock DB`);
       }
 
-      if (!targetEan && mode === "import") {
+      if (shouldBuildCache) {
         await flushCacheRows();
         cacheAlreadyBuilt = true;
       }
