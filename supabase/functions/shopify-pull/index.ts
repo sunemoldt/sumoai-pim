@@ -227,6 +227,24 @@ Deno.serve(async (req) => {
             update.ean = normalizedBarcode;
           }
           tryField("sku", matchedVariant.sku);
+          // Suffix title with the variant's option values so each PIM master reflects
+          // its specific variant (e.g. "... - Hvid"). Single-variant products stay bare.
+          const optSuffix = (matchedVariant.selectedOptions ?? [])
+            .map((o: any) => o.value)
+            .filter((x: string) => x && x !== "Default Title")
+            .join(" / ");
+          const derivedTitle = variants.length > 1 && optSuffix ? `${sp.title} - ${optSuffix}` : sp.title;
+          tryField("title", derivedTitle);
+          // Mirror the variant's selectedOptions into master.attributes so downstream
+          // logic (variant grouping, sibling sync) sees the axis values.
+          const variantAttrs = Object.fromEntries(
+            (matchedVariant.selectedOptions ?? [])
+              .filter((o: any) => o?.name && o?.value && o.value !== "Default Title")
+              .map((o: any) => [o.name, o.value])
+          );
+          if (Object.keys(variantAttrs).length > 0) {
+            tryField("attributes", variantAttrs);
+          }
         }
 
 
