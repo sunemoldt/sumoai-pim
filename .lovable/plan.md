@@ -1,75 +1,50 @@
-## Mål
+## Diagnose
 
-På `/products/new` skal jeg kunne markere at produktet oprettes med flere varianter (fx Farve: Hvid, Sort). Systemet opretter ét Shopify-produkt med en variant pr. række og én `master_products`-row pr. variant, alle med samme `shopify_product_id` — præcis samme mønster som auto-split i `shopify-pull` allerede bruger.
+- **pg_cron kalder `scheduled-sync` hvert 30. minut** (`*/30 * * * *`), men `scheduled-sync` staggerer på 15‑minutters slots → slots på `:15`/`:45` fyres **aldrig**. Det rammer især **Aurdel** (slot :15) og forklarer hvorfor den ikke har hentet i dag.
+- Da Aurdel *undtagelsesvis* kørte manuelt → **504 IDLE_TIMEOUT (150s)** fordi API‑kaldet holder hovedrequesten åben.
+- 09:27 i dag fejlede alle 4 feeds med `No rows found in feed` — samtidige manuelle "Kør nu"‑kald kolliderede med en cron‑kørsel. Flere `Stale running log closed` på DCS bekræfter overlappende runs.
+- KOSATEC (`0 6 * * *`) missede 06:00 i dag samme mekanisme.
 
-## UX på NewProductPage
+## Plan — fuldt forskudt kørsel
 
-- Ny switch øverst i "Grundoplysninger": **"Opret med varianter"**.
-- Når slået fra: siden fungerer som i dag (én EAN, én pris osv.).
-- Når slået til:
-  - Feltet **Akse-navn** vises (default `Farve`, kan ændres til fx `Størrelse` eller `Model`).
-  - EAN/SKU/pris/tilbudspris/vægt/lager-felterne i basis-kortet skjules (de bliver pr-variant i stedet).
-  - Nyt kort **"Varianter"** med en tabel/liste, hver række har: Værdi (fx "Hvid"), EAN*, SKU, Salgspris, Tilbudspris, Lager, Vægt, Billede-URL.
-  - Knapper "+ Tilføj variant" og "Fjern" pr. række. Min. 2 rækker kræves.
-  - Fælles felter (titel, brand, kategori, beskrivelser, meta) redigeres én gang og deles på alle varianter — matcher `sync_meta_to_siblings`-triggerens forventning.
+### 1. Erstat minut‑slots med en "sidst‑kørt" gate (rigtig staggering)
+- Ændr `scheduled-sync` så den **ikke** længere bruger cron‑minutfelter til at bestemme hvem der fyres.
+- Ny logik pr. tick:
+  1. Hent alle aktive leverandører med `feed_schedule ≠ manual`.
+  2. Mappér `feed_schedule` → intervaltimer (samme tabel som findes i `SupplierStatusTable`).
+  3. Betragt en leverandør som **due** hvis `now - last_sync_at ≥ interval` (eller `last_sync_at IS NULL`).
+  4. Sortér due leverandører efter `last_sync_at ASC NULLS FIRST` (den mest forsømte først).
+  5. **Fyre kun én due leverandør pr. tick.** Resten venter til næste tick → naturlig forskydning.
+- pg_cron `scheduled-sync-check` sættes til **hvert 5. minut** (`*/5 * * * *`). Med 4 aktive skema‑feeds giver det ~20 minutters minimum afstand mellem to leverandør‑jobs.
+- Effekten: Aurdel og KOSATEC bliver aldrig "sprunget over" fordi de ligger på et minuttal cron ikke rammer. Overlap mellem to feeds i samme tick er umuligt.
 
-## Validering før submit
+### 2. Advisory lock pr. leverandør i `supplier-feed-import`
+- Første handling: `pg_try_advisory_lock(hashtext('supplier-feed:'||supplier_id))`. Hvis låsen ikke fås → returnér `{ skipped: 'already_running' }` uden at røre `import_logs`. Fjerner "No rows found in feed"‑spøgelser fra samtidige manuelle + cron‑kald.
+- `Stale running log`‑oprydning scopes til den enkelte supplier_id og kun logs > 20 min gamle.
 
-- Titel + akse-navn påkrævet.
-- Min. 2 varianter, hver med unik værdi og gyldigt EAN (12/13 cifre, ledende nuller strippes).
-- EAN-dubletcheck mod `master_products.ean` i én query (`.in("ean", [...])`).
-- Salgspris kan ikke være tom hvis "Gem og send til Shopify" bruges.
+### 3. Gør Aurdel timeout‑sikker
+- Flyt `EdgeRuntime.waitUntil` **før** første fetch, så hoved‑responsen returnerer 202 straks (ingen 150s idle‑timer på callerens request).
+- Stream Aurdel's items/stock i chunks (samme mønster som DCS): parse XML → flush hver N rækker → clear buffer → fortsæt. Fjerner in‑memory stockMap som holdt hele feedet.
 
-## Data-flow ved "Gem"
+### 4. Bedre status på Leverandør‑siden
+- Udvid `SupplierStatusTable` + `SupplierListPage` med kolonner: `sidst OK`, `sidste fejl`, badge `Forsinket` (hvis `now - last_sync_at > 2× interval`).
+- Knap "Vis seneste log" åbner dialog med nyeste `import_logs`‑række (`status`, `total_fetched`, `imported`, `errors`).
 
-1. **PIM først**: én `master_products.insert()` pr. variant (som i dag, men i loop), med:
-   - fælles felter fra formen,
-   - variant-specifikke felter fra rækken,
-   - `attributes: { [akseNavn]: værdi }`,
-   - `shopify_product_id`/`shopify_variant_id` = `null` (sættes efter Shopify-push).
-2. **Leverandør-rematch**: kald `supplier-rematch-product` for hver ny master parallelt (samme kald som i dag).
-3. Hvis brugeren trykker **"Gem som kladde"**: stop her, naviger til første variant.
-4. Hvis brugeren trykker **"Gem og send til Shopify"**: kald ny edge-funktion `shopify-create-product-with-variants` (se næste sektion). Efter succes: naviger til første variant.
+### 5. Efter deploy
+- Manuel trigger af `scheduled-sync` for at hente Aurdel + KOSATEC nu.
+- Verificér næste tick: kun én leverandør fyres, resten venter, ingen overlap i `import_logs`.
 
-## Ny edge-funktion `shopify-create-product-with-variants`
+## Tekniske detaljer
 
-Baseret på eksisterende `shopify-create-product`, men opretter ét produkt med flere varianter i én GraphQL-kæde:
+**Filer:**
+- `supabase/functions/scheduled-sync/index.ts` — ny "sidst‑kørt" gate, dropper cron‑minut‑logik, fyrer én due leverandør pr. tick.
+- `supabase/functions/supplier-feed-import/index.ts` — advisory lock, scoped stale‑log‑cleanup, tidligere `waitUntil` for Aurdel, streamet Aurdel‑parser.
+- `src/components/monitoring/SupplierStatusTable.tsx` + `src/pages/SupplierListPage.tsx` — nye kolonner + "Vis seneste log" dialog.
+- pg_cron (via `supabase--insert`, ikke migration jf. project‑memory): unschedule + reschedule `scheduled-sync-check` til `*/5 * * * *`.
 
-- **Input**: `{ master_product_ids: string[], option_name: string }` — alle masters skal have samme `shopify_product_id=null` og deles om fælles felter (validering på server).
-- **Step 1**: `productCreate` med `productOptions: [{ name: option_name, values: [{name: v1}, {name: v2}, …] }]`, `status: DRAFT`, samt titel/desc/vendor/type/SEO/short-description-metafield fra første master. Bruger samme HTML→rich_text-konverter som i dag.
-- **Step 2**: `productVariantsBulkCreate` (strategy `REMOVE_STANDALONE_VARIANT`) med én variant pr. master: `optionValues: [{ optionName, name }]`, `price`, `compareAtPrice`, `barcode` (= EAN), `inventoryPolicy`, `inventoryItem.sku`, `inventoryItem.tracked: true`, `inventoryItem.measurement.weight`.
-- **Below-cost guard**: kør `getCheapestPurchasePrice` + `assertNotBelowPurchase` pr. variant inden Shopify-kaldet — samme regel som i dag.
-- **Step 3**: opdatér hver master med `shopify_product_id` + `shopify_variant_id` + `lifecycle_status='pending_activation'` + `shopify_sync_enabled=true`. Skriv `product_change_log`-linje pr. master.
-- **Response**: `{ shopify_product_id, shopify_admin_url, variants: [{master_id, shopify_variant_id}] }`.
+**Ingen skema‑ændringer, ingen data‑migration.**
 
-## Kant-tilfælde og gotchas
+## Åbne spørgsmål
 
-- `master_products.ean` er NOT NULL. Varianten skal derfor have gyldig EAN allerede ved PIM-insert — ellers blokerer vi i UI. (Ingen `shopify-` fallback her, i modsætning til auto-split, fordi brugeren indtaster manuelt.)
-- Ved delvist fejlet Shopify-push: masters er allerede oprettet i PIM som kladder — de forbliver, og brugeren kan bruge eksisterende "Match til eksisterende Shopify"-knap eller retry. Fejl vises som toast med detaljer.
-- `attach_own_stock_supplier`-triggeren aktiverer automatisk own-stock på hver ny master (uændret adfærd).
-- `sync_meta_to_siblings`-triggeren holder tekster synkroniseret bagefter (uændret).
-
-## Filer der ændres/oprettes
-
-Ændres:
-- `src/pages/NewProductPage.tsx` — variant-tilstand, ny variant-tabel, ændret submit-flow.
-
-Oprettes:
-- `supabase/functions/shopify-create-product-with-variants/index.ts` — ny edge-funktion.
-
-Ingen migrationer, ingen skema-ændringer, ingen ændringer i `shopify-pull` / `shopify-update-product` / triggers.
-
-## Teknisk noter
-
-- Shopify GraphQL 2026-04: `productCreate` + `productVariantsBulkCreate` (ikke deprecated `productSet`) — samme pattern som `shopify-create-product` bruger for `productVariantsBulkUpdate`.
-- `productOptions` skal sendes med i `productCreate`; ellers kan `productVariantsBulkCreate` ikke tildele option-værdier.
-- `strategy: REMOVE_STANDALONE_VARIANT` fjerner Shopify's default "Default Title"-variant.
-- HTML-håndtering, VAT-logik og price-mapping genbruges 1:1 fra `shopify-create-product`.
-
-## Test-plan
-
-1. Opret et testprodukt med 2 varianter (Hvid + Sort) → verificér 2 rows i `master_products` med samme `shopify_product_id`, forskellige EAN, korrekte attributes.
-2. Åbn produktet i Shopify-admin → verificér 2 varianter, korrekte priser, EAN som barcode, tracked=true.
-3. Rediger meta-titel på Hvid → verificér `sync_meta_to_siblings` propagerer til Sort.
-4. Kør `shopify-pull` på Hvid → verificér begge varianter forbliver linket, ingen dubletter.
-5. Prøv at oprette med dublet EAN → verificér fejl før nogen inserts.
+1. OK med at fyre **én leverandør pr. tick** (max ~1 kørsel hvert 5. minut)? Alle leverandører når stadig deres respektive intervaller, men to store feeds vil aldrig køre samtidigt igen.
+2. Skal jeg samtidig sætte Aurdel og KOSATEC til hyppigere skema (fx hver 2. time) mens vi er i gang, eller behold nuværende frekvens?
