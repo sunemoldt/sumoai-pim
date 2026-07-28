@@ -221,8 +221,19 @@ Deno.serve(async (req) => {
           userErrors { field message }
         }
       }`;
+    // Strip any trailing " - <optionValue>" suffix from the parent title so variant name
+     // isn't duplicated on the Shopify product title.
+    const stripSuffix = (t: string) => {
+      let out = String(t ?? "").trim();
+      for (const v of optionValues) {
+        const re = new RegExp(`\\s*[-–—]\\s*${v.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\s*$`, "i");
+        out = out.replace(re, "").trim();
+      }
+      return out;
+    };
+    const parentTitle = stripSuffix(head.title);
     const productInput: Record<string, unknown> = {
-      title: head.title,
+      title: parentTitle,
       status: "DRAFT",
       descriptionHtml: head.long_description ?? "",
       vendor: head.brand ?? undefined,
