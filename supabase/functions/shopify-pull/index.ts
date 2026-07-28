@@ -154,7 +154,8 @@ Deno.serve(async (req) => {
         const tryField = (field: string, value: unknown) => {
           if (canPull(policy, field) && value !== undefined && value !== null) update[field] = value;
         };
-        tryField("title", sp.title);
+        // Title is set below after we know which variant this master maps to,
+        // so multi-variant products get "Base - Value" instead of the bare base title.
         tryField("long_description", sp.descriptionHtml);
         tryField("short_description", sp.shortDescription?.value);
         tryField("meta_title", sp.seo?.title);
@@ -226,6 +227,24 @@ Deno.serve(async (req) => {
             update.ean = normalizedBarcode;
           }
           tryField("sku", matchedVariant.sku);
+          // Suffix title with the variant's option values so each PIM master reflects
+          // its specific variant (e.g. "... - Hvid"). Single-variant products stay bare.
+          const optSuffix = (matchedVariant.selectedOptions ?? [])
+            .map((o: any) => o.value)
+            .filter((x: string) => x && x !== "Default Title")
+            .join(" / ");
+          const derivedTitle = variants.length > 1 && optSuffix ? `${sp.title} - ${optSuffix}` : sp.title;
+          tryField("title", derivedTitle);
+          // Mirror the variant's selectedOptions into master.attributes so downstream
+          // logic (variant grouping, sibling sync) sees the axis values.
+          const variantAttrs = Object.fromEntries(
+            (matchedVariant.selectedOptions ?? [])
+              .filter((o: any) => o?.name && o?.value && o.value !== "Default Title")
+              .map((o: any) => [o.name, o.value])
+          );
+          if (Object.keys(variantAttrs).length > 0) {
+            tryField("attributes", variantAttrs);
+          }
         }
 
 
@@ -362,6 +381,11 @@ Deno.serve(async (req) => {
                 long_description: parent?.long_description ?? null,
                 meta_title: parent?.meta_title ?? null,
                 meta_description: parent?.meta_description ?? null,
+                attributes: Object.fromEntries(
+                  (v.selectedOptions ?? [])
+                    .filter((o: any) => o?.name && o?.value && o.value !== "Default Title")
+                    .map((o: any) => [o.name, o.value])
+                ),
               })
               .select("id").single();
             if (insErr) { console.error("split insert failed:", insErr.message); continue; }
