@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
                   "Content-Type": "application/json",
                   Authorization: `Bearer ${serviceKey}`,
                 },
-                body: JSON.stringify({ supplier_id: supplier.id, async: true }),
+                body: JSON.stringify({ supplier_id: supplier.id, async: true, skip_cache: true }),
               }
             );
             const data = await response.json().catch(() => ({}));

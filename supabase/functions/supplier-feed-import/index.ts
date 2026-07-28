@@ -423,7 +423,7 @@ const handler = async (req: Request): Promise<Response> => {
   let importLogId: string | null = null;
   try {
     const body = await req.json();
-    const { supplier_id, target_ean: rawTargetEan, mode: rawMode, async: rawAsync, _import_log_id: rawLogId } = body;
+    const { supplier_id, target_ean: rawTargetEan, mode: rawMode, async: rawAsync, _import_log_id: rawLogId, skip_cache: rawSkipCache } = body;
     if (!supplier_id) {
       return new Response(JSON.stringify({ error: "supplier_id is required" }), {
         status: 400,
@@ -433,6 +433,7 @@ const handler = async (req: Request): Promise<Response> => {
     const mode: "import" | "unmatched" = rawMode === "unmatched" ? "unmatched" : "import";
     asyncMode = rawAsync === true && mode === "import";
     importLogId = typeof rawLogId === "string" ? rawLogId : null;
+    const skipCache = rawSkipCache === true;
     // Optional: only process rows matching this normalized EAN (used by supplier-rematch-product)
     const targetEan: string | null = rawTargetEan
       ? (String(rawTargetEan).trim().replace(/^0+/, "") || String(rawTargetEan).trim())
@@ -464,7 +465,7 @@ const handler = async (req: Request): Promise<Response> => {
           "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
           "apikey": SUPABASE_SERVICE_ROLE_KEY,
         },
-        body: JSON.stringify({ supplier_id, target_ean: rawTargetEan, mode: rawMode, _import_log_id: logId }),
+        body: JSON.stringify({ supplier_id, target_ean: rawTargetEan, mode: rawMode, skip_cache: skipCache, _import_log_id: logId }),
       });
       const work = (async () => {
         try {
@@ -514,6 +515,7 @@ const handler = async (req: Request): Promise<Response> => {
     let feedRows: Record<string, string>[] = [];
     let eanToIdEarlyOuter: Map<string, string> | null = null;
     let feedRowCount = 0;
+    const shouldBuildCache = !skipCache && !targetEan && mode === "import";
     let cacheAlreadyBuilt = false;
     let cacheUpserted = 0;
     const runStartedAt = new Date().toISOString();
@@ -547,7 +549,7 @@ const handler = async (req: Request): Promise<Response> => {
       onCacheRow?: (cacheRow: SupplierFeedCacheRow) => void,
     ) => {
       feedRowCount++;
-      if (!targetEan && mode === "import") {
+      if (shouldBuildCache) {
         const cacheRow = buildSupplierFeedCacheRow(row, mapping, supplier.id, runStartedAt);
         if (cacheRow && !seenCache.has(cacheRow.ean)) {
           seenCache.add(cacheRow.ean);
@@ -667,7 +669,7 @@ const handler = async (req: Request): Promise<Response> => {
         console.log(`Patched stock on ${patched} cache rows from stock DB`);
       }
 
-      if (!targetEan && mode === "import") {
+      if (shouldBuildCache) {
         await flushCacheRows();
         cacheAlreadyBuilt = true;
       }
@@ -716,7 +718,7 @@ const handler = async (req: Request): Promise<Response> => {
           });
           await acceptFeedRow(row, ean, true);
         });
-        if (!targetEan && mode === "import") {
+        if (shouldBuildCache) {
           await flushCacheRows();
           cacheAlreadyBuilt = true;
         }
@@ -764,7 +766,7 @@ const handler = async (req: Request): Promise<Response> => {
           });
           console.log(`Streamed CSV (http): read ${rows} rows, kept ${feedRows.length}`);
         }
-        if (!targetEan && mode === "import") {
+        if (shouldBuildCache) {
           await flushCacheRows();
           cacheAlreadyBuilt = true;
         }
