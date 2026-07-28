@@ -332,7 +332,7 @@ Deno.serve(async (req) => {
             }
             const vEan = v.barcode
               ? (String(v.barcode).trim().replace(/^0+/, "") || String(v.barcode).trim())
-              : null;
+              : `shopify-${vid}`;
             const qty = typeof v.inventoryQuantity === "number" ? v.inventoryQuantity : 0;
             const mappedPrices = mapShopifyPrices(v);
 
