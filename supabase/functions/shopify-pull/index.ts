@@ -381,6 +381,11 @@ Deno.serve(async (req) => {
                 long_description: parent?.long_description ?? null,
                 meta_title: parent?.meta_title ?? null,
                 meta_description: parent?.meta_description ?? null,
+                attributes: Object.fromEntries(
+                  (v.selectedOptions ?? [])
+                    .filter((o: any) => o?.name && o?.value && o.value !== "Default Title")
+                    .map((o: any) => [o.name, o.value])
+                ),
               })
               .select("id").single();
             if (insErr) { console.error("split insert failed:", insErr.message); continue; }
