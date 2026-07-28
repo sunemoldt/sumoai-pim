@@ -515,6 +515,7 @@ const handler = async (req: Request): Promise<Response> => {
     let feedRows: Record<string, string>[] = [];
     let eanToIdEarlyOuter: Map<string, string> | null = null;
     let feedRowCount = 0;
+    const shouldBuildCache = !skipCache && !targetEan && mode === "import";
     let cacheAlreadyBuilt = false;
     let cacheUpserted = 0;
     const runStartedAt = new Date().toISOString();
@@ -548,7 +549,7 @@ const handler = async (req: Request): Promise<Response> => {
       onCacheRow?: (cacheRow: SupplierFeedCacheRow) => void,
     ) => {
       feedRowCount++;
-      if (!targetEan && mode === "import") {
+      if (shouldBuildCache) {
         const cacheRow = buildSupplierFeedCacheRow(row, mapping, supplier.id, runStartedAt);
         if (cacheRow && !seenCache.has(cacheRow.ean)) {
           seenCache.add(cacheRow.ean);
