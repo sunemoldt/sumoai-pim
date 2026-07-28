@@ -154,7 +154,8 @@ Deno.serve(async (req) => {
         const tryField = (field: string, value: unknown) => {
           if (canPull(policy, field) && value !== undefined && value !== null) update[field] = value;
         };
-        tryField("title", sp.title);
+        // Title is set below after we know which variant this master maps to,
+        // so multi-variant products get "Base - Value" instead of the bare base title.
         tryField("long_description", sp.descriptionHtml);
         tryField("short_description", sp.shortDescription?.value);
         tryField("meta_title", sp.seo?.title);
