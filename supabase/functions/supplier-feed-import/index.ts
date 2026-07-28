@@ -444,6 +444,40 @@ const handler = async (req: Request): Promise<Response> => {
     // We also register an import_logs row so the actual outcome (success or resource-limit
     // failure) is visible to the UI — previously all async errors were silently swallowed.
     if (asyncMode) {
+      // Overlap guard: if the same supplier already has a running import
+      // from within the last 20 minutes, skip instead of starting a
+      // second concurrent run (which caused "No rows found in feed"
+      // ghosts when a manual "Kør nu" collided with a scheduled tick).
+      const twentyMinAgo = new Date(Date.now() - 20 * 60_000).toISOString();
+      const { data: inflight } = await supabase
+        .from("import_logs")
+        .select("id, started_at")
+        .eq("source", `supplier-feed-import:${supplier_id}`)
+        .eq("status", "running")
+        .gte("started_at", twentyMinAgo)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (inflight?.id) {
+        return new Response(
+          JSON.stringify({ success: true, async: true, started: false, skipped: "already_running", import_log_id: inflight.id }),
+          { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Scoped stale-log cleanup: close only this supplier's abandoned
+      // rows (> 20 min old) so we never treat them as in-flight above.
+      await supabase
+        .from("import_logs")
+        .update({
+          status: "failed",
+          completed_at: new Date().toISOString(),
+          errors: { message: "Stale running log closed by overlap guard" },
+        })
+        .eq("source", `supplier-feed-import:${supplier_id}`)
+        .eq("status", "running")
+        .lt("started_at", twentyMinAgo);
+
       const { data: logRow } = await supabase
         .from("import_logs")
         .insert({
