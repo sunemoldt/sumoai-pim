@@ -220,7 +220,12 @@ Deno.serve(async (req) => {
     const onSale = regularPrice != null && salePrice != null && salePrice > 0 && salePrice < regularPrice;
     const sellingPrice = onSale ? salePrice : regularPrice;
     const cheapestPurchase = await getCheapestPurchasePrice(supabase, master_product_id);
-    assertNotBelowPurchase(sellingPrice, cheapestPurchase);
+    // Draft creation: don't block. Log a warning so the user can fix price before activating in Shopify.
+    if (sellingPrice != null && cheapestPurchase != null && sellingPrice / (1 + VAT_RATE) + 0.005 < cheapestPurchase) {
+      console.warn(`shopify-create-product: Advarsel – salgspris ${sellingPrice.toFixed(2)} kr inkl. moms under indkøb ${cheapestPurchase.toFixed(2)} kr ekskl. moms. Oprettes som KLADDE alligevel.`);
+    }
+    // Keep helper referenced (no-op) to satisfy linters if unused elsewhere
+    void assertNotBelowPurchase;
 
     const variantInput: Record<string, unknown> = {
       id: variantGid,
