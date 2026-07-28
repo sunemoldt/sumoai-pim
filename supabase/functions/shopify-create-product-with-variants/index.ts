@@ -197,15 +197,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Below-cost guard per variant
+    // Draft creation: warn but don't block below-cost variants. Update path still enforces guard on activation.
     for (const m of ordered) {
       const regular = m.webshop_price != null ? Number(m.webshop_price) : null;
       const sale = m.sale_price != null ? Number(m.sale_price) : null;
       const onSale = regular != null && sale != null && sale > 0 && sale < regular;
       const sellingPrice = onSale ? sale : regular;
       const cheapest = await getCheapestPurchasePrice(supabase, m.id);
-      assertNotBelowPurchase(sellingPrice, cheapest, String(m.attributes?.[optName] ?? m.id));
+      const label = String(m.attributes?.[optName] ?? m.id);
+      if (sellingPrice != null && cheapest != null && sellingPrice / (1 + VAT_RATE) + 0.005 < cheapest) {
+        console.warn(`shopify-create-product-with-variants: [${label}] Advarsel – salgspris ${sellingPrice.toFixed(2)} under indkøb ${cheapest.toFixed(2)}. Oprettes som KLADDE.`);
+      }
     }
+    void assertNotBelowPurchase;
 
     const head = ordered[0];
 
