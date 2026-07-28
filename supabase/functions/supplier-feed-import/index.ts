@@ -718,7 +718,7 @@ const handler = async (req: Request): Promise<Response> => {
           });
           await acceptFeedRow(row, ean, true);
         });
-        if (!targetEan && mode === "import") {
+        if (shouldBuildCache) {
           await flushCacheRows();
           cacheAlreadyBuilt = true;
         }
