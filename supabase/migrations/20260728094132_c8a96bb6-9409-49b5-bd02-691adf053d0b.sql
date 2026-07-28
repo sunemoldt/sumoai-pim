@@ -1,0 +1,1 @@
+SELECT set_change_source('manual-fix'); UPDATE public.master_products SET title = 'Ajax DomeCam Mini HL 8 MP – Med hybridbelysning - Hvid' WHERE id = '9218ba33-7f53-47e0-a3aa-f866c8120df2'; UPDATE public.master_products SET attributes = jsonb_build_object('Farve', 'Sort') WHERE id = 'f9dc87b6-58da-49c3-bf4f-e33e4455f9fc';
