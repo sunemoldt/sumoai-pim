@@ -27,6 +27,7 @@ import ProductVariantsTab from "@/components/ProductVariantsTab";
 import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
 import MergeProductDialog from "@/components/MergeProductDialog";
 import AiGenerateAllDialog from "@/components/AiGenerateAllDialog";
+import AiGenerateSeoDialog from "@/components/AiGenerateSeoDialog";
 import ProductLowMarginGuardCard from "@/components/ProductLowMarginGuardCard";
 import ProductCollectionsTab from "@/components/ProductCollectionsTab";
 import { Archive, ArchiveRestore, Copy, GitMerge, Sparkles, Rss, FolderTree } from "lucide-react";
@@ -67,6 +68,7 @@ export default function ProductDetailPage() {
   const [applyingRec, setApplyingRec] = useState<string | null>(null);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [aiGenOpen, setAiGenOpen] = useState(false);
+  const [aiSeoOpen, setAiSeoOpen] = useState(false);
   const [togglingLifecycle, setTogglingLifecycle] = useState(false);
   const [rematchingSuppliers, setRematchingSuppliers] = useState(false);
   const [siblingCount, setSiblingCount] = useState<number>(0);
@@ -474,6 +476,21 @@ export default function ProductDetailPage() {
           attributes: (product as any).attributes,
         }}
       />
+      <AiGenerateSeoDialog
+        open={aiSeoOpen}
+        onOpenChange={setAiSeoOpen}
+        product={{
+          id: product.id,
+          title: product.title,
+          brand: (product as any).brand,
+          category: (product as any).category,
+          short_description: (product as any).short_description,
+          long_description: (product as any).long_description,
+          meta_title: (product as any).meta_title,
+          meta_description: (product as any).meta_description,
+          attributes: (product as any).attributes,
+        }}
+      />
 
       <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
         {/* Header */}
@@ -691,6 +708,9 @@ export default function ProductDetailPage() {
                 <div className="flex items-center gap-3">
                   <Button variant="outline" size="sm" onClick={pullSeoFromShopify} disabled={seoPulling || !product.shopify_product_id}>
                     {seoPulling ? "Henter…" : "Hent fra Shopify"}
+                  </Button>
+                  <Button size="sm" onClick={() => setAiSeoOpen(true)}>
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Generér med AI
                   </Button>
                   {product.webshop_product_id && (
                     <a
