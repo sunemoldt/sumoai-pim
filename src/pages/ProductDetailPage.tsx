@@ -27,6 +27,7 @@ import ProductVariantsTab from "@/components/ProductVariantsTab";
 import QuickSupplierSyncButton from "@/components/QuickSupplierSyncButton";
 import MergeProductDialog from "@/components/MergeProductDialog";
 import AiGenerateAllDialog from "@/components/AiGenerateAllDialog";
+import AiGenerateSeoDialog from "@/components/AiGenerateSeoDialog";
 import ProductLowMarginGuardCard from "@/components/ProductLowMarginGuardCard";
 import ProductCollectionsTab from "@/components/ProductCollectionsTab";
 import { Archive, ArchiveRestore, Copy, GitMerge, Sparkles, Rss, FolderTree } from "lucide-react";
