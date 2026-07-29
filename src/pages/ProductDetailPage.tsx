@@ -737,6 +737,10 @@ export default function ProductDetailPage() {
                   <Button variant="outline" size="sm" onClick={pullSeoFromShopify} disabled={seoPulling || !product.shopify_product_id}>
                     {seoPulling ? "Henter…" : "Hent fra Shopify"}
                   </Button>
+                  <Button variant="outline" size="sm" onClick={pushSeoToShopify} disabled={seoPushing || !product.shopify_product_id}>
+                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    {seoPushing ? "Skubber…" : "Skub til Shopify"}
+                  </Button>
                   <Button size="sm" onClick={() => setAiSeoOpen(true)}>
                     <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Generér med AI
                   </Button>
