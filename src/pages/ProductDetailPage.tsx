@@ -73,6 +73,34 @@ export default function ProductDetailPage() {
   const [rematchingSuppliers, setRematchingSuppliers] = useState(false);
   const [siblingCount, setSiblingCount] = useState<number>(0);
   const [seoPulling, setSeoPulling] = useState(false);
+  const [seoPushing, setSeoPushing] = useState(false);
+
+  const pushSeoToShopify = async () => {
+    if (!product?.id || !product?.shopify_product_id) return;
+    setSeoPushing(true);
+    try {
+      const { error: qErr } = await supabase.from("shopify_update_queue").insert({
+        master_product_id: product.id,
+        source: "manual-seo-push",
+        status: "pending",
+        next_attempt_at: new Date().toISOString(),
+        payload: {
+          reason: "manual-seo-push",
+          meta_title: (product as any).meta_title ?? null,
+          meta_description: (product as any).meta_description ?? null,
+          changed_fields: ["meta_title", "meta_description"],
+        },
+      } as any);
+      if (qErr) throw qErr;
+      const { error: wErr } = await supabase.functions.invoke("shopify-queue-worker", { body: {} });
+      if (wErr) throw wErr;
+      toast.success("SEO skubbet til Shopify");
+    } catch (e: any) {
+      toast.error(`Push fejlede: ${e?.message ?? String(e)}`);
+    } finally {
+      setSeoPushing(false);
+    }
+  };
 
   useEffect(() => {
     if (!product?.shopify_product_id || !product?.id) { setSiblingCount(0); return; }
