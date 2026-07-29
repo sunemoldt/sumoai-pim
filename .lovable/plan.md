@@ -1,50 +1,49 @@
-## Diagnose
+## Formål
 
-- **pg_cron kalder `scheduled-sync` hvert 30. minut** (`*/30 * * * *`), men `scheduled-sync` staggerer på 15‑minutters slots → slots på `:15`/`:45` fyres **aldrig**. Det rammer især **Aurdel** (slot :15) og forklarer hvorfor den ikke har hentet i dag.
-- Da Aurdel *undtagelsesvis* kørte manuelt → **504 IDLE_TIMEOUT (150s)** fordi API‑kaldet holder hovedrequesten åben.
-- 09:27 i dag fejlede alle 4 feeds med `No rows found in feed` — samtidige manuelle "Kør nu"‑kald kolliderede med en cron‑kørsel. Flere `Stale running log closed` på DCS bekræfter overlappende runs.
-- KOSATEC (`0 6 * * *`) missede 06:00 i dag samme mekanisme.
+Kør en struktureret drifts- og robusthedsgennemgang ("simulering") af PIM'et: prislogik, lagerlogik, leverandør-sync, Shopify-push og sikkerhed — og lever en rapport med konkrete fund + fixes.
 
-## Plan — fuldt forskudt kørsel
+Note om modeller: i dette projekt bruges Lovable AI Gateway. Chat-default er `openai/gpt-5.6-sol` (Claude-modeller er ikke i kataloget her). Simuleringerne nedenfor kører primært som deterministiske SQL/edge-function-tests — ikke som AI-gæt — så resultaterne er efterprøvelige.
 
-### 1. Erstat minut‑slots med en "sidst‑kørt" gate (rigtig staggering)
-- Ændr `scheduled-sync` så den **ikke** længere bruger cron‑minutfelter til at bestemme hvem der fyres.
-- Ny logik pr. tick:
-  1. Hent alle aktive leverandører med `feed_schedule ≠ manual`.
-  2. Mappér `feed_schedule` → intervaltimer (samme tabel som findes i `SupplierStatusTable`).
-  3. Betragt en leverandør som **due** hvis `now - last_sync_at ≥ interval` (eller `last_sync_at IS NULL`).
-  4. Sortér due leverandører efter `last_sync_at ASC NULLS FIRST` (den mest forsømte først).
-  5. **Fyre kun én due leverandør pr. tick.** Resten venter til næste tick → naturlig forskydning.
-- pg_cron `scheduled-sync-check` sættes til **hvert 5. minut** (`*/5 * * * *`). Med 4 aktive skema‑feeds giver det ~20 minutters minimum afstand mellem to leverandør‑jobs.
-- Effekten: Aurdel og KOSATEC bliver aldrig "sprunget over" fordi de ligger på et minuttal cron ikke rammer. Overlap mellem to feeds i samme tick er umuligt.
+## Trin 1 — Datatilstands-audit (read-only SQL)
 
-### 2. Advisory lock pr. leverandør i `supplier-feed-import`
-- Første handling: `pg_try_advisory_lock(hashtext('supplier-feed:'||supplier_id))`. Hvis låsen ikke fås → returnér `{ skipped: 'already_running' }` uden at røre `import_logs`. Fjerner "No rows found in feed"‑spøgelser fra samtidige manuelle + cron‑kald.
-- `Stale running log`‑oprydning scopes til den enkelte supplier_id og kun logs > 20 min gamle.
+Kør faktatjek mod databasen og sammenhold med reglerne:
+- Produkter hvor `stock_quantity` ikke matcher billigste/prioriterede valgte leverandør (leverandør-prioritet respekteret?).
+- Produkter der står "på lager" uden en valgt leverandør med lager.
+- Produkter hvor `webshop_price`/`sale_price` er under indkøb + margin-grænse, men uden aktiv prisalarm (og omvendt: alarmer der burde være lukket).
+- Produkter med `low_margin_guard = 'off'` der stadig har alarm.
+- Aktive tilbudskampagner: er slut-dato-revert faktisk sket på alle produkter?
+- Ugyldige/duplikerede EAN'er og produkter uden Shopify-link.
 
-### 3. Gør Aurdel timeout‑sikker
-- Flyt `EdgeRuntime.waitUntil` **før** første fetch, så hoved‑responsen returnerer 202 straks (ingen 150s idle‑timer på callerens request).
-- Stream Aurdel's items/stock i chunks (samme mønster som DCS): parse XML → flush hver N rækker → clear buffer → fortsæt. Fjerner in‑memory stockMap som holdt hele feedet.
+## Trin 2 — Sync-sundhed (leverandører)
 
-### 4. Bedre status på Leverandør‑siden
-- Udvid `SupplierStatusTable` + `SupplierListPage` med kolonner: `sidst OK`, `sidste fejl`, badge `Forsinket` (hvis `now - last_sync_at > 2× interval`).
-- Knap "Vis seneste log" åbner dialog med nyeste `import_logs`‑række (`status`, `total_fetched`, `imported`, `errors`).
+- Sidste succesfulde kørsel pr. leverandør vs. konfigureret interval; hvor mange fejl-/timeout-kørsler i `import_logs` seneste 7 dage.
+- Tjek om last-run-gate/overlap-guard reelt forhindrer samtidige kørsler (mønster i logs).
+- Cache-friskhed i `supplier_feed_cache` pr. leverandør (DCS undtaget pga. skip_cache).
 
-### 5. Efter deploy
-- Manuel trigger af `scheduled-sync` for at hente Aurdel + KOSATEC nu.
-- Verificér næste tick: kun én leverandør fyres, resten venter, ingen overlap i `import_logs`.
+## Trin 3 — Shopify-drift
 
-## Tekniske detaljer
+- Kø-status: fastlåste/gentagne fejlende jobs i Shopify-køen, ældste ubehandlede job.
+- Stikprøve-diff PIM ↔ Shopify på 20–30 produkter: pris, compareAtPrice, lager, tracked, SEO — via `shopify-compare`.
+- Verificér at tilbudsprodukter har korrekt price/compareAtPrice.
 
-**Filer:**
-- `supabase/functions/scheduled-sync/index.ts` — ny "sidst‑kørt" gate, dropper cron‑minut‑logik, fyrer én due leverandør pr. tick.
-- `supabase/functions/supplier-feed-import/index.ts` — advisory lock, scoped stale‑log‑cleanup, tidligere `waitUntil` for Aurdel, streamet Aurdel‑parser.
-- `src/components/monitoring/SupplierStatusTable.tsx` + `src/pages/SupplierListPage.tsx` — nye kolonner + "Vis seneste log" dialog.
-- pg_cron (via `supabase--insert`, ikke migration jf. project‑memory): unschedule + reschedule `scheduled-sync-check` til `*/5 * * * *`.
+## Trin 4 — Negative simuleringer (kontrollerede test-scenarier)
 
-**Ingen skema‑ændringer, ingen data‑migration.**
+Kør som transaktioner der rulles tilbage / på ét testprodukt:
+- Sæt billigste leverandør til 0 på lager → forventet: lager falder til næste leverandør, ikke summeret, ingen negativ avance.
+- Sæt indkøbspris over salgspris → forventet: salg stoppes + alarm rejses øjeblikkeligt.
+- Push under kostpris → forventet: blokeret (undtagen kladde-oprettelse).
+- Kampagne der udløber → forventet: pris ruller tilbage, også hvis trigger først blokerer.
 
-## Åbne spørgsmål
+## Trin 5 — Sikkerhed & fejltolerance
 
-1. OK med at fyre **én leverandør pr. tick** (max ~1 kørsel hvert 5. minut)? Alle leverandører når stadig deres respektive intervaller, men to store feeds vil aldrig køre samtidigt igen.
-2. Skal jeg samtidig sætte Aurdel og KOSATEC til hyppigere skema (fx hver 2. time) mens vi er i gang, eller behold nuværende frekvens?
+- Kør sikkerhedsscan; bekræft ingen nye fund.
+- Tjek at alle edge functions validerer JWT / service-role korrekt.
+- Tjek fejlhåndtering: 429/402 fra AI-gateway, timeouts, retry-adfærd.
+
+## Leverance
+
+En rapport i chatten: Grønt / Advarsel / Kritisk pr. område, med præcise produkt-/log-referencer. Kritiske fund fixes med det samme i samme runde; advarsler listes med forslag, så du vælger.
+
+## Teknisk
+
+Alt i trin 1–3 og 5 er read-only (SQL-queries, logs, scan). Trin 4 bruger ét dedikeret testprodukt eller rullede transaktioner, så produktionsdata ikke ændres, og eventuelle Shopify-push i test køres mod kladde/dry-run.
