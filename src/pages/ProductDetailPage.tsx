@@ -73,6 +73,34 @@ export default function ProductDetailPage() {
   const [rematchingSuppliers, setRematchingSuppliers] = useState(false);
   const [siblingCount, setSiblingCount] = useState<number>(0);
   const [seoPulling, setSeoPulling] = useState(false);
+  const [seoPushing, setSeoPushing] = useState(false);
+
+  const pushSeoToShopify = async () => {
+    if (!product?.id || !product?.shopify_product_id) return;
+    setSeoPushing(true);
+    try {
+      const { error: qErr } = await supabase.from("shopify_update_queue").insert({
+        master_product_id: product.id,
+        source: "manual-seo-push",
+        status: "pending",
+        next_attempt_at: new Date().toISOString(),
+        payload: {
+          reason: "manual-seo-push",
+          meta_title: (product as any).meta_title ?? null,
+          meta_description: (product as any).meta_description ?? null,
+          changed_fields: ["meta_title", "meta_description"],
+        },
+      } as any);
+      if (qErr) throw qErr;
+      const { error: wErr } = await supabase.functions.invoke("shopify-queue-worker", { body: {} });
+      if (wErr) throw wErr;
+      toast.success("SEO skubbet til Shopify");
+    } catch (e: any) {
+      toast.error(`Push fejlede: ${e?.message ?? String(e)}`);
+    } finally {
+      setSeoPushing(false);
+    }
+  };
 
   useEffect(() => {
     if (!product?.shopify_product_id || !product?.id) { setSiblingCount(0); return; }
@@ -708,6 +736,10 @@ export default function ProductDetailPage() {
                 <div className="flex items-center gap-3">
                   <Button variant="outline" size="sm" onClick={pullSeoFromShopify} disabled={seoPulling || !product.shopify_product_id}>
                     {seoPulling ? "Henter…" : "Hent fra Shopify"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={pushSeoToShopify} disabled={seoPushing || !product.shopify_product_id}>
+                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    {seoPushing ? "Skubber…" : "Skub til Shopify"}
                   </Button>
                   <Button size="sm" onClick={() => setAiSeoOpen(true)}>
                     <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Generér med AI
