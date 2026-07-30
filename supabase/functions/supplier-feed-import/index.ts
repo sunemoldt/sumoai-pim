@@ -641,8 +641,30 @@ const handler = async (req: Request): Promise<Response> => {
 
         const apiUrl = `https://api.aurdel.com/Prices/getPrice?${params.toString()}`;
         console.log(`Fetching Aurdel API database=${db}...`);
-        const res = await fetch(apiUrl);
-        if (!res.ok || !res.body) throw new Error(`API returned status ${res.status} for database=${db}`);
+        // Aurdel returns transient 5xx fairly often; retry with backoff before
+        // failing the whole import.
+        let res: Response | null = null;
+        let lastStatus = 0;
+        const delays = [2000, 5000, 10_000, 20_000];
+        for (let attempt = 0; attempt <= delays.length; attempt++) {
+          try {
+            const r = await fetch(apiUrl);
+            if (r.ok && r.body) { res = r; break; }
+            lastStatus = r.status;
+            try { await r.body?.cancel(); } catch { /* ignore */ }
+            // Only retry transient server-side/rate-limit failures.
+            if (r.status < 500 && r.status !== 429) break;
+          } catch (e) {
+            lastStatus = 0;
+            console.log(`Aurdel fetch error (db=${db}, attempt ${attempt + 1}): ${e}`);
+          }
+          if (attempt < delays.length) {
+            console.log(`Aurdel ${lastStatus || "network error"} for database=${db} — retrying in ${delays[attempt]}ms`);
+            await new Promise((r) => setTimeout(r, delays[attempt]));
+          }
+        }
+        if (!res) throw new Error(`API returned status ${lastStatus} for database=${db} after ${delays.length + 1} attempts`);
+
 
         if (db === "stock") {
           const count = await streamXmlItemsFromReadable(res.body, (attrs, inner) => {
