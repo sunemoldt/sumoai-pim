@@ -64,16 +64,39 @@ async function fetchShopifySales(shopDomain: string, token: string, startISO: st
   return stats;
 }
 
-// ShopifyQL: product views & sessions per product over period.
+// Map Shopify product handle -> numeric product id (needed to attribute sessions)
+async function fetchProductHandles(shopDomain: string, token: string) {
+  const map = new Map<string, string>();
+  let cursor: string | null = null;
+  for (let page = 0; page < 40; page++) {
+    const data = await shopifyGraphql(shopDomain, token, `#graphql
+      query($cursor: String) {
+        products(first: 250, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes { id handle }
+        }
+      }`, { cursor });
+    for (const n of data.products.nodes ?? []) {
+      map.set(String(n.handle).toLowerCase(), String(n.id).split("/").pop()!);
+    }
+    if (!data.products.pageInfo.hasNextPage) break;
+    cursor = data.products.pageInfo.endCursor;
+  }
+  return map;
+}
+
+// ShopifyQL: sessions per product landing page over the period.
+// The `products_analytics` dataset does not exist in Admin API 2026-04; the
+// supported way to get per-product traffic is the `sessions` dataset grouped
+// by landing_page_path (/products/<handle>).
 // Throws on failure — the caller must NOT silently store zeros.
-// Admin API 2026-04 shape: shopifyqlQuery { parseErrors, tableData { columns { name dataType }, rows } }
 async function fetchShopifyViews(shopDomain: string, token: string, startISO: string, endISO: string) {
   const result = new Map<string, { views: number; sessions: number }>();
   const since = startISO.split("T")[0];
   const until = endISO.split("T")[0];
-  const ql = `FROM products_analytics
-    SHOW product_views, sessions
-    GROUP BY product_id
+  const ql = `FROM sessions
+    SHOW sessions
+    GROUP BY landing_page_path
     SINCE ${since} UNTIL ${until}
     LIMIT 1000`;
   let data: Record<string, any>;
@@ -103,24 +126,29 @@ async function fetchShopifyViews(shopDomain: string, token: string, startISO: st
   if (!r?.tableData) {
     throw new Error("ShopifyQL returnerede ingen tabeldata");
   }
+
+  const handleToId = await fetchProductHandles(shopDomain, token);
+  const rows = (r.tableData.rows ?? []) as Array<Record<string, unknown> | unknown[]>;
   const cols: { name: string }[] = r.tableData.columns ?? [];
-  const idxProduct = cols.findIndex((c) => c.name === "product_id");
-  const idxViews = cols.findIndex((c) => c.name === "product_views");
+  const idxPath = cols.findIndex((c) => c.name === "landing_page_path");
   const idxSessions = cols.findIndex((c) => c.name === "sessions");
-  if (idxProduct < 0 || idxViews < 0) {
-    throw new Error(`ShopifyQL mangler forventede kolonner: ${cols.map((c) => c.name).join(", ")}`);
-  }
-  const rows = (r.tableData.rows ?? []) as unknown[][];
+
   for (const row of rows) {
-    const pid = String(row[idxProduct] ?? "").split("/").pop();
+    const isArray = Array.isArray(row);
+    const path = String((isArray ? row[idxPath] : (row as Record<string, unknown>).landing_page_path) ?? "");
+    const sessions = Number((isArray ? row[idxSessions] : (row as Record<string, unknown>).sessions) ?? 0) || 0;
+    const m = path.match(/^\/products\/([^/?#]+)/i);
+    if (!m) continue;
+    const pid = handleToId.get(decodeURIComponent(m[1]).toLowerCase());
     if (!pid) continue;
-    result.set(pid, {
-      views: Number(row[idxViews] ?? 0) || 0,
-      sessions: idxSessions >= 0 ? Number(row[idxSessions] ?? 0) || 0 : 0,
-    });
+    const cur = result.get(pid) ?? { views: 0, sessions: 0 };
+    cur.views += sessions;
+    cur.sessions += sessions;
+    result.set(pid, cur);
   }
   return result;
 }
+
 
 
 serve(async (req) => {
