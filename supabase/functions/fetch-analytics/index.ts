@@ -155,6 +155,22 @@ serve(async (req) => {
       .maybeSingle();
     if (!conn) throw new Error("Ingen aktiv Shopify-forbindelse");
 
+    // Diagnostic probe: inspect what the Shopify schema exposes for analytics.
+    let body: Record<string, unknown> = {};
+    try { body = await req.json(); } catch { /* no body */ }
+    if (body?.probe === "views") {
+      const introspect = await shopifyGraphql(conn.shop_domain, conn.access_token, `#graphql
+        query {
+          __type(name: "QueryRoot") { fields { name type { name kind ofType { name kind } } } }
+        }`);
+      const fields = (introspect.__type?.fields ?? []) as { name: string; type: Record<string, unknown> }[];
+      const analyticsFields = fields.filter((f) => /shopifyql|analytic|report/i.test(f.name));
+      return new Response(JSON.stringify({ probe: "views", analyticsFields }, null, 2), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+
     // Settings
     const { data: settings } = await supabase.from("analytics_settings").select("setting_key, setting_value");
     const settingsMap: Record<string, string> = {};
