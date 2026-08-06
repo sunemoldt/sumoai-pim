@@ -1,0 +1,20 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "efbc597f0d9faea46003b76496026f69"
+application_url = "https://pim.sumoai.dk/shopify"
+embedded = false
+name = "PIM-SUMOai"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_inventory,read_inventory,read_orders,read_product_listings,read_products,write_products,read_reports"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://qanxmacwntyxfhznxriz.supabase.co/functions/v1/shopify-oauth-callback"
+]
+
+[webhooks]
+api_version = "2026-07"
