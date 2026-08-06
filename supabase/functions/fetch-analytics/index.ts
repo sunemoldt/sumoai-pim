@@ -174,6 +174,9 @@ serve(async (req) => {
         analyticsFields: fields.filter((f) => /shopifyql|analytic|report/i.test(f.name)),
         response: introspect.resp,
         table: introspect.table,
+        col: introspect.col,
+        err: introspect.err,
+
       }, null, 2), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
