@@ -283,6 +283,14 @@ export function getRecommendedPrice(purchasePrice: number, markupPct: number): n
   return Math.round(purchasePrice * (1 + markupPct / 100) * 100) / 100;
 }
 
+// Utility: sales price ex-VAT that yields a given gross margin (dækningsgrad) on the purchase price.
+// margin% = (sale - purchase) / sale  =>  sale = purchase / (1 - margin/100)
+export function priceFromMargin(purchasePriceExVat: number, marginPct: number): number {
+  const m = marginPct / 100;
+  if (!Number.isFinite(m) || m >= 1) return purchasePriceExVat;
+  return Math.round((purchasePriceExVat / (1 - m)) * 100) / 100;
+}
+
 // Utility: recommended price incl VAT (for display as webshop price)
 export function getRecommendedPriceInclVat(purchasePrice: number, markupPct: number): number {
   return inclVat(getRecommendedPrice(purchasePrice, markupPct));
