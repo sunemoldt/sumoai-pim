@@ -23,6 +23,7 @@ type Row = {
   webshop_price: number | null;
   sale_price: number | null;
   custom_markup_percentage: number | null;
+  min_sync_margin: number | null;
   stock_sync_supplier_ids: string[] | null;
   supplier_products: {
     supplier_id: string;
