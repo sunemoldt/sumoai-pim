@@ -78,6 +78,7 @@ function AuthenticatedApp() {
 
   return (
     <AppLayout>
+      <Suspense fallback={<PageFallback />}>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/products" element={<ProductListPage />} />
