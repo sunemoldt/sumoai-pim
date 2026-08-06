@@ -1,49 +1,36 @@
-## Formål
+# Masse-prisjustering pr. brand / kategori
 
-Kør en struktureret drifts- og robusthedsgennemgang ("simulering") af PIM'et: prislogik, lagerlogik, leverandør-sync, Shopify-push og sikkerhed — og lever en rapport med konkrete fund + fixes.
+Et nyt værktøj hvor du vælger fx brand "Ubiquiti" (eller en kategori), sætter ønsket avance til 10%, ser en forhåndsvisning af hvad hver vare ændres til, og først derefter gemmer og pusher til Shopify.
 
-Note om modeller: i dette projekt bruges Lovable AI Gateway. Chat-default er `openai/gpt-5.6-sol` (Claude-modeller er ikke i kataloget her). Simuleringerne nedenfor kører primært som deterministiske SQL/edge-function-tests — ikke som AI-gæt — så resultaterne er efterprøvelige.
+## Sådan virker det
 
-## Trin 1 — Datatilstands-audit (read-only SQL)
+1. Ny side **Priser → Masse-prisjustering** (link fra Indstillinger og fra produktlisten).
+2. Vælg målgruppe: brand, kategori eller de varer du har markeret i produktlisten.
+3. Indtast ønsket **avance (dækningsgrad)** i procent, fx 10.
+   - Beregning: salgspris ekskl. moms = billigste valgte leverandørs indkøbspris / (1 − avance/100), derefter moms lagt på og afrundet efter den globale afrundingsregel.
+4. Preview-tabel viser pr. vare: titel, leverandør, indkøbspris, nuværende pris, ny pris, nuværende avance → ny avance, og en årsag hvis varen springes over. Hver række kan fravælges.
+5. Tryk **Anvend** → priserne gemmes, markup-værdien gemmes pr. vare, og ændringerne lægges i Shopify-køen.
 
-Kør faktatjek mod databasen og sammenhold med reglerne:
-- Produkter hvor `stock_quantity` ikke matcher billigste/prioriterede valgte leverandør (leverandør-prioritet respekteret?).
-- Produkter der står "på lager" uden en valgt leverandør med lager.
-- Produkter hvor `webshop_price`/`sale_price` er under indkøb + margin-grænse, men uden aktiv prisalarm (og omvendt: alarmer der burde være lukket).
-- Produkter med `low_margin_guard = 'off'` der stadig har alarm.
-- Aktive tilbudskampagner: er slut-dato-revert faktisk sket på alle produkter?
-- Ugyldige/duplikerede EAN'er og produkter uden Shopify-link.
+## Varer der springes over (vises som "springes over" i preview)
 
-## Trin 2 — Sync-sundhed (leverandører)
+- Varer på tilbud (aktiv `sale_price`)
+- Varer med egen markup-override (`custom_markup_percentage` sat)
+- Varer uden valgt leverandør / uden indkøbspris
 
-- Sidste succesfulde kørsel pr. leverandør vs. konfigureret interval; hvor mange fejl-/timeout-kørsler i `import_logs` seneste 7 dage.
-- Tjek om last-run-gate/overlap-guard reelt forhindrer samtidige kørsler (mønster i logs).
-- Cache-friskhed i `supplier_feed_cache` pr. leverandør (DCS undtaget pga. skip_cache).
+Du kan tvinge en enkelt oversprunget vare med igennem ved manuelt at markere den i preview, hvis du vil.
 
-## Trin 3 — Shopify-drift
+## Sikkerhed og alarmer
 
-- Kø-status: fastlåste/gentagne fejlende jobs i Shopify-køen, ældste ubehandlede job.
-- Stikprøve-diff PIM ↔ Shopify på 20–30 produkter: pris, compareAtPrice, lager, tracked, SEO — via `shopify-compare`.
-- Verificér at tilbudsprodukter har korrekt price/compareAtPrice.
+Ingen eksisterende beskyttelse omgås:
 
-## Trin 4 — Negative simuleringer (kontrollerede test-scenarier)
-
-Kør som transaktioner der rulles tilbage / på ét testprodukt:
-- Sæt billigste leverandør til 0 på lager → forventet: lager falder til næste leverandør, ikke summeret, ingen negativ avance.
-- Sæt indkøbspris over salgspris → forventet: salg stoppes + alarm rejses øjeblikkeligt.
-- Push under kostpris → forventet: blokeret (undtagen kladde-oprettelse).
-- Kampagne der udløber → forventet: pris ruller tilbage, også hvis trigger først blokerer.
-
-## Trin 5 — Sikkerhed & fejltolerance
-
-- Kør sikkerhedsscan; bekræft ingen nye fund.
-- Tjek at alle edge functions validerer JWT / service-role korrekt.
-- Tjek fejlhåndtering: 429/402 fra AI-gateway, timeouts, retry-adfærd.
-
-## Leverance
-
-En rapport i chatten: Grønt / Advarsel / Kritisk pr. område, med præcise produkt-/log-referencer. Kritiske fund fixes med det samme i samme runde; advarsler listes med forslag, så du vælger.
+- Databasens `prevent_below_purchase_price`-trigger gælder stadig — en beregnet pris under indkøb afvises og vises som fejl i resultatet.
+- Lav-avance-vagten (`apply_low_margin_guard`) og lagerberegning kører som i dag efter opdateringen, så varer der ryger under grænsen stadig markeres/stoppes og giver prisalarm.
+- Varer uden lager behandles uændret.
 
 ## Teknisk
 
-Alt i trin 1–3 og 5 er read-only (SQL-queries, logs, scan). Trin 4 bruger ét dedikeret testprodukt eller rullede transaktioner, så produktionsdata ikke ændres, og eventuelle Shopify-push i test køres mod kladde/dry-run.
+- Ny side `src/pages/BulkPricingPage.tsx` + rute i `src/App.tsx` og menupunkt i `AppSidebar`.
+- Genbruger `usePriceSettings`, `getCheapestSupplier`-logikken (respekterer `stock_sync_supplier_ids` og leverandør-prioritet som på produktsiden) samt `applyRounding` fra `src/lib/price-rounding.ts`.
+- Ny hjælpefunktion `priceFromMargin(purchaseExVat, marginPct)` i `src/hooks/use-products.ts` (avance-formel), ved siden af den eksisterende markup-formel.
+- Anvend-knappen opdaterer `master_products.webshop_price` (og `custom_markup_percentage` som den ækvivalente markup) i batches med fejlopsamling pr. vare; eksisterende trigger `auto_enqueue_shopify_update` sørger for Shopify-push.
+- Ingen skemaændringer nødvendige.
