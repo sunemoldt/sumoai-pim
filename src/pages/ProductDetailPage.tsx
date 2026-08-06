@@ -313,7 +313,7 @@ export default function ProductDetailPage() {
       }
       const { error } = await supabase
         .from("master_products")
-        .update(patch)
+        .update(patch as any)
         .eq("id", product.id);
       if (error) throw error;
       if (capped) setMinSyncMargin(String(marginCap));

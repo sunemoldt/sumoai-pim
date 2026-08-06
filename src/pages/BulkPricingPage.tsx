@@ -169,7 +169,7 @@ export default function BulkPricingPage() {
       if (current == null || current > targetMargin) patch.min_sync_margin = targetMargin;
       const { error } = await supabase
         .from("master_products")
-        .update(patch)
+        .update(patch as any)
         .eq("id", row.id);
       if (error) failed.push({ title: row.title, error: error.message });
       else ok++;
