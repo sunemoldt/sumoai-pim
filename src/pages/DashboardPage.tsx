@@ -273,21 +273,39 @@ export default function DashboardPage() {
               <CardTitle className="text-base font-medium flex items-center gap-2">
                 <Eye className="h-4 w-4 text-muted-foreground" />
                 Mest besøgte ({periodDays} dage)
+                {analyticsIsStale && (
+                  <Badge variant="outline" className="text-warning border-warning/30">Forældet</Badge>
+                )}
               </CardTitle>
+              {analyticsMeta && (
+                <p className="text-xs text-muted-foreground">
+                  Data: {formatDate(analyticsMeta.period_start)} – {formatDate(analyticsMeta.period_end)} · opdateret {formatDate(analyticsMeta.updated_at)}
+                </p>
+              )}
             </CardHeader>
             <CardContent>
               {topVisitedProducts.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4">Ingen besøgsdata endnu</p>
-              ) : renderProductList(topVisitedProducts, (p) => {
-                const pv = (p as typeof topVisitedProducts[0]).pageViews;
-                return (
-                  <Badge variant="outline" className="ml-2 shrink-0">
-                    {pv} besøg
-                  </Badge>
-                );
-              })}
+              ) : (
+                <>
+                  {analyticsIsStale && (
+                    <p className="text-xs text-warning mb-3">
+                      Tallene er ikke opdateret fra Shopify — de viser perioden ovenfor, ikke de sidste {periodDays} dage.
+                    </p>
+                  )}
+                  {renderProductList(topVisitedProducts, (p) => {
+                    const pv = (p as typeof topVisitedProducts[0]).pageViews;
+                    return (
+                      <Badge variant="outline" className="ml-2 shrink-0">
+                        {pv} besøg
+                      </Badge>
+                    );
+                  })}
+                </>
+              )}
             </CardContent>
           </Card>
+
         </div>
       )}
     </div>
