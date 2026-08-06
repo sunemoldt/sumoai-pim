@@ -2,12 +2,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const CANDIDATES = [
-  "FROM foo SHOW bar SINCE -30d",
-  "FROM sessions SHOW sum(sessions) GROUP BY product_id SINCE -30d LIMIT 5",
-  "FROM products SHOW view_sessions GROUP BY product_id SINCE -30d LIMIT 5",
-  "FROM sales SHOW sum(net_sales) GROUP BY product_id SINCE -30d LIMIT 5",
-  "FROM products SHOW product_views, sessions GROUP BY product_id SINCE -30d LIMIT 5",
-  "FROM online_store_sessions SHOW sum(sessions) GROUP BY product_id SINCE -30d LIMIT 5",
+  "FROM sessions SHOW sum(sessions) GROUP BY product_title SINCE -30d LIMIT 3",
+  "FROM sessions SHOW sum(sessions) GROUP BY landing_page_url SINCE -30d LIMIT 3",
+  "FROM sessions SHOW sum(sessions) GROUP BY page_type SINCE -30d LIMIT 3",
+  "FROM product_views SHOW sum(views) GROUP BY product_id SINCE -30d LIMIT 3",
+  "FROM products_analytics SHOW product_views GROUP BY product_id SINCE -30d LIMIT 3",
+  "FROM sales SHOW net_sales GROUP BY product_id SINCE -30d LIMIT 3",
+  "FROM sessions SHOW sum(sessions) SINCE -30d",
 ];
 
 Deno.serve(async (req) => {
