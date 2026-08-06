@@ -5,6 +5,7 @@ import {
   getMarginPercent,
   exVat,
   useAllProductAnalytics,
+  useAnalyticsPeriodMeta,
 } from "@/hooks/use-products";
 import { useSuppliers } from "@/hooks/use-products";
 import StatCard from "@/components/StatCard";
@@ -13,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+
 
 type DashView = "overview" | "low_margin" | "out_of_stock" | "high_margin";
 
