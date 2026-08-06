@@ -682,6 +682,11 @@ export default function ProductDetailPage() {
                 <div>
                   <Label className="text-muted-foreground text-xs">Lagerbeholdning</Label>
                   <InlineEditField productId={product.id} field="stock_quantity" value={(product as any).stock_quantity} type="number" />
+                  {hasUnknownStockQty(product as any) && (
+                    <p className="mt-1 text-[11px] text-warning">
+                      Ukendt antal – leverandøren melder på lager uden at oplyse lagertal
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Lagerstatus</Label>
