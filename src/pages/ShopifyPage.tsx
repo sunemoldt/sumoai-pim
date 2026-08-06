@@ -39,6 +39,8 @@ type ShopifyTestResult = Record<string, unknown>;
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const isValidShopDomain = (domain: string) => /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i.test(domain);
 const isLovablePreview = () => window.location.hostname.includes("lovableproject.com") || window.location.hostname.includes("lovable.app");
+const hasScope = (scope: string | null | undefined, required: string) =>
+  (scope ?? "").split(",").map((item) => item.trim()).includes(required);
 
 const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref) {
   const [status, setStatus] = useState<Status | null>(null);
@@ -49,6 +51,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
   const [installUrlLoading, setInstallUrlLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ShopifyTestResult | null>(null);
+  const reportsAccessMissing = status?.is_connected && !hasScope(status.scope, "read_reports");
 
   const loadStatus = async () => {
     setLoading(true);
@@ -245,6 +248,15 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
               <div><span className="text-muted-foreground">Shopify API-id:</span> <span className="font-mono text-xs">{status.shop_domain}</span></div>
               <div><span className="text-muted-foreground">Scopes:</span> <span className="font-mono text-xs">{status.scope}</span></div>
               <div><span className="text-muted-foreground">Installeret:</span> {status.installed_at ? new Date(status.installed_at).toLocaleString("da-DK") : "—"}</div>
+              {reportsAccessMissing && (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-destructive">
+                  <p className="font-medium">Shopify afviser adgang til rapporter</p>
+                  <p className="mt-1 text-xs">
+                    Installationen blev gennemført, men Shopify tildelte ikke <code>read_reports</code>.
+                    Tilladelsen skal først tilføjes i Shopify-appens konfiguration; derefter kan forbindelsen geninstalleres her.
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -363,7 +375,7 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
             <p>2. Du sendes ud af preview-rammen til Shopify hvor du godkender app'en. Shopify sender dig tilbage med et access token.</p>
           <p>3. Den nyligt installerede butik bliver automatisk **aktiv tenant** — alle PIM-handlinger arbejder herefter mod den.</p>
           <p>4. Du kan registrere flere butikker (f.eks. dev-store + produktion) og skifte mellem dem ovenfor.</p>
-          <p className="pt-2 text-xs">Scopes: <code className="text-xs">read_products, write_products, read_inventory, write_inventory, read_product_listings</code></p>
+          <p className="pt-2 text-xs">Scopes: <code className="text-xs">read_products, write_products, read_inventory, write_inventory, read_product_listings, read_orders, read_reports</code></p>
         </CardContent>
       </Card>
     </div>
