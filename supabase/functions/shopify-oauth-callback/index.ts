@@ -8,6 +8,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 // App URL to redirect user back to after install (the Lovable app)
 const APP_RETURN_URL = "https://pim.sumoai.dk/shopify";
+const REQUIRED_SCOPES = ["write_products", "write_inventory", "read_orders", "read_reports"];
 
 async function verifyHmac(params: URLSearchParams, secret: string): Promise<boolean> {
   const hmac = params.get("hmac");
@@ -114,6 +115,25 @@ Deno.serve(async (req) => {
 
     if (!accessToken) {
       return htmlResponse("Token mangler", "Shopify returnerede ingen access token.", false);
+    }
+
+    const grantedScopes = new Set(
+      String(scope).split(",").map((item) => item.trim()).filter(Boolean)
+    );
+    const missingScopes = REQUIRED_SCOPES.filter((required) => !grantedScopes.has(required));
+    if (missingScopes.length > 0) {
+      console.error("Shopify did not grant required scopes", {
+        requested: REQUIRED_SCOPES,
+        granted: [...grantedScopes],
+        missing: missingScopes,
+      });
+      await supabase.from("shopify_oauth_state").delete().eq("state", state);
+      return htmlResponse(
+        "Shopify mangler tilladelse",
+        `Shopify godkendte ikke den nødvendige adgang: <strong>${missingScopes.join(", ")}</strong>. ` +
+        "Tilføj tilladelsen i Shopify-appens konfiguration og start derefter installationen igen.",
+        false
+      );
     }
 
     let shopName: string | null = null;
