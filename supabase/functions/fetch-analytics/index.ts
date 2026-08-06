@@ -155,10 +155,8 @@ serve(async (req) => {
       .maybeSingle();
     if (!conn) throw new Error("Ingen aktiv Shopify-forbindelse");
 
-    // Diagnostic probe: inspect what the Shopify schema exposes for analytics.
-    let body: Record<string, unknown> = {};
-    try { body = await req.json(); } catch { /* no body */ }
     // Settings
+
     const { data: settings } = await supabase.from("analytics_settings").select("setting_key, setting_value");
     const settingsMap: Record<string, string> = {};
     (settings ?? []).forEach((s: { setting_key: string; setting_value: string }) => { settingsMap[s.setting_key] = s.setting_value; });
