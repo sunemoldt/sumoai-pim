@@ -81,7 +81,7 @@ export default function BulkPricingPage() {
       const { data, error } = await supabase
         .from("master_products")
         .select(
-          "id,title,brand,category,categories,webshop_price,sale_price,custom_markup_percentage,stock_sync_supplier_ids," +
+          "id,title,brand,category,categories,webshop_price,sale_price,custom_markup_percentage,min_sync_margin,stock_sync_supplier_ids," +
             "supplier_products(supplier_id,purchase_price,in_stock,suppliers(id,name,priority))"
         )
         .order("title");
@@ -159,13 +159,17 @@ export default function BulkPricingPage() {
     const equivalentMarkup = Math.round((100 / (1 - targetMargin / 100) - 100) * 100) / 100;
 
     for (const row of applicable) {
+      // Min. avance for sync må aldrig være højere end den valgte avance.
+      const current = products.find((p) => p.id === row.id)?.min_sync_margin;
+      const patch: Record<string, unknown> = {
+        webshop_price: row.newPrice,
+        custom_markup_percentage: equivalentMarkup,
+        updated_at: new Date().toISOString(),
+      };
+      if (current == null || current > targetMargin) patch.min_sync_margin = targetMargin;
       const { error } = await supabase
         .from("master_products")
-        .update({
-          webshop_price: row.newPrice,
-          custom_markup_percentage: equivalentMarkup,
-          updated_at: new Date().toISOString(),
-        })
+        .update(patch)
         .eq("id", row.id);
       if (error) failed.push({ title: row.title, error: error.message });
       else ok++;
