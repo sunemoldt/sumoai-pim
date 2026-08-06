@@ -112,6 +112,7 @@ function AuthenticatedApp() {
         <Route path="/settings/ean-suggestions" element={<EanSuggestionsPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </Suspense>
     </AppLayout>
   );
 }
