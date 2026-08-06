@@ -161,14 +161,19 @@ serve(async (req) => {
     if (body?.probe === "views") {
       const introspect = await shopifyGraphql(conn.shop_domain, conn.access_token, `#graphql
         query {
-          __type(name: "QueryRoot") { fields { name type { name kind ofType { name kind } } } }
+          root: __type(name: "QueryRoot") { fields { name args { name } type { name kind ofType { name kind } } } }
+          resp: __type(name: "ShopifyqlQueryResponse") { fields { name type { name kind ofType { name kind ofType { name kind } } } } }
+          table: __type(name: "TableData") { fields { name type { name kind ofType { name kind } } } }
         }`);
-      const fields = (introspect.__type?.fields ?? []) as { name: string; type: Record<string, unknown> }[];
-      const analyticsFields = fields.filter((f) => /shopifyql|analytic|report/i.test(f.name));
-      return new Response(JSON.stringify({ probe: "views", analyticsFields }, null, 2), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const fields = (introspect.root?.fields ?? []) as { name: string }[];
+      return new Response(JSON.stringify({
+        probe: "views",
+        analyticsFields: fields.filter((f) => /shopifyql|analytic|report/i.test(f.name)),
+        response: introspect.resp,
+        table: introspect.table,
+      }, null, 2), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
 
 
     // Settings
