@@ -5,6 +5,7 @@ import {
   getMarginPercent,
   exVat,
   useAllProductAnalytics,
+  useAnalyticsPeriodMeta,
 } from "@/hooks/use-products";
 import { useSuppliers } from "@/hooks/use-products";
 import StatCard from "@/components/StatCard";
@@ -14,15 +15,18 @@ import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
+
 type DashView = "overview" | "low_margin" | "out_of_stock" | "high_margin";
 
 export default function DashboardPage() {
   const { data: products = [] } = useMasterProducts();
   const { data: suppliers = [] } = useSuppliers();
   const { data: analyticsMap } = useAllProductAnalytics();
+  const { data: analyticsMeta } = useAnalyticsPeriodMeta();
   const navigate = useNavigate();
   const [view, setView] = useState<DashView>("overview");
   const [periodDays, setPeriodDays] = useState<number>(30);
+
 
   useEffect(() => {
     supabase
@@ -40,6 +44,16 @@ export default function DashboardPage() {
     window.open(`/products/${id}`, "_blank", "noopener,noreferrer");
   };
 
+  const formatDate = (iso: string) =>
+    new Intl.DateTimeFormat("da-DK", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(iso));
+
+  // Data counts as stale when the newest analytics period ended more than 2 days ago.
+  const analyticsIsStale = useMemo(() => {
+    if (!analyticsMeta) return false;
+    const end = new Date(analyticsMeta.period_end).getTime();
+    return Date.now() - end > 2 * 24 * 60 * 60 * 1000;
+  }, [analyticsMeta]);
+
   const topVisitedProducts = useMemo(() => {
     if (!analyticsMap) return [];
     return products
@@ -48,6 +62,7 @@ export default function DashboardPage() {
       .sort((a, b) => b.pageViews - a.pageViews)
       .slice(0, 10);
   }, [products, analyticsMap]);
+
 
   const totalProducts = products.length;
   const activeSuppliers = suppliers.filter((s) => s.is_active).length;
@@ -269,21 +284,39 @@ export default function DashboardPage() {
               <CardTitle className="text-base font-medium flex items-center gap-2">
                 <Eye className="h-4 w-4 text-muted-foreground" />
                 Mest besøgte ({periodDays} dage)
+                {analyticsIsStale && (
+                  <Badge variant="outline" className="text-warning border-warning/30">Forældet</Badge>
+                )}
               </CardTitle>
+              {analyticsMeta && (
+                <p className="text-xs text-muted-foreground">
+                  Data: {formatDate(analyticsMeta.period_start)} – {formatDate(analyticsMeta.period_end)} · opdateret {formatDate(analyticsMeta.updated_at)}
+                </p>
+              )}
             </CardHeader>
             <CardContent>
               {topVisitedProducts.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4">Ingen besøgsdata endnu</p>
-              ) : renderProductList(topVisitedProducts, (p) => {
-                const pv = (p as typeof topVisitedProducts[0]).pageViews;
-                return (
-                  <Badge variant="outline" className="ml-2 shrink-0">
-                    {pv} besøg
-                  </Badge>
-                );
-              })}
+              ) : (
+                <>
+                  {analyticsIsStale && (
+                    <p className="text-xs text-warning mb-3">
+                      Tallene er ikke opdateret fra Shopify — de viser perioden ovenfor, ikke de sidste {periodDays} dage.
+                    </p>
+                  )}
+                  {renderProductList(topVisitedProducts, (p) => {
+                    const pv = (p as typeof topVisitedProducts[0]).pageViews;
+                    return (
+                      <Badge variant="outline" className="ml-2 shrink-0">
+                        {pv} besøg
+                      </Badge>
+                    );
+                  })}
+                </>
+              )}
             </CardContent>
           </Card>
+
         </div>
       )}
     </div>
