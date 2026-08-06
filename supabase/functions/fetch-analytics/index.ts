@@ -164,7 +164,7 @@ serve(async (req) => {
       const raw = await shopifyGraphql(conn.shop_domain, conn.access_token, `#graphql
         query($q: String!) {
           shopifyqlQuery(query: $q) {
-            parseErrors { code message }
+            parseErrors
             tableData { columns { name dataType displayName } rows }
           }
         }`, { q: `FROM products SHOW view_sessions GROUP BY product_id SINCE ${since} UNTIL ${until} LIMIT 5` });
