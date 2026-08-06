@@ -3,11 +3,11 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const CANDIDATES = [
   "FROM foo SHOW bar SINCE -30d",
-  "FROM sessions SHOW sum(sessions) BY product_id SINCE -30d",
-  "FROM products SHOW view_sessions BY product_id SINCE -30d",
-  "FROM product_analytics SHOW product_views BY product_id SINCE -30d",
-  "FROM online_store_sessions SHOW sum(sessions) BY product_id SINCE -30d",
-  "FROM products SHOW sum(product_views) BY product_id SINCE -30d",
+  "FROM sessions SHOW sum(sessions) GROUP BY product_id SINCE -30d LIMIT 5",
+  "FROM products SHOW view_sessions GROUP BY product_id SINCE -30d LIMIT 5",
+  "FROM sales SHOW sum(net_sales) GROUP BY product_id SINCE -30d LIMIT 5",
+  "FROM products SHOW product_views, sessions GROUP BY product_id SINCE -30d LIMIT 5",
+  "FROM online_store_sessions SHOW sum(sessions) GROUP BY product_id SINCE -30d LIMIT 5",
 ];
 
 Deno.serve(async (req) => {
@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": conn.access_token },
         body: JSON.stringify({
-          query: `query($q: String!) { shopifyqlQuery(query: $q) { __typename ... on TableResponse { parseErrors { code message } tableData { columns { name dataType } rowData } } } }`,
+          query: `query($q: String!) { shopifyqlQuery(query: $q) { parseErrors tableData { columns { name dataType } rows } } }`,
           variables: { q },
         }),
       });
