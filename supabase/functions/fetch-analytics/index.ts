@@ -196,6 +196,15 @@ serve(async (req) => {
 
     console.log(`Shopify sales: ${salesStats.size} products | views: ${viewStats.size} products`);
 
+    // Guard: never overwrite existing analytics with all-zero rows.
+    const totalViews = [...viewStats.values()].reduce((s, v) => s + v.views, 0);
+    if (viewStats.size === 0 || totalViews === 0) {
+      throw new Error(
+        `Shopify returnerede ingen besøgsdata for ${startStr} → ${endStr} (${viewStats.size} rækker, ${totalViews} visninger). ` +
+        `Gemmer ikke nul-tal. Tjek at Shopify-appen har read_analytics-adgang.`
+      );
+    }
+
     const analyticsRows: Record<string, unknown>[] = [];
     const recommendations: Record<string, unknown>[] = [];
     let matchedSales = 0, matchedViews = 0;
