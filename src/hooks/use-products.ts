@@ -253,9 +253,9 @@ export function useAllProductAnalytics() {
       // Trim to only the columns Dashboard/ProductList read, and dedupe to one row per product.
       const { data, error } = await supabase
         .from("product_analytics")
-        .select("master_product_id, page_views, add_to_carts, purchases, conversion_rate, impressions, clicks, ctr, avg_position, period_end, updated_at")
-        .order("updated_at", { ascending: false })
-        .order("period_end", { ascending: false });
+        .select("master_product_id, page_views, add_to_carts, purchases, conversion_rate, impressions, clicks, ctr, avg_position, period_start, period_end, updated_at")
+        .order("period_end", { ascending: false })
+        .order("updated_at", { ascending: false });
       if (error) throw error;
       const byProduct = new Map<string, ProductAnalytics>();
       for (const row of (data ?? []) as unknown as ProductAnalytics[]) {
@@ -267,6 +267,30 @@ export function useAllProductAnalytics() {
     },
   });
 }
+
+// Newest analytics period present in the database, for staleness display.
+export function useAnalyticsPeriodMeta() {
+  return useQuery({
+    queryKey: ["analytics_period_meta"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("product_analytics")
+        .select("period_start, period_end, updated_at")
+        .order("period_end", { ascending: false })
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      const row = data?.[0];
+      if (!row) return null;
+      return {
+        period_start: row.period_start as string,
+        period_end: row.period_end as string,
+        updated_at: row.updated_at as string,
+      };
+    },
+  });
+}
+
 
 export function useProductRecommendations(productId?: string) {
   return useQuery({
