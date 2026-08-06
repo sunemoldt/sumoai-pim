@@ -163,7 +163,10 @@ serve(async (req) => {
         query {
           root: __type(name: "QueryRoot") { fields { name args { name } type { name kind ofType { name kind } } } }
           resp: __type(name: "ShopifyqlQueryResponse") { fields { name type { name kind ofType { name kind ofType { name kind } } } } }
-          table: __type(name: "TableData") { fields { name type { name kind ofType { name kind } } } }
+          table: __type(name: "ShopifyqlTableData") { fields { name type { name kind ofType { name kind ofType { name kind } } } } }
+          col: __type(name: "ShopifyqlColumn") { fields { name } }
+          err: __type(name: "ShopifyqlParseError") { fields { name } }
+
         }`);
       const fields = (introspect.root?.fields ?? []) as { name: string }[];
       return new Response(JSON.stringify({
