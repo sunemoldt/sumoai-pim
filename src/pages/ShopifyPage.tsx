@@ -104,26 +104,40 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
     };
   }, [shopDomainInput]);
 
-  const openInstallLink = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const generateFreshInstallUrl = async (domain: string): Promise<string | null> => {
+    const { data, error } = await supabase.functions.invoke<{ install_url: string }>("shopify-oauth-start", {
+      body: { shop_domain: domain },
+    });
+    if (error || !data?.install_url) {
+      console.error(error);
+      toast({ title: "Kunne ikke generere link", description: error?.message || "Prøv igen.", variant: "destructive" });
+      return null;
+    }
+    return data.install_url;
+  };
+
+  const openInstallLink = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     const domain = shopDomainInput.trim();
     if (!isValidShopDomain(domain)) {
       toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
-    if (!installUrl) {
-      toast({ title: "Install-link ikke klar", description: "Vent et øjeblik og prøv igen.", variant: "destructive" });
-      return;
-    }
+    setInstallUrlLoading(true);
+    const freshUrl = await generateFreshInstallUrl(domain);
+    setInstallUrlLoading(false);
+    if (!freshUrl) return;
+    setInstallUrl(freshUrl);
+
     if (isLovablePreview() && window.location.hostname !== "pim.sumoai.dk") {
-      navigator.clipboard.writeText(installUrl).catch(() => undefined);
+      navigator.clipboard.writeText(freshUrl).catch(() => undefined);
       toast({ title: "Install-link kopieret", description: "Indsæt linket direkte i browserens adressefelt — Shopify blokerer Lovable preview-rammen." });
       return;
     }
 
-    const popup = window.open(installUrl, "shopify_oauth", "popup=yes,width=1100,height=800,noopener,noreferrer");
+    const popup = window.open(freshUrl, "shopify_oauth", "popup=yes,width=1100,height=800,noopener,noreferrer");
     if (!popup) {
-      navigator.clipboard.writeText(installUrl).catch(() => undefined);
+      navigator.clipboard.writeText(freshUrl).catch(() => undefined);
       toast({ title: "Popup blev blokeret", description: "Install-linket er kopieret — indsæt det i en ny browserfane.", variant: "destructive" });
       return;
     }
@@ -137,11 +151,12 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       toast({ title: "Ugyldigt shop-domain", description: "Skal være f.eks. comtek-webshop.myshopify.com", variant: "destructive" });
       return;
     }
-    if (!installUrl) {
-      toast({ title: "Install-link ikke klar", description: "Vent et øjeblik og prøv igen.", variant: "destructive" });
-      return;
-    }
-    await navigator.clipboard.writeText(installUrl);
+    setInstallUrlLoading(true);
+    const freshUrl = await generateFreshInstallUrl(domain);
+    setInstallUrlLoading(false);
+    if (!freshUrl) return;
+    setInstallUrl(freshUrl);
+    await navigator.clipboard.writeText(freshUrl);
     toast({ title: "Install-link kopieret", description: "Indsæt i en ny browserfane for at godkende på Shopify." });
   };
 
