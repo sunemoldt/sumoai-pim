@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import DashboardPage from "@/pages/DashboardPage";
 import ProductListPage from "@/pages/ProductListPage";
+import BulkPricingPage from "@/pages/BulkPricingPage";
 import ProductDetailPage from "@/pages/ProductDetailPage";
 import NewProductPage from "@/pages/NewProductPage";
 import SupplierListPage from "@/pages/SupplierListPage";
@@ -92,6 +93,7 @@ function AuthenticatedApp() {
         <Route path="/campaigns/new" element={<CampaignEditorPage />} />
         <Route path="/campaigns/:id" element={<CampaignEditorPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/bulk-pricing" element={<BulkPricingPage />} />
         <Route path="/price-alerts" element={<PriceAlertsPage />} />
         <Route path="/ean-lookup" element={<EanLookupPage />} />
 

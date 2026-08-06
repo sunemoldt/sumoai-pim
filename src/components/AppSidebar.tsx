@@ -15,6 +15,7 @@ import {
   Tag,
   AlertTriangle,
   ScanBarcode,
+  Percent,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,6 +31,7 @@ const navItems = [
   { to: "/suppliers", icon: Truck, label: "Leverandører" },
   { to: "/shopify", icon: ShoppingBag, label: "Shopify" },
   { to: "/ai-insights", icon: Sparkles, label: "AI-indsigter" },
+  { to: "/bulk-pricing", icon: Percent, label: "Masse-priser" },
   { to: "/price-alerts", icon: AlertTriangle, label: "Pris-alarmer" },
   { to: "/monitoring", icon: Activity, label: "Monitoring" },
   { to: "/automations/n8n", icon: Workflow, label: "n8n Workflows" },
