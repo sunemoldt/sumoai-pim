@@ -22,9 +22,11 @@ export default function DashboardPage() {
   const { data: products = [] } = useMasterProducts();
   const { data: suppliers = [] } = useSuppliers();
   const { data: analyticsMap } = useAllProductAnalytics();
+  const { data: analyticsMeta } = useAnalyticsPeriodMeta();
   const navigate = useNavigate();
   const [view, setView] = useState<DashView>("overview");
   const [periodDays, setPeriodDays] = useState<number>(30);
+
 
   useEffect(() => {
     supabase
