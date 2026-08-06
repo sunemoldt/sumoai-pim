@@ -289,6 +289,9 @@ export default function ProductDetailPage() {
     return new Intl.NumberFormat("da-DK", { style: "currency", currency: "DKK" }).format(price);
   };
 
+  // markup% (tillæg på indkøb) -> avance% (dækningsgrad)
+  const markupToMargin = (markup: number) => Math.round((markup / (100 + markup)) * 10000) / 100;
+
   const saveMarkup = async () => {
     if (!product) return;
     setSaving(true);
@@ -298,12 +301,26 @@ export default function ProductDetailPage() {
         toast.error("Ugyldig værdi");
         return;
       }
+      // Min. avance for sync må aldrig overstige den valgte avance.
+      const effMarkup = val !== null ? val : globalMarkup;
+      const marginCap = markupToMargin(effMarkup);
+      const currentMin = (product as any).min_sync_margin as number | null;
+      const patch: Record<string, any> = { custom_markup_percentage: val };
+      let capped = false;
+      if (currentMin == null || currentMin > marginCap) {
+        patch.min_sync_margin = marginCap;
+        capped = true;
+      }
       const { error } = await supabase
         .from("master_products")
-        .update({ custom_markup_percentage: val })
+        .update(patch as any)
         .eq("id", product.id);
       if (error) throw error;
-      toast.success(val !== null ? `Avance sat til ${val}%` : "Avance nulstillet til global");
+      if (capped) setMinSyncMargin(String(marginCap));
+      toast.success(
+        (val !== null ? `Avance sat til ${val}%` : "Avance nulstillet til global") +
+          (capped ? ` · Min. avance for sync justeret til ${marginCap}%` : "")
+      );
       queryClient.invalidateQueries({ queryKey: ["master_product", id] });
       setMarkupInput(null);
     } catch (err: any) {
@@ -365,6 +382,10 @@ export default function ProductDetailPage() {
   const saveStockSync = async () => {
     if (!product) return;
     setSavingSync(true);
+    // Min. avance for sync må aldrig overstige produktets avance.
+    const marginCap = markupToMargin(effectiveMarkup);
+    const requested = parseFloat(minSyncMargin) || 15;
+    const cappedMinSyncMargin = Math.min(requested, marginCap);
     try {
       const { error } = await supabase
         .from("master_products")
@@ -374,11 +395,16 @@ export default function ProductDetailPage() {
           stock_sync_supplier_id: stockSyncSupplierIds[0] || null,
           stock_supplier_order_override: stockSupplierOrderOverride,
           stock_sync_interval: stockSyncInterval,
-          min_sync_margin: parseFloat(minSyncMargin) || 15,
+          min_sync_margin: cappedMinSyncMargin,
         } as any)
         .eq("id", product.id);
       if (error) throw error;
-      toast.success("Automatisk lager-sync indstillinger gemt");
+      if (cappedMinSyncMargin !== requested) setMinSyncMargin(String(cappedMinSyncMargin));
+      toast.success(
+        cappedMinSyncMargin !== requested
+          ? `Gemt · Min. avance for sync sat til ${cappedMinSyncMargin}% (kan ikke overstige avancen)`
+          : "Automatisk lager-sync indstillinger gemt"
+      );
       queryClient.invalidateQueries({ queryKey: ["master_product", id] });
     } catch (err: any) {
       toast.error(err?.message || "Fejl ved gemning");
@@ -1101,7 +1127,7 @@ export default function ProductDetailPage() {
                         placeholder="15"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Leverandører med lavere avance end dette springes over
+                        Leverandører med lavere avance end dette springes over. Kan ikke være højere end produktets avance ({markupToMargin(effectiveMarkup)}%).
                       </p>
                     </div>
                   </div>
