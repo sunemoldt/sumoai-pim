@@ -44,6 +44,16 @@ export default function DashboardPage() {
     window.open(`/products/${id}`, "_blank", "noopener,noreferrer");
   };
 
+  const formatDate = (iso: string) =>
+    new Intl.DateTimeFormat("da-DK", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(iso));
+
+  // Data counts as stale when the newest analytics period ended more than 2 days ago.
+  const analyticsIsStale = useMemo(() => {
+    if (!analyticsMeta) return false;
+    const end = new Date(analyticsMeta.period_end).getTime();
+    return Date.now() - end > 2 * 24 * 60 * 60 * 1000;
+  }, [analyticsMeta]);
+
   const topVisitedProducts = useMemo(() => {
     if (!analyticsMap) return [];
     return products
@@ -52,6 +62,7 @@ export default function DashboardPage() {
       .sort((a, b) => b.pageViews - a.pageViews)
       .slice(0, 10);
   }, [products, analyticsMap]);
+
 
   const totalProducts = products.length;
   const activeSuppliers = suppliers.filter((s) => s.is_active).length;
