@@ -159,26 +159,21 @@ serve(async (req) => {
     let body: Record<string, unknown> = {};
     try { body = await req.json(); } catch { /* no body */ }
     if (body?.probe === "views") {
-      const introspect = await shopifyGraphql(conn.shop_domain, conn.access_token, `#graphql
-        query {
-          root: __type(name: "QueryRoot") { fields { name args { name } type { name kind ofType { name kind } } } }
-          resp: __type(name: "ShopifyqlQueryResponse") { fields { name type { name kind ofType { name kind ofType { name kind } } } } }
-          table: __type(name: "ShopifyqlTableData") { fields { name type { name kind ofType { name kind ofType { name kind } } } } }
-          col: __type(name: "ShopifyqlColumn") { fields { name } }
-          err: __type(name: "ShopifyqlParseError") { fields { name } }
-
-        }`);
-      const fields = (introspect.root?.fields ?? []) as { name: string }[];
-      return new Response(JSON.stringify({
-        probe: "views",
-        analyticsFields: fields.filter((f) => /shopifyql|analytic|report/i.test(f.name)),
-        response: introspect.resp,
-        table: introspect.table,
-        col: introspect.col,
-        err: introspect.err,
-
-      }, null, 2), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const since = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
+      const until = new Date().toISOString().split("T")[0];
+      const raw = await shopifyGraphql(conn.shop_domain, conn.access_token, `#graphql
+        query($q: String!) {
+          shopifyqlQuery(query: $q) {
+            parseErrors { code message }
+            tableData { columns { name dataType displayName } rows }
+          }
+        }`, { q: `FROM products SHOW view_sessions GROUP BY product_id SINCE ${since} UNTIL ${until} LIMIT 5` });
+      return new Response(JSON.stringify({ probe: "views", since, until, raw }, null, 2), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+
+
 
 
 
