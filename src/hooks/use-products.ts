@@ -172,6 +172,26 @@ export function getCheapestSupplierAny(
   return supplierProducts.reduce((min, sp) => (sp.purchase_price < min.purchase_price ? sp : min));
 }
 
+// Utility: true when the product counts as in stock only because a selected
+// supplier reports "in stock" without an actual quantity (stock_quantity = null).
+// The stock engine then assumes 1, so the displayed number isn't a real count.
+export function hasUnknownStockQty(product: {
+  stock_status?: string | null;
+  stock_sync_supplier_ids?: string[] | null;
+  supplier_products?: { supplier_id: string; in_stock: boolean; stock_quantity: number | null }[];
+}): boolean {
+  if (product.stock_status !== "instock") return false;
+  const selected = product.stock_sync_supplier_ids ?? [];
+  if (selected.length === 0) return false;
+  const relevant = (product.supplier_products ?? []).filter(
+    (sp) => selected.includes(sp.supplier_id) && sp.in_stock
+  );
+  if (relevant.length === 0) return false;
+  const hasReal = relevant.some((sp) => (sp.stock_quantity ?? 0) > 0);
+  const hasUnknown = relevant.some((sp) => sp.stock_quantity === null || sp.stock_quantity === undefined);
+  return hasUnknown && !hasReal;
+}
+
 // Danish VAT rate
 export const VAT_RATE = 0.25;
 

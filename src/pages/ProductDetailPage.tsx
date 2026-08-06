@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useMasterProduct, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog, useProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
+import { useMasterProduct, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog, useProductAnalytics, useProductRecommendations, hasUnknownStockQty } from "@/hooks/use-products";
 import { applyRounding } from "@/lib/price-rounding";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -682,6 +682,11 @@ export default function ProductDetailPage() {
                 <div>
                   <Label className="text-muted-foreground text-xs">Lagerbeholdning</Label>
                   <InlineEditField productId={product.id} field="stock_quantity" value={(product as any).stock_quantity} type="number" />
+                  {hasUnknownStockQty(product as any) && (
+                    <p className="mt-1 text-[11px] text-warning">
+                      Ukendt antal – leverandøren melder på lager uden at oplyse lagertal
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-muted-foreground text-xs">Lagerstatus</Label>

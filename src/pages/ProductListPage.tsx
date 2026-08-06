@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useState } from "react";
-import { useMasterProducts, useSuppliers, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations } from "@/hooks/use-products";
+import { useMasterProducts, useSuppliers, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations, hasUnknownStockQty } from "@/hooks/use-products";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-type StockFilter = "all" | "instock" | "outofstock" | "backorder" | "instock_zero";
+type StockFilter = "all" | "instock" | "outofstock" | "backorder" | "instock_zero" | "unknown_qty";
 type MarginFilter = "all" | "low" | "medium" | "good";
 type PriceFilter = "all" | "has_price" | "no_price" | "on_sale";
 type StatusFilter = "all" | "on_stock" | "out_of_stock" | "no_data";
@@ -265,6 +265,7 @@ export default function ProductListPage() {
       if (stockFilter === "outofstock" && product.stock_status !== "outofstock") return false;
       if (stockFilter === "backorder" && !product.backorders_allowed) return false;
       if (stockFilter === "instock_zero" && !(product.stock_status === "instock" && (product.stock_quantity ?? 0) === 0)) return false;
+      if (stockFilter === "unknown_qty" && !hasUnknownStockQty(product)) return false;
       if (brandFilter !== "all" && product.brand !== brandFilter) return false;
       if (categoryFilter !== "all" && !getProductCategories(product).includes(categoryFilter)) return false;
       if (priceFilter === "has_price" && !product.webshop_price) return false;
@@ -520,6 +521,7 @@ export default function ProductListPage() {
               <SelectItem value="outofstock">Udsolgt</SelectItem>
               <SelectItem value="backorder">Restordre</SelectItem>
               <SelectItem value="instock_zero">På lager med 0 antal</SelectItem>
+              <SelectItem value="unknown_qty">Ukendt lagerantal</SelectItem>
             </SelectContent>
           </Select>
 
@@ -841,7 +843,18 @@ export default function ProductListPage() {
                       </td>
                       <td className="px-2 py-1.5 align-middle text-muted-foreground font-mono text-[11px]">{product.ean}</td>
                       <td className="px-2 py-1.5 align-middle text-muted-foreground hidden xl:table-cell">{product.brand ?? "—"}</td>
-                      <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">{product.stock_quantity ?? "—"}</td>
+                      <td className="px-2 py-1.5 align-middle text-right font-mono text-muted-foreground">
+                        {hasUnknownStockQty(product) ? (
+                          <span
+                            className="text-warning"
+                            title="Leverandøren oplyser ikke lagerantal – antallet er et gæt"
+                          >
+                            {product.stock_quantity ?? 0}?
+                          </span>
+                        ) : (
+                          product.stock_quantity ?? "—"
+                        )}
+                      </td>
                       <td className="px-2 py-1.5 align-middle text-right font-mono">
                         {cheapestPrice !== null ? <span className="text-foreground">{formatPrice(cheapestPrice)}</span> : "—"}
                       </td>
