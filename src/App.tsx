@@ -126,12 +126,13 @@ const App = forwardRef<HTMLDivElement>(function App(_props, ref) {
           <Sonner />
           <BrowserRouter>
             <AuthProvider>
-              <Routes>
-                <Route path="/reset-password" element={<ResetPasswordPage />} />
-                <Route path="/.lovable/oauth/consent" element={<OAuthConsentPage />} />
-                <Route path="*" element={<AuthenticatedApp />} />
-
-              </Routes>
+              <Suspense fallback={<PageFallback />}>
+                <Routes>
+                  <Route path="/reset-password" element={<ResetPasswordPage />} />
+                  <Route path="/.lovable/oauth/consent" element={<OAuthConsentPage />} />
+                  <Route path="*" element={<AuthenticatedApp />} />
+                </Routes>
+              </Suspense>
             </AuthProvider>
           </BrowserRouter>
         </TooltipProvider>
