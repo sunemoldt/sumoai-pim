@@ -66,6 +66,7 @@ async function fetchShopifySales(shopDomain: string, token: string, startISO: st
 
 // ShopifyQL: product views & sessions per product over period.
 // Throws on failure — the caller must NOT silently store zeros.
+// Admin API 2026-04 shape: shopifyqlQuery { parseErrors, tableData { columns { name dataType }, rows } }
 async function fetchShopifyViews(shopDomain: string, token: string, startISO: string, endISO: string) {
   const result = new Map<string, { views: number; sessions: number }>();
   const since = startISO.split("T")[0];
@@ -75,43 +76,52 @@ async function fetchShopifyViews(shopDomain: string, token: string, startISO: st
     GROUP BY product_id
     SINCE ${since} UNTIL ${until}
     LIMIT 1000`;
-  const data = await shopifyGraphql(shopDomain, token, `#graphql
-    query($q: String!) {
-      shopifyqlQuery(query: $q) {
-        __typename
-        ... on TableResponse {
-          tableData {
-            columns { name dataType }
-            rowData
-          }
+  let data: Record<string, any>;
+  try {
+    data = await shopifyGraphql(shopDomain, token, `#graphql
+      query($q: String!) {
+        shopifyqlQuery(query: $q) {
+          parseErrors
+          tableData { columns { name dataType } rows }
         }
-        ... on ParseError { code message }
-      }
-    }`, { q: ql });
+      }`, { q: ql });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("ACCESS_DENIED") || msg.includes("read_reports")) {
+      throw new Error(
+        "Shopify-appen mangler adgangen 'read_reports', som kræves for besøgstal (ShopifyQL). " +
+        "Geninstallér Shopify-forbindelsen for at godkende den nye adgang."
+      );
+    }
+    throw err;
+  }
   const r = data.shopifyqlQuery;
-  if (r?.__typename === "ParseError") {
-    throw new Error(`ShopifyQL parse error [${r.code}]: ${r.message}`);
+  const parseErrors: string[] = r?.parseErrors ?? [];
+  if (parseErrors.length) {
+    throw new Error(`ShopifyQL parse error: ${parseErrors.join("; ")}`);
   }
-  if (r?.__typename !== "TableResponse") {
-    throw new Error(`ShopifyQL returned unexpected response type: ${r?.__typename ?? "null"} (mangler muligvis read_analytics-adgang)`);
+  if (!r?.tableData) {
+    throw new Error("ShopifyQL returnerede ingen tabeldata");
   }
-  const cols: { name: string }[] = r.tableData.columns;
+  const cols: { name: string }[] = r.tableData.columns ?? [];
   const idxProduct = cols.findIndex((c) => c.name === "product_id");
   const idxViews = cols.findIndex((c) => c.name === "product_views");
   const idxSessions = cols.findIndex((c) => c.name === "sessions");
   if (idxProduct < 0 || idxViews < 0) {
     throw new Error(`ShopifyQL mangler forventede kolonner: ${cols.map((c) => c.name).join(", ")}`);
   }
-  for (const row of r.tableData.rowData as string[][]) {
+  const rows = (r.tableData.rows ?? []) as unknown[][];
+  for (const row of rows) {
     const pid = String(row[idxProduct] ?? "").split("/").pop();
     if (!pid) continue;
     result.set(pid, {
-      views: parseInt(row[idxViews] ?? "0") || 0,
-      sessions: idxSessions >= 0 ? parseInt(row[idxSessions] ?? "0") || 0 : 0,
+      views: Number(row[idxViews] ?? 0) || 0,
+      sessions: idxSessions >= 0 ? Number(row[idxSessions] ?? 0) || 0 : 0,
     });
   }
   return result;
 }
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
