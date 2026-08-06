@@ -158,25 +158,6 @@ serve(async (req) => {
     // Diagnostic probe: inspect what the Shopify schema exposes for analytics.
     let body: Record<string, unknown> = {};
     try { body = await req.json(); } catch { /* no body */ }
-    if (body?.probe === "views") {
-      const since = new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
-      const until = new Date().toISOString().split("T")[0];
-      const raw = await shopifyGraphql(conn.shop_domain, conn.access_token, `#graphql
-        query($q: String!) {
-          shopifyqlQuery(query: $q) {
-            parseErrors
-            tableData { columns { name dataType displayName } rows }
-          }
-        }`, { q: `FROM products SHOW view_sessions GROUP BY product_id SINCE ${since} UNTIL ${until} LIMIT 5` });
-      return new Response(JSON.stringify({ probe: "views", since, until, raw }, null, 2), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-
-
-
-
     // Settings
     const { data: settings } = await supabase.from("analytics_settings").select("setting_key, setting_value");
     const settingsMap: Record<string, string> = {};
