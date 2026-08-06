@@ -64,10 +64,10 @@ async function fetchShopifySales(shopDomain: string, token: string, startISO: st
   return stats;
 }
 
-// ShopifyQL: product views & sessions per product over period
+// ShopifyQL: product views & sessions per product over period.
+// Throws on failure — the caller must NOT silently store zeros.
 async function fetchShopifyViews(shopDomain: string, token: string, startISO: string, endISO: string) {
   const result = new Map<string, { views: number; sessions: number }>();
-  // ShopifyQL via `shopifyqlQuery` returns tabular data
   const since = startISO.split("T")[0];
   const until = endISO.split("T")[0];
   const ql = `FROM products_analytics
@@ -75,39 +75,40 @@ async function fetchShopifyViews(shopDomain: string, token: string, startISO: st
     GROUP BY product_id
     SINCE ${since} UNTIL ${until}
     LIMIT 1000`;
-  try {
-    const data = await shopifyGraphql(shopDomain, token, `#graphql
-      query($q: String!) {
-        shopifyqlQuery(query: $q) {
-          __typename
-          ... on TableResponse {
-            tableData {
-              columns { name dataType }
-              rowData
-            }
+  const data = await shopifyGraphql(shopDomain, token, `#graphql
+    query($q: String!) {
+      shopifyqlQuery(query: $q) {
+        __typename
+        ... on TableResponse {
+          tableData {
+            columns { name dataType }
+            rowData
           }
-          ... on ParseError { code message }
         }
-      }`, { q: ql });
-    const r = data.shopifyqlQuery;
-    if (r?.__typename === "TableResponse") {
-      const cols: { name: string }[] = r.tableData.columns;
-      const idxProduct = cols.findIndex((c) => c.name === "product_id");
-      const idxViews = cols.findIndex((c) => c.name === "product_views");
-      const idxSessions = cols.findIndex((c) => c.name === "sessions");
-      for (const row of r.tableData.rowData as string[][]) {
-        const pid = String(row[idxProduct] ?? "").split("/").pop();
-        if (!pid) continue;
-        result.set(pid, {
-          views: parseInt(row[idxViews] ?? "0") || 0,
-          sessions: parseInt(row[idxSessions] ?? "0") || 0,
-        });
+        ... on ParseError { code message }
       }
-    } else if (r?.__typename === "ParseError") {
-      console.warn(`ShopifyQL parse error: ${r.message}`);
-    }
-  } catch (e) {
-    console.warn(`ShopifyQL views unavailable: ${(e as Error).message}`);
+    }`, { q: ql });
+  const r = data.shopifyqlQuery;
+  if (r?.__typename === "ParseError") {
+    throw new Error(`ShopifyQL parse error [${r.code}]: ${r.message}`);
+  }
+  if (r?.__typename !== "TableResponse") {
+    throw new Error(`ShopifyQL returned unexpected response type: ${r?.__typename ?? "null"} (mangler muligvis read_analytics-adgang)`);
+  }
+  const cols: { name: string }[] = r.tableData.columns;
+  const idxProduct = cols.findIndex((c) => c.name === "product_id");
+  const idxViews = cols.findIndex((c) => c.name === "product_views");
+  const idxSessions = cols.findIndex((c) => c.name === "sessions");
+  if (idxProduct < 0 || idxViews < 0) {
+    throw new Error(`ShopifyQL mangler forventede kolonner: ${cols.map((c) => c.name).join(", ")}`);
+  }
+  for (const row of r.tableData.rowData as string[][]) {
+    const pid = String(row[idxProduct] ?? "").split("/").pop();
+    if (!pid) continue;
+    result.set(pid, {
+      views: parseInt(row[idxViews] ?? "0") || 0,
+      sessions: idxSessions >= 0 ? parseInt(row[idxSessions] ?? "0") || 0 : 0,
+    });
   }
   return result;
 }
@@ -116,19 +117,30 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const authHeader = req.headers.get("authorization");
+  const internalSecret = req.headers.get("x-internal-secret");
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
-  if (!authHeader.includes(supabaseServiceKey)) {
-    const anon = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error } = await anon.auth.getUser();
-    if (error || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const unauthorized = () =>
+    new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+  let authorized = false;
+  if (internalSecret) {
+    // Scheduled invocation (pg_cron) — validate against the stored internal secret.
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, supabaseServiceKey);
+    const { data: ok } = await admin.rpc("verify_internal_invoke_secret", { p_secret: internalSecret });
+    authorized = ok === true;
+  } else if (authHeader) {
+    if (authHeader.includes(supabaseServiceKey)) {
+      authorized = true;
+    } else {
+      const anon = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY") ?? "", {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user }, error } = await anon.auth.getUser();
+      authorized = !error && !!user;
     }
   }
+  if (!authorized) return unauthorized();
+
 
   try {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, supabaseServiceKey);
