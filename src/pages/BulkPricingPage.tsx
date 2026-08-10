@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Loader2, Percent, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { applyRounding } from "@/lib/price-rounding";
+import { applyRoundingWithMinMargin } from "@/lib/price-rounding";
 import { usePriceSettings, exVat, inclVat, getMarginPercent, priceFromMargin } from "@/hooks/use-products";
 
 type Row = {
