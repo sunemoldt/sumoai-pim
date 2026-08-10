@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Loader2, Percent, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { applyRounding } from "@/lib/price-rounding";
+import { applyRoundingWithMinMargin } from "@/lib/price-rounding";
 import { usePriceSettings, exVat, inclVat, getMarginPercent, priceFromMargin } from "@/hooks/use-products";
 
 type Row = {
@@ -128,7 +128,12 @@ export default function BulkPricingPage() {
       else if (p.custom_markup_percentage != null && !includeCustomMarkup) skip = "Egen markup";
 
       const newExVat = marginValid && purchase != null ? priceFromMargin(purchase, targetMargin) : null;
-      const newPrice = newExVat != null ? applyRounding(inclVat(newExVat), roundingMode) : null;
+      // Afrunding må aldrig sænke avancen under produktets "Min. avance for sync".
+      const effectiveMinMargin = Math.min(p.min_sync_margin ?? 15, targetMargin);
+      const newPrice =
+        newExVat != null
+          ? applyRoundingWithMinMargin(inclVat(newExVat), roundingMode, purchase, effectiveMinMargin)
+          : null;
       const newMargin = newPrice != null && purchase != null ? getMarginPercent(exVat(newPrice), purchase) : null;
       const unchanged = newPrice != null && p.webshop_price != null && Math.abs(newPrice - p.webshop_price) < 0.005;
 

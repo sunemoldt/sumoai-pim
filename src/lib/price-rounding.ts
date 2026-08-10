@@ -46,6 +46,78 @@ export function applyRounding(price: number, mode: string): number {
   }
 }
 
+/** Step/offset grid per mode, used to walk to the next valid price upwards. */
+function gridFor(mode: string): { step: number; offset: number } | null {
+  switch (mode) {
+    case "nearest_1":
+      return { step: 1, offset: 0 };
+    case "nearest_5":
+      return { step: 5, offset: 0 };
+    case "nearest_10":
+      return { step: 10, offset: 0 };
+    case "nearest_25":
+      return { step: 25, offset: 0 };
+    case "nearest_49":
+      return { step: 10, offset: 9 };
+    case "nearest_95":
+      return { step: 5, offset: 4.95 };
+    case "nearest_99":
+      return { step: 10, offset: 9.99 };
+    default:
+      return null;
+  }
+}
+
+/** Smallest rounded price (on the mode's grid) that is >= `floor`. */
+export function roundUpToGrid(floor: number, mode: string): number {
+  const g = gridFor(mode);
+  if (!g) return Math.ceil(floor * 100) / 100;
+  const k = Math.ceil((floor - g.offset) / g.step - 1e-9);
+  const val = k * g.step + g.offset;
+  return Math.round(val * 100) / 100;
+}
+
+const VAT_RATE = 0.25;
+
+/**
+ * Round a price, but never below the minimum margin. If the normal (nearest)
+ * rounding pushes the margin under `minMarginPct`, step up to the next value
+ * on the rounding grid that satisfies the minimum margin.
+ */
+export function applyRoundingWithMinMargin(
+  priceInclVat: number,
+  mode: string,
+  purchasePriceExVat: number | null | undefined,
+  minMarginPct: number | null | undefined,
+): number {
+  const rounded = applyRounding(priceInclVat, mode);
+  if (
+    purchasePriceExVat == null ||
+    !Number.isFinite(purchasePriceExVat) ||
+    purchasePriceExVat <= 0 ||
+    minMarginPct == null ||
+    !Number.isFinite(minMarginPct) ||
+    minMarginPct >= 100
+  ) {
+    return rounded;
+  }
+  const marginOf = (inclVat: number) => {
+    const ex = inclVat / (1 + VAT_RATE);
+    return ex <= 0 ? -Infinity : ((ex - purchasePriceExVat) / ex) * 100;
+  };
+  if (marginOf(rounded) >= minMarginPct - 1e-9) return rounded;
+
+  // Minimum incl. VAT price that satisfies the margin, then round up to grid.
+  const minInclVat = (purchasePriceExVat / (1 - minMarginPct / 100)) * (1 + VAT_RATE);
+  let candidate = roundUpToGrid(minInclVat, mode);
+  const g = gridFor(mode);
+  // Safety: walk up a few steps in case of float edge cases.
+  for (let i = 0; i < 5 && marginOf(candidate) < minMarginPct - 1e-9; i++) {
+    candidate = g ? Math.round((candidate + g.step) * 100) / 100 : Math.round((candidate + 0.01) * 100) / 100;
+  }
+  return candidate;
+}
+
 export const ROUNDING_EXAMPLES: Record<string, string> = {
   none: "741,57 → 741,57",
   nearest_1: "741,57 → 742",
