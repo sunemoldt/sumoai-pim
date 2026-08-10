@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useMasterProduct, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog, useProductAnalytics, useProductRecommendations, hasUnknownStockQty } from "@/hooks/use-products";
-import { applyRounding } from "@/lib/price-rounding";
+import { applyRounding, applyRoundingWithMinMargin } from "@/lib/price-rounding";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -502,6 +502,11 @@ export default function ProductDetailPage() {
   const currentPriceExVat = currentPrice ? exVat(currentPrice) : null;
   const margin = currentPriceExVat && cheapestPrice ? getMarginPercent(currentPriceExVat, cheapestPrice) : null;
   const priceDiff = currentPrice && recommendedPriceInclVat ? currentPrice - recommendedPriceInclVat : null;
+  // Afrunding må aldrig sænke avancen under "Min. avance for sync".
+  const effectiveMinSyncMargin = (product as any).min_sync_margin ?? 15;
+  const roundedRecommendedPrice = recommendedPriceInclVat
+    ? applyRoundingWithMinMargin(recommendedPriceInclVat, roundingMode, recommendedBasePrice, effectiveMinSyncMargin)
+    : null;
 
   const attributes = (product as any).attributes as Record<string, string> | null | undefined;
 
@@ -1347,7 +1352,7 @@ export default function ProductDetailPage() {
                 </div>
                 {recommendedPriceInclVat && (
                   (() => {
-                    const roundedRecommended = applyRounding(recommendedPriceInclVat, roundingMode);
+                    const roundedRecommended = roundedRecommendedPrice!;
                     return (
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-primary border-primary/30">
@@ -2031,14 +2036,14 @@ export default function ProductDetailPage() {
                   <div className="min-w-0">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Anbefalet pris</p>
                     <p className="font-display text-base font-semibold text-primary leading-tight mt-0.5">
-                      {formatPrice(recommendedPriceInclVat ? applyRounding(recommendedPriceInclVat, roundingMode) : null)}
+                      {formatPrice(roundedRecommendedPrice)}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
                       ex. {formatPrice(recommendedPriceExVat)}
                     </p>
                   </div>
                   {priceDiff !== null && recommendedPriceInclVat && (() => {
-                    const roundedDiff = currentPrice! - applyRounding(recommendedPriceInclVat, roundingMode);
+                    const roundedDiff = currentPrice! - roundedRecommendedPrice!;
                     return (
                       <span className={`text-xs font-semibold whitespace-nowrap ${roundedDiff > 0 ? "text-success" : roundedDiff < 0 ? "text-destructive" : "text-muted-foreground"}`}>
                         {roundedDiff > 0 ? "+" : ""}{formatPrice(roundedDiff)}
