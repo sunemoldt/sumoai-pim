@@ -233,7 +233,14 @@ export default function ProductDetailPage() {
     try {
       const data = rec.data as any;
       if (!data?.suggested_price || !product) { toast.error("Ingen prisforslag"); return; }
-      const rounded = applyRounding(data.suggested_price, roundingMode);
+      const purchaseForRec =
+        getCheapestSupplierAny(product.supplier_products)?.purchase_price ?? null;
+      const rounded = applyRoundingWithMinMargin(
+        data.suggested_price,
+        roundingMode,
+        purchaseForRec,
+        (product as any).min_sync_margin ?? 15,
+      );
       const { error } = await supabase.from("master_products").update({ webshop_price: rounded }).eq("id", product.id);
       if (error) throw error;
       await supabase.from("product_recommendations").update({ resolved_at: new Date().toISOString(), is_dismissed: true }).eq("id", rec.id);
