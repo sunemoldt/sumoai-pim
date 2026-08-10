@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyRounding } from "@/lib/price-rounding";
+import { applyRounding, applyRoundingWithMinMargin } from "@/lib/price-rounding";
 
 describe("applyRounding", () => {
   it("nearest_5 rounds both directions", () => {
@@ -33,5 +33,21 @@ describe("applyRounding", () => {
 
   it("none passes through with 2 decimals", () => {
     expect(applyRounding(741.573, "none")).toBe(741.57);
+  });
+});
+
+describe("applyRoundingWithMinMargin", () => {
+  it("steps up when nearest_5 would break the min margin", () => {
+    // purchase 100 ex vat, target ~ 123.5 ex vat -> 154.4 incl. nearest_5 = 155 (ok)
+    // purchase 120, min margin 15% -> min ex vat 141.18 -> incl 176.47 -> grid 180
+    expect(applyRoundingWithMinMargin(176.47, "nearest_5", 120, 15)).toBe(180);
+  });
+
+  it("keeps normal rounding when margin is fine", () => {
+    expect(applyRoundingWithMinMargin(741.57, "nearest_5", 100, 15)).toBe(740);
+  });
+
+  it("no purchase price = plain rounding", () => {
+    expect(applyRoundingWithMinMargin(741.57, "nearest_5", null, 15)).toBe(740);
   });
 });
