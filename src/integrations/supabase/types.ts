@@ -1225,6 +1225,7 @@ export type Database = {
           created_at: string
           ean: string
           id: string
+          image_url: string | null
           in_stock: boolean
           last_seen_at: string
           product_title: string | null
@@ -1239,6 +1240,7 @@ export type Database = {
           created_at?: string
           ean: string
           id?: string
+          image_url?: string | null
           in_stock?: boolean
           last_seen_at?: string
           product_title?: string | null
@@ -1253,6 +1255,7 @@ export type Database = {
           created_at?: string
           ean?: string
           id?: string
+          image_url?: string | null
           in_stock?: boolean
           last_seen_at?: string
           product_title?: string | null

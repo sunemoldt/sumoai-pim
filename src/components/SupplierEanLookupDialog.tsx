@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Loader2, Search, ScanBarcode, ExternalLink, Package, CheckCircle2, XCircle } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Loader2, Search, ScanBarcode, ExternalLink, Package, CheckCircle2, XCircle, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { inclVat, getRecommendedPriceInclVat, VAT_RATE } from "@/hooks/use-products";
+import { applyRoundingWithMinMargin } from "@/lib/price-rounding";
 
 export type EanLookupOffer = {
   supplier_id: string;
@@ -20,6 +21,7 @@ export type EanLookupOffer = {
   last_updated: string | null;
   product_title?: string | null;
   brand?: string | null;
+  image_url?: string | null;
   source?: "linked" | "feed";
 };
 
@@ -60,25 +62,63 @@ type Props = {
   initialEan?: string;
 };
 
-async function fetchGlobalMarkup(): Promise<number> {
+type PriceRules = { markupPct: number; roundingMode: string; minMarginPct: number };
+
+async function fetchPriceRules(): Promise<PriceRules> {
   const { data } = await supabase
     .from("price_settings")
-    .select("markup_percentage")
-    .eq("scope", "global")
-    .maybeSingle();
-  return Number((data as any)?.markup_percentage ?? 25);
+    .select("scope, scope_value, markup_percentage, minimum_margin");
+  const rows = (data ?? []) as any[];
+  const global = rows.find((r) => r.scope === "global");
+  const rounding = rows.find((r) => r.scope === "price_rounding");
+  return {
+    markupPct: Number(global?.markup_percentage ?? 25),
+    roundingMode: String(rounding?.scope_value ?? "nearest_5"),
+    minMarginPct: Number(global?.minimum_margin ?? 15),
+  };
 }
 
 export function SupplierEanLookupPanel({ useLabel, onUse, initialEan }: Omit<Props, "asPage" | "open" | "onOpenChange">) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [ean, setEan] = useState(initialEan ?? "");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<EanLookupResult | null>(null);
   const [markupPct, setMarkupPct] = useState<number>(25);
+  const [rules, setRules] = useState<PriceRules>({ markupPct: 25, roundingMode: "nearest_5", minMarginPct: 15 });
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchGlobalMarkup().then(setMarkupPct).catch(() => {});
+    fetchPriceRules()
+      .then((r) => { setRules(r); setMarkupPct(r.markupPct); })
+      .catch(() => {});
   }, []);
+
+  const suggestedPrice = (purchasePrice: number) =>
+    applyRoundingWithMinMargin(
+      getRecommendedPriceInclVat(purchasePrice, markupPct),
+      rules.roundingMode,
+      purchasePrice,
+      rules.minMarginPct,
+    );
+
+  const startCreate = (offer: EanLookupOffer) => {
+    if (!result) return;
+    navigate("/products/new", {
+      state: {
+        prefill: {
+          ean: result.ean_normalized,
+          title: offer.product_title ?? "",
+          brand: offer.brand ?? "",
+          sku: offer.supplier_sku ?? "",
+          image_url: offer.image_url ?? "",
+          webshop_price: suggestedPrice(offer.purchase_price).toFixed(2),
+          purchase_price: offer.purchase_price,
+          supplier_name: offer.supplier_name,
+        },
+      },
+    });
+  };
 
   const runSearch = async () => {
     const q = ean.trim();
@@ -156,18 +196,78 @@ export function SupplierEanLookupPanel({ useLabel, onUse, initialEan }: Omit<Pro
               </Link>
             </div>
           ) : (
-            <div className="rounded-md border border-dashed border-border bg-secondary/20 p-4 text-sm">
-              <p className="font-medium">Intet produkt oprettet med EAN {result.ean_normalized}</p>
-              <p className="text-muted-foreground mt-1">
-                {result.offers.length > 0
-                  ? `Fundet ${result.offers.length} leverandør-tilbud fra feed-cachen nedenfor.`
-                  : "Ingen leverandører har dette EAN i deres feed endnu."}
-              </p>
-              <div className="mt-3">
-                <Link to={`/products/new?ean=${encodeURIComponent(result.ean_normalized)}`}>
-                  <Button size="sm"><Package className="h-4 w-4 mr-1" /> Opret produkt</Button>
-                </Link>
+            <div className="rounded-md border border-dashed border-border bg-secondary/20 p-4 text-sm space-y-3">
+              <div>
+                <p className="font-medium">Intet produkt oprettet med EAN {result.ean_normalized}</p>
+                <p className="text-muted-foreground mt-1">
+                  {result.offers.length > 0
+                    ? `Fundet ${result.offers.length} leverandør-tilbud fra feed-cachen nedenfor.`
+                    : "Ingen leverandører har dette EAN i deres feed endnu."}
+                </p>
               </div>
+
+              {result.offers.length > 0 && (() => {
+                const chosen =
+                  result.offers.find((o) => o.supplier_id === selectedSupplierId) ?? result.offers[0];
+                return (
+                  <div className="rounded-md border border-border bg-background p-3 space-y-3">
+                    <div className="text-xs font-medium uppercase text-muted-foreground tracking-wide">
+                      Opret produkt i PIM
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Brug data fra leverandør</Label>
+                      <select
+                        className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
+                        value={chosen.supplier_id}
+                        onChange={(e) => setSelectedSupplierId(e.target.value)}
+                      >
+                        {result.offers.map((o) => (
+                          <option key={o.supplier_id} value={o.supplier_id}>
+                            {o.supplier_name} — {o.purchase_price.toFixed(2)} kr.
+                            {o.in_stock ? "" : " (ikke på lager)"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex gap-3">
+                      {chosen.image_url ? (
+                        <img src={chosen.image_url} alt="" className="h-16 w-16 rounded object-contain bg-secondary/40 border border-border" />
+                      ) : (
+                        <div className="h-16 w-16 rounded bg-secondary/40 border border-border flex items-center justify-center">
+                          <Package className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 text-xs space-y-0.5">
+                        <div className="font-medium text-sm truncate">{chosen.product_title || "(ingen titel i feed)"}</div>
+                        <div className="text-muted-foreground">
+                          {[chosen.brand, chosen.supplier_sku && `SKU ${chosen.supplier_sku}`].filter(Boolean).join(" · ") || "—"}
+                        </div>
+                        <div className="text-muted-foreground">
+                          Indkøb {chosen.purchase_price.toFixed(2)} kr. → foreslået salgspris{" "}
+                          <span className="font-mono font-semibold text-primary">
+                            {suggestedPrice(chosen.purchase_price).toFixed(2)} kr.
+                          </span>{" "}
+                          inkl. moms
+                        </div>
+                        {!chosen.image_url && (
+                          <div className="text-muted-foreground italic">Feedet har intet billede — du kan indsætte en URL selv.</div>
+                        )}
+                      </div>
+                    </div>
+                    <Button size="sm" onClick={() => startCreate(chosen)}>
+                      <Sparkles className="h-4 w-4 mr-1" /> Opret produkt med AI-tekster
+                    </Button>
+                  </div>
+                );
+              })()}
+
+              {result.offers.length === 0 && (
+                <div>
+                  <Link to={`/products/new?ean=${encodeURIComponent(result.ean_normalized)}`}>
+                    <Button size="sm"><Package className="h-4 w-4 mr-1" /> Opret produkt</Button>
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 

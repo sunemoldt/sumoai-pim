@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: p, error: pErr } = await supabase
       .from("master_products")
-      .select("id, title, ean, sku, brand, category, webshop_price, sale_price, stock_quantity, short_description, long_description, meta_title, meta_description, lifecycle_status, shopify_product_id, weight_kg, backorder_policy")
+      .select("id, title, ean, sku, brand, category, webshop_price, sale_price, stock_quantity, short_description, long_description, meta_title, meta_description, lifecycle_status, shopify_product_id, weight_kg, backorder_policy, image_url")
       .eq("id", master_product_id)
       .single();
     if (pErr || !p) {
@@ -174,8 +174,8 @@ Deno.serve(async (req) => {
 
     // 1. Create product as DRAFT
     const productMutation = `#graphql
-      mutation CreateProduct($input: ProductInput!) {
-        productCreate(input: $input) {
+      mutation CreateProduct($input: ProductInput!, $media: [CreateMediaInput!]) {
+        productCreate(input: $input, media: $media) {
           product { id variants(first: 1) { nodes { id inventoryItem { id } } } }
           userErrors { field message }
         }
@@ -199,7 +199,11 @@ Deno.serve(async (req) => {
     if (p.meta_title) seoObj.title = String(p.meta_title);
     if (p.meta_description) seoObj.description = String(p.meta_description);
     if (Object.keys(seoObj).length > 0) productInput.seo = seoObj;
-    const created = await shopifyGraphql(conn.shop_domain, conn.access_token, productMutation, { input: productInput });
+    const imgUrl = typeof p.image_url === "string" && /^https?:\/\//i.test(p.image_url) ? p.image_url : null;
+    const media = imgUrl
+      ? [{ originalSource: imgUrl, mediaContentType: "IMAGE", alt: String(p.title).slice(0, 250) }]
+      : undefined;
+    const created = await shopifyGraphql(conn.shop_domain, conn.access_token, productMutation, { input: productInput, media });
     const errs = created.productCreate.userErrors;
     if (errs?.length) throw new Error(errs.map((e: { message: string }) => e.message).join(", "));
     const productGid = created.productCreate.product.id as string;

@@ -211,6 +211,7 @@ type SupplierFeedCacheRow = {
   product_title: string | null;
   supplier_sku: string | null;
   brand: string | null;
+  image_url: string | null;
   purchase_price: number;
   stock_quantity: number | null;
   in_stock: boolean;
@@ -231,13 +232,17 @@ function buildSupplierFeedCacheRow(
   const titleCol = (mapping as Record<string, string>).title || (mapping as Record<string, string>).name || (mapping as Record<string, string>).short_description;
   const brandCol = (mapping as Record<string, string>).brand || (mapping as Record<string, string>).manufacturer;
   const skuCol = mapping.sku;
+  const imageCol = (mapping as Record<string, string>).image_url || (mapping as Record<string, string>).image;
   const trim = (s: string | undefined | null, n: number) => s ? (s.length > n ? s.slice(0, n) : s) : null;
+  const rawImage = trim(imageCol ? row[imageCol]?.trim() : null, 1000);
+  const imageUrl = rawImage && /^https?:\/\//i.test(rawImage) ? rawImage : null;
   return {
     supplier_id: supplierId,
     ean,
     product_title: trim(titleCol ? row[titleCol]?.trim() : null, 300),
     supplier_sku: trim(skuCol ? row[skuCol]?.trim() : null, 100),
     brand: trim(brandCol ? row[brandCol]?.trim() : null, 100),
+    image_url: imageUrl,
     purchase_price: price,
     stock_quantity: stockQty,
     in_stock: parseMappedInStock(row, mapping, stockQty),
@@ -258,6 +263,10 @@ function extractAurdelItemFields(inner: string, attrs: Record<string, string>): 
   if (shortDesc) row.short_description = shortDesc[1].trim();
   const mfgMatch = inner.match(/<manufacturer[^>]*><description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
   if (mfgMatch) row.manufacturer = mfgMatch[1].trim();
+  const imgMatch =
+    inner.match(/<(?:image|picture|imageurl|image_url)[^>]*>(?:<!\[CDATA\[)?\s*(https?:\/\/[^\s<\]]+)/i) ??
+    inner.match(/<(?:image|picture)[^>]*\s(?:url|src|href)="(https?:\/\/[^"]+)"/i);
+  if (imgMatch) row.image_url = imgMatch[1].trim();
   return row;
 }
 function buildFtpPathCandidates(path: string, user: string): string[] {
@@ -625,6 +634,7 @@ const handler = async (req: Request): Promise<Response> => {
       mapping.purchase_price = "purchase_price";
       mapping.stock_quantity = "stock_quantity";
       mapping.sku = "supplier_sku";
+      mapping.image_url = "image_url";
 
       const stockMap = new Map<string, string>(); // SKU -> quantity
       const aurdelHasStock = apiDbs.includes("stock");
