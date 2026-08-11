@@ -90,13 +90,20 @@ Deno.serve(async (req) => {
     // exist in master_products yet (or suppliers that haven't been linked yet).
     const { data: cache } = await admin
       .from("supplier_feed_cache")
-      .select("supplier_id, purchase_price, in_stock, stock_quantity, supplier_sku, product_title, brand, last_seen_at, suppliers(id, name)")
+      .select("supplier_id, purchase_price, in_stock, stock_quantity, supplier_sku, product_title, brand, image_url, last_seen_at, suppliers(id, name)")
       .in("ean", Array.from(new Set([raw, stripped])));
 
     for (const row of (cache ?? []) as any[]) {
       if (row.purchase_price == null) continue;
-      // Prefer linked offer if the supplier is already represented.
-      if (offersByKey.has(row.supplier_id)) continue;
+      // Prefer linked offer if the supplier is already represented — but enrich it
+      // with feed metadata (title/brand/image) so product creation can use it.
+      const existing = offersByKey.get(row.supplier_id);
+      if (existing) {
+        existing.product_title = existing.product_title ?? row.product_title ?? null;
+        existing.brand = existing.brand ?? row.brand ?? null;
+        existing.image_url = existing.image_url ?? row.image_url ?? null;
+        continue;
+      }
       offersByKey.set(row.supplier_id, {
         supplier_id: row.supplier_id,
         supplier_name: row.suppliers?.name ?? "Ukendt",
@@ -107,6 +114,7 @@ Deno.serve(async (req) => {
         last_updated: row.last_seen_at ?? null,
         product_title: row.product_title ?? null,
         brand: row.brand ?? null,
+        image_url: row.image_url ?? null,
         source: "feed" as const,
       });
     }
