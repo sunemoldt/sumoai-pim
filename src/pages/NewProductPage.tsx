@@ -32,11 +32,16 @@ export default function NewProductPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const duplicateFrom = (location.state as any)?.duplicateFrom ?? null;
+  const prefill = (location.state as any)?.prefill ?? null;
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [aiBrief, setAiBrief] = useState("");
+  const [aiBrief, setAiBrief] = useState(
+    prefill
+      ? [prefill.title, prefill.brand, prefill.ean ? `EAN ${prefill.ean}` : ""].filter(Boolean).join(", ")
+      : "",
+  );
 
   const [variantMode, setVariantMode] = useState(false);
   const [optionName, setOptionName] = useState("Farve");
@@ -46,18 +51,18 @@ export default function NewProductPage() {
     const d = duplicateFrom;
     const numStr = (v: any) => (v === null || v === undefined || v === "" ? "" : String(v));
     return {
-      title: d?.title ? `${d.title} (kopi)` : "",
-      ean: searchParams.get("ean") ?? "",
-      sku: "",
-      brand: d?.brand ?? "",
+      title: prefill?.title ?? (d?.title ? `${d.title} (kopi)` : ""),
+      ean: prefill?.ean ?? searchParams.get("ean") ?? "",
+      sku: prefill?.sku ?? "",
+      brand: prefill?.brand ?? d?.brand ?? "",
       category: d?.category ?? "",
       short_description: d?.short_description ?? "",
       long_description: d?.long_description ?? "",
       meta_title: d?.meta_title ?? "",
       meta_description: d?.meta_description ?? "",
-      webshop_price: numStr(d?.webshop_price),
+      webshop_price: prefill?.webshop_price ?? numStr(d?.webshop_price),
       sale_price: numStr(d?.sale_price),
-      image_url: d?.image_url ?? "",
+      image_url: prefill?.image_url ?? d?.image_url ?? "",
       weight_kg: numStr(d?.weight_kg),
       backorder_policy: d?.backorder_policy ?? "no",
     };
