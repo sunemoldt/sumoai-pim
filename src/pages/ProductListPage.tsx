@@ -802,10 +802,10 @@ export default function ProductListPage() {
                 </tr>
               ) : (
                 sorted.map((product) => {
-                  const cheapestAny = getCheapestSupplierAny(product.supplier_products);
+                  const cheapestAny = pickPurchaseSupplier(product as any);
                   const cheapestPrice = cheapestAny?.purchase_price ?? null;
-                  // Recommendation: prefer cheapest IN-STOCK, fall back to cheapest any
-                  const cheapestInStock = getCheapestSupplier(product.supplier_products);
+                  // Only suppliers selected for the product, priority first
+                  const cheapestInStock = pickPricingSupplier(product as any);
                   const recommendedBasePrice = cheapestInStock?.purchase_price ?? cheapestPrice;
                   const recommendedPriceInclVat = recommendedBasePrice ? getRecommendedPriceInclVat(recommendedBasePrice, product.custom_markup_percentage ?? globalMarkup) : null;
                   const activePrice = product.sale_price ?? product.webshop_price;
