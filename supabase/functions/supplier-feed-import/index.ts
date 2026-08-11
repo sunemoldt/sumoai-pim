@@ -263,6 +263,10 @@ function extractAurdelItemFields(inner: string, attrs: Record<string, string>): 
   if (shortDesc) row.short_description = shortDesc[1].trim();
   const mfgMatch = inner.match(/<manufacturer[^>]*><description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
   if (mfgMatch) row.manufacturer = mfgMatch[1].trim();
+  const imgMatch =
+    inner.match(/<(?:image|picture|imageurl|image_url)[^>]*>(?:<!\[CDATA\[)?\s*(https?:\/\/[^\s<\]]+)/i) ??
+    inner.match(/<(?:image|picture)[^>]*\s(?:url|src|href)="(https?:\/\/[^"]+)"/i);
+  if (imgMatch) row.image_url = imgMatch[1].trim();
   return row;
 }
 function buildFtpPathCandidates(path: string, user: string): string[] {
