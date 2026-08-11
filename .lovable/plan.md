@@ -13,14 +13,29 @@ I dag viser EAN-opslag kun en "Opret produkt"-knap når EAN'et slet ikke findes,
    - vægt hvis feedet har den
    - salgspris inkl. moms beregnet ud fra indkøbspris + gældende avance, afrundet med den margin-sikre afrundingsregel (aldrig under min. avance)
 4. AI kører automatisk med det samme og udfylder titel, kort beskrivelse, lang beskrivelse, meta titel og meta beskrivelse ud fra leverandørens produktnavn, brand og kategori — efter de eksisterende danske regler (h2 + teaser + 4–8 bullets, meta titel ≤60 tegn, meta beskrivelse 140–160 tegn, ingen opdigtede specs).
-5. Du kan rette alt inden du gemmer. Produktet oprettes som kladde, og leverandøren kobles automatisk på via den eksisterende rematch-funktion, så indkøbspris og lager følger med.
+5. Har leverandørfeedet et produktbillede, hentes billed-URL'en med og vises i oprettelsen. Billedet følger med til Shopify-kladden, så du ikke selv skal uploade det.
+6. Du kan rette alt inden du gemmer. Produktet oprettes som kladde, og leverandøren kobles automatisk på via den eksisterende rematch-funktion, så indkøbspris og lager følger med.
 
 Findes produktet allerede i PIM, ændres intet — du får som nu et link til produktet.
 
+## Billeder
+
+I dag gemmer feed-importen ingen billeder, og Shopify-oprettelsen sender ingen billeder med. Det tilføjes:
+
+- Nyt felt "Billede-URL" i leverandørens kolonne-mapping, så feeds der har et billedfelt kan mappe det.
+- Billed-URL'en gemmes på feed-cachen og vises i EAN-opslaget og i oprettelsen (med forhåndsvisning).
+- Ved push til Shopify sendes billedet med som medie på produktkladden ud fra URL'en — Shopify henter selv filen, så intet skal uploades manuelt.
+- Har feedet intet billede, opretter systemet som i dag uden billede, og du kan indsætte en URL selv.
+
 ## Teknisk
 
-- `supabase/functions/supplier-ean-lookup/index.ts`: udvid feed-tilbud med de felter der findes i `supplier_feed_cache` (produktnavn, brand, SKU) i selve svaret — de hentes allerede, men medtages ikke konsekvent for linkede tilbud. Ingen skemaændring.
-- `src/components/SupplierEanLookupDialog.tsx`: nyt "Opret produkt"-panel når `master_product` er null og der findes tilbud. Vælg tilbud, beregn foreslået salgspris via `getRecommendedPriceInclVat` + `applyRoundingWithMinMargin` (henter afrundingstilstand og min. avance fra `price_settings`/`analytics_settings` som andre sider gør). Navigér til `/products/new` med `state.prefill`.
-- `src/pages/NewProductPage.tsx`: læs `location.state.prefill` (samme mønster som `duplicateFrom`) og forudfyld form-felterne. Kør `ai-generate-product` automatisk én gang ved mount når prefill indeholder et leverandør-produktnavn, med brief bygget af navn + brand + kategori + EAN; vis loading-tilstand og lad brugeren generere igen.
-- `supabase/functions/ai-generate-product/index.ts`: uændret prompt/regler — kaldes bare med feed-info som input, så tonen er identisk med resten af systemet.
-- Ingen databasemigrationer og ingen ændringer i sync- eller prislogik.
+- `supabase/functions/supplier-ean-lookup/index.ts`: udvid feed-tilbud med de felter der findes i `supplier_feed_cache` (produktnavn, brand, SKU, billede) i selve svaret.
+- Migration: tilføj `image_url text` til `supplier_feed_cache` (ingen andre skemaændringer).
+- `supabase/functions/supplier-feed-import/index.ts`: understøt `mapping.image_url` for CSV/XML-feeds og gem værdien på cache-rækken.
+- `src/components/SupplierMappingDialog.tsx`: nyt valgfrit mapping-felt "Billede-URL".
+- `src/components/SupplierEanLookupDialog.tsx`: nyt "Opret produkt"-panel når `master_product` er null og der findes tilbud. Vælg tilbud, beregn foreslået salgspris via `getRecommendedPriceInclVat` + `applyRoundingWithMinMargin` (afrundingstilstand og min. avance hentes fra `price_settings`/`analytics_settings` som andre sider gør). Navigér til `/products/new` med `state.prefill` inkl. billed-URL.
+- `src/pages/NewProductPage.tsx`: læs `location.state.prefill` (samme mønster som `duplicateFrom`) og forudfyld felterne inkl. billede. Kør `ai-generate-product` automatisk én gang ved mount når prefill har et leverandør-produktnavn.
+- `supabase/functions/shopify-create-product/index.ts` (+ varianter-versionen): send `media: [{ originalSource: image_url, mediaContentType: IMAGE }]` med i `productCreate`, kun når PIM har en gyldig http(s)-URL; fejl på medie må ikke vælte oprettelsen.
+- `supabase/functions/ai-generate-product/index.ts`: uændret prompt/regler.
+- Ingen ændringer i sync- eller prislogik.
+
