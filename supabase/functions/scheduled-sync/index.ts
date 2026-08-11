@@ -77,6 +77,32 @@ Deno.serve(async (req) => {
     // Most-overdue first (never-run wins because Infinity).
     due.sort((a, b) => b.overdue_hours - a.overdue_hours);
 
+    // Back off suppliers whose last attempt failed recently (e.g. upstream API
+    // outage returning 503). Without this we re-hit a dead API every tick.
+    const FAILURE_BACKOFF_MIN = 30;
+    if (due.length > 0) {
+      const backoffSince = new Date(now.getTime() - FAILURE_BACKOFF_MIN * 60_000).toISOString();
+      const { data: recentFails } = await supabase
+        .from("import_logs")
+        .select("source, status, started_at")
+        .in("source", due.map((d) => `supplier-feed-import:${d.id}`))
+        .eq("status", "failed")
+        .gte("started_at", backoffSince);
+      const cooling = new Set(
+        (recentFails ?? []).map((r) => String(r.source).replace("supplier-feed-import:", "")),
+      );
+      if (cooling.size > 0) {
+        for (const d of due) {
+          if (cooling.has(d.id)) {
+            results.push({ type: "supplier", name: d.name, skipped: "failure_backoff" });
+          }
+        }
+        const filtered = due.filter((d) => !cooling.has(d.id));
+        due.length = 0;
+        due.push(...filtered);
+      }
+    }
+
     // Fire at most ONE supplier per tick. Guarantees no two heavy feeds
     // ever share a runtime slot.
     const pick = due[0] ?? null;
