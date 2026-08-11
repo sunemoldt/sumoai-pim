@@ -634,6 +634,7 @@ const handler = async (req: Request): Promise<Response> => {
       mapping.purchase_price = "purchase_price";
       mapping.stock_quantity = "stock_quantity";
       mapping.sku = "supplier_sku";
+      mapping.image_url = "image_url";
 
       const stockMap = new Map<string, string>(); // SKU -> quantity
       const aurdelHasStock = apiDbs.includes("stock");
