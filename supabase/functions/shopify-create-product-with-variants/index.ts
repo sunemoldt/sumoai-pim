@@ -215,8 +215,8 @@ Deno.serve(async (req) => {
 
     // Step 1: productCreate with productOptions
     const productMutation = `#graphql
-      mutation CreateProduct($input: ProductInput!) {
-        productCreate(input: $input) {
+      mutation CreateProduct($input: ProductInput!, $media: [CreateMediaInput!]) {
+        productCreate(input: $input, media: $media) {
           product { id }
           userErrors { field message }
         }
