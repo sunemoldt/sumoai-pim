@@ -11,6 +11,8 @@ import {
   getMarginPercent,
   getRecommendedPriceInclVat,
   exVat,
+  pickPricingSupplier,
+  pickPurchaseSupplier,
 } from "@/hooks/use-products";
 
 type Props = {

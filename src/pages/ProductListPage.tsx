@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useState } from "react";
-import { useMasterProducts, useSuppliers, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations, hasUnknownStockQty } from "@/hooks/use-products";
+import { useMasterProducts, useSuppliers, getCheapestSupplier, getCheapestSupplierAny, pickPricingSupplier, pickPurchaseSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations, hasUnknownStockQty } from "@/hooks/use-products";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
