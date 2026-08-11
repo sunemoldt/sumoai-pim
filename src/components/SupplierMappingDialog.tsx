@@ -19,6 +19,7 @@ const SYSTEM_FIELDS = [
   { key: "stock_quantity", label: "Lagerantal", required: false },
   { key: "in_stock", label: "På lager (ja/nej)", required: false },
   { key: "weight_kg", label: "Vægt (kg)", required: false },
+  { key: "image_url", label: "Billede-URL", required: false },
 ];
 
 interface Props {
