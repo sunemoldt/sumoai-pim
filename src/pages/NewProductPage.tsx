@@ -105,6 +105,17 @@ export default function NewProductPage() {
     toast({ title: "AI har udfyldt felterne" });
   };
 
+  // Auto-generate texts once when arriving from EAN-lookup with supplier prefill.
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (!prefill || autoRan.current) return;
+    autoRan.current = true;
+    generateWithAi().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
+
+
+
   const commonPayload = () => ({
     title: form.title.trim(),
     brand: form.brand.trim() || null,
