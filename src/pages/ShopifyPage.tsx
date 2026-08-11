@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { ShoppingBag, CheckCircle2, XCircle, Loader2, ExternalLink, RefreshCw, Copy, Trash2, Star } from "lucide-react";
 import { ShopifyRematchCard } from "@/components/ShopifyRematchCard";
 import { ShopifyShortDescBackfillCard } from "@/components/ShopifyShortDescBackfillCard";
+import { ShopifyRefreshImagesCard } from "@/components/ShopifyRefreshImagesCard";
 import { ShopifyUnmatchedCard } from "@/components/ShopifyUnmatchedCard";
 
 interface Status {
@@ -363,6 +364,8 @@ const ShopifyPage = forwardRef<HTMLDivElement>(function ShopifyPage(_props, ref)
       )}
       {status?.is_connected && <ShopifyRematchCard />}
       {status?.is_connected && <ShopifyShortDescBackfillCard />}
+
+      {status?.is_connected && <ShopifyRefreshImagesCard />}
       {status?.is_connected && <ShopifyUnmatchedCard />}
 
 
