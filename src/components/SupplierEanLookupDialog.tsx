@@ -196,18 +196,78 @@ export function SupplierEanLookupPanel({ useLabel, onUse, initialEan }: Omit<Pro
               </Link>
             </div>
           ) : (
-            <div className="rounded-md border border-dashed border-border bg-secondary/20 p-4 text-sm">
-              <p className="font-medium">Intet produkt oprettet med EAN {result.ean_normalized}</p>
-              <p className="text-muted-foreground mt-1">
-                {result.offers.length > 0
-                  ? `Fundet ${result.offers.length} leverandør-tilbud fra feed-cachen nedenfor.`
-                  : "Ingen leverandører har dette EAN i deres feed endnu."}
-              </p>
-              <div className="mt-3">
-                <Link to={`/products/new?ean=${encodeURIComponent(result.ean_normalized)}`}>
-                  <Button size="sm"><Package className="h-4 w-4 mr-1" /> Opret produkt</Button>
-                </Link>
+            <div className="rounded-md border border-dashed border-border bg-secondary/20 p-4 text-sm space-y-3">
+              <div>
+                <p className="font-medium">Intet produkt oprettet med EAN {result.ean_normalized}</p>
+                <p className="text-muted-foreground mt-1">
+                  {result.offers.length > 0
+                    ? `Fundet ${result.offers.length} leverandør-tilbud fra feed-cachen nedenfor.`
+                    : "Ingen leverandører har dette EAN i deres feed endnu."}
+                </p>
               </div>
+
+              {result.offers.length > 0 && (() => {
+                const chosen =
+                  result.offers.find((o) => o.supplier_id === selectedSupplierId) ?? result.offers[0];
+                return (
+                  <div className="rounded-md border border-border bg-background p-3 space-y-3">
+                    <div className="text-xs font-medium uppercase text-muted-foreground tracking-wide">
+                      Opret produkt i PIM
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Brug data fra leverandør</Label>
+                      <select
+                        className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm"
+                        value={chosen.supplier_id}
+                        onChange={(e) => setSelectedSupplierId(e.target.value)}
+                      >
+                        {result.offers.map((o) => (
+                          <option key={o.supplier_id} value={o.supplier_id}>
+                            {o.supplier_name} — {o.purchase_price.toFixed(2)} kr.
+                            {o.in_stock ? "" : " (ikke på lager)"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex gap-3">
+                      {chosen.image_url ? (
+                        <img src={chosen.image_url} alt="" className="h-16 w-16 rounded object-contain bg-secondary/40 border border-border" />
+                      ) : (
+                        <div className="h-16 w-16 rounded bg-secondary/40 border border-border flex items-center justify-center">
+                          <Package className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 text-xs space-y-0.5">
+                        <div className="font-medium text-sm truncate">{chosen.product_title || "(ingen titel i feed)"}</div>
+                        <div className="text-muted-foreground">
+                          {[chosen.brand, chosen.supplier_sku && `SKU ${chosen.supplier_sku}`].filter(Boolean).join(" · ") || "—"}
+                        </div>
+                        <div className="text-muted-foreground">
+                          Indkøb {chosen.purchase_price.toFixed(2)} kr. → foreslået salgspris{" "}
+                          <span className="font-mono font-semibold text-primary">
+                            {suggestedPrice(chosen.purchase_price).toFixed(2)} kr.
+                          </span>{" "}
+                          inkl. moms
+                        </div>
+                        {!chosen.image_url && (
+                          <div className="text-muted-foreground italic">Feedet har intet billede — du kan indsætte en URL selv.</div>
+                        )}
+                      </div>
+                    </div>
+                    <Button size="sm" onClick={() => startCreate(chosen)}>
+                      <Sparkles className="h-4 w-4 mr-1" /> Opret produkt med AI-tekster
+                    </Button>
+                  </div>
+                );
+              })()}
+
+              {result.offers.length === 0 && (
+                <div>
+                  <Link to={`/products/new?ean=${encodeURIComponent(result.ean_normalized)}`}>
+                    <Button size="sm"><Package className="h-4 w-4 mr-1" /> Opret produkt</Button>
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 
