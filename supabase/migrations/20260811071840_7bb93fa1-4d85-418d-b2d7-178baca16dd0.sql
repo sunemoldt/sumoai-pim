@@ -1,0 +1,1 @@
+ALTER TABLE public.supplier_feed_cache ADD COLUMN IF NOT EXISTS image_url text;
