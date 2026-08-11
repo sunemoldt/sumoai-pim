@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Loader2, Search, ScanBarcode, ExternalLink, Package, CheckCircle2, XCircle } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Loader2, Search, ScanBarcode, ExternalLink, Package, CheckCircle2, XCircle, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { inclVat, getRecommendedPriceInclVat, VAT_RATE } from "@/hooks/use-products";
+import { applyRoundingWithMinMargin } from "@/lib/price-rounding";
 
 export type EanLookupOffer = {
   supplier_id: string;
@@ -20,6 +21,7 @@ export type EanLookupOffer = {
   last_updated: string | null;
   product_title?: string | null;
   brand?: string | null;
+  image_url?: string | null;
   source?: "linked" | "feed";
 };
 
