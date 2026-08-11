@@ -473,7 +473,7 @@ export default function ProductDetailPage() {
   // otherwise we risk recommending a sales price below our real purchase cost.
   const cheapestPriceForInit = (() => {
     if (!product) return null;
-    const c = pickPricingSupplier(product as any);
+    const c = pickPricingSupplier<any>(product as any);
     return c?.purchase_price ?? null;
   })();
 
@@ -495,8 +495,8 @@ export default function ProductDetailPage() {
     );
   }
 
-  const cheapest = pickPricingSupplier(product as any);
-  const cheapestAny = pickPurchaseSupplier(product as any);
+  const cheapest = pickPricingSupplier<any>(product as any);
+  const cheapestAny = pickPurchaseSupplier<any>(product as any);
   // Purchase price and recommendation only ever come from the suppliers actually
   // selected for this product (with supplier priority respected).
   const cheapestPrice = cheapestAny?.purchase_price ?? null;

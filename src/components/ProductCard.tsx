@@ -40,11 +40,11 @@ export default function ProductCard({
 
 
 
-  const cheapestAny = pickPurchaseSupplier(product as any);
+  const cheapestAny = pickPurchaseSupplier<any>(product as any);
   const cheapestPrice = cheapestAny?.purchase_price ?? null;
   // Recommendation: only suppliers selected for this product, priority first,
   // preferring in-stock; falls back to selected out-of-stock suppliers.
-  const cheapestInStock = pickPricingSupplier(product as any);
+  const cheapestInStock = pickPricingSupplier<any>(product as any);
   const recommendedBasePrice = cheapestInStock?.purchase_price ?? cheapestPrice;
   const recommended = recommendedBasePrice
     ? getRecommendedPriceInclVat(recommendedBasePrice, product.custom_markup_percentage ?? globalMarkup)
