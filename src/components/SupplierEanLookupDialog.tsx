@@ -62,25 +62,63 @@ type Props = {
   initialEan?: string;
 };
 
-async function fetchGlobalMarkup(): Promise<number> {
+type PriceRules = { markupPct: number; roundingMode: string; minMarginPct: number };
+
+async function fetchPriceRules(): Promise<PriceRules> {
   const { data } = await supabase
     .from("price_settings")
-    .select("markup_percentage")
-    .eq("scope", "global")
-    .maybeSingle();
-  return Number((data as any)?.markup_percentage ?? 25);
+    .select("scope, scope_value, markup_percentage, minimum_margin");
+  const rows = (data ?? []) as any[];
+  const global = rows.find((r) => r.scope === "global");
+  const rounding = rows.find((r) => r.scope === "price_rounding");
+  return {
+    markupPct: Number(global?.markup_percentage ?? 25),
+    roundingMode: String(rounding?.scope_value ?? "nearest_5"),
+    minMarginPct: Number(global?.minimum_margin ?? 15),
+  };
 }
 
 export function SupplierEanLookupPanel({ useLabel, onUse, initialEan }: Omit<Props, "asPage" | "open" | "onOpenChange">) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [ean, setEan] = useState(initialEan ?? "");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<EanLookupResult | null>(null);
   const [markupPct, setMarkupPct] = useState<number>(25);
+  const [rules, setRules] = useState<PriceRules>({ markupPct: 25, roundingMode: "nearest_5", minMarginPct: 15 });
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchGlobalMarkup().then(setMarkupPct).catch(() => {});
+    fetchPriceRules()
+      .then((r) => { setRules(r); setMarkupPct(r.markupPct); })
+      .catch(() => {});
   }, []);
+
+  const suggestedPrice = (purchasePrice: number) =>
+    applyRoundingWithMinMargin(
+      getRecommendedPriceInclVat(purchasePrice, markupPct),
+      rules.roundingMode,
+      purchasePrice,
+      rules.minMarginPct,
+    );
+
+  const startCreate = (offer: EanLookupOffer) => {
+    if (!result) return;
+    navigate("/products/new", {
+      state: {
+        prefill: {
+          ean: result.ean_normalized,
+          title: offer.product_title ?? "",
+          brand: offer.brand ?? "",
+          sku: offer.supplier_sku ?? "",
+          image_url: offer.image_url ?? "",
+          webshop_price: suggestedPrice(offer.purchase_price).toFixed(2),
+          purchase_price: offer.purchase_price,
+          supplier_name: offer.supplier_name,
+        },
+      },
+    });
+  };
 
   const runSearch = async () => {
     const q = ean.trim();
