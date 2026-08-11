@@ -253,7 +253,11 @@ Deno.serve(async (req) => {
     if (head.meta_description) seoObj.description = String(head.meta_description);
     if (Object.keys(seoObj).length > 0) productInput.seo = seoObj;
 
-    const created = await shopifyGraphql(conn.shop_domain, conn.access_token, productMutation, { input: productInput });
+    const headImg = typeof head.image_url === "string" && /^https?:\/\//i.test(head.image_url) ? head.image_url : null;
+    const created = await shopifyGraphql(conn.shop_domain, conn.access_token, productMutation, {
+      input: productInput,
+      media: headImg ? [{ originalSource: headImg, mediaContentType: "IMAGE", alt: parentTitle.slice(0, 250) }] : undefined,
+    });
     const errs = created.productCreate.userErrors;
     if (errs?.length) throw new Error(errs.map((e: { message: string }) => e.message).join(", "));
     const productGid = created.productCreate.product.id as string;
