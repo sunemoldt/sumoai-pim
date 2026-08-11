@@ -1443,6 +1443,7 @@ export type Database = {
       }
       get_db_stats: { Args: never; Returns: Json }
       get_monitoring_overview: { Args: never; Returns: Json }
+      is_owner: { Args: never; Returns: boolean }
       list_duplicate_eans: {
         Args: never
         Returns: {
