@@ -211,6 +211,7 @@ type SupplierFeedCacheRow = {
   product_title: string | null;
   supplier_sku: string | null;
   brand: string | null;
+  image_url: string | null;
   purchase_price: number;
   stock_quantity: number | null;
   in_stock: boolean;
@@ -231,13 +232,17 @@ function buildSupplierFeedCacheRow(
   const titleCol = (mapping as Record<string, string>).title || (mapping as Record<string, string>).name || (mapping as Record<string, string>).short_description;
   const brandCol = (mapping as Record<string, string>).brand || (mapping as Record<string, string>).manufacturer;
   const skuCol = mapping.sku;
+  const imageCol = (mapping as Record<string, string>).image_url || (mapping as Record<string, string>).image;
   const trim = (s: string | undefined | null, n: number) => s ? (s.length > n ? s.slice(0, n) : s) : null;
+  const rawImage = trim(imageCol ? row[imageCol]?.trim() : null, 1000);
+  const imageUrl = rawImage && /^https?:\/\//i.test(rawImage) ? rawImage : null;
   return {
     supplier_id: supplierId,
     ean,
     product_title: trim(titleCol ? row[titleCol]?.trim() : null, 300),
     supplier_sku: trim(skuCol ? row[skuCol]?.trim() : null, 100),
     brand: trim(brandCol ? row[brandCol]?.trim() : null, 100),
+    image_url: imageUrl,
     purchase_price: price,
     stock_quantity: stockQty,
     in_stock: parseMappedInStock(row, mapping, stockQty),
