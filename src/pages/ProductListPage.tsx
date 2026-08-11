@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useState } from "react";
-import { useMasterProducts, useSuppliers, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations, hasUnknownStockQty } from "@/hooks/use-products";
+import { useMasterProducts, useSuppliers, getCheapestSupplier, getCheapestSupplierAny, pickPricingSupplier, pickPurchaseSupplier, getMarginPercent, getRecommendedPriceInclVat, usePriceSettings, exVat, useAllProductAnalytics, useProductRecommendations, hasUnknownStockQty } from "@/hooks/use-products";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
@@ -287,7 +287,7 @@ export default function ProductListPage() {
       }
 
       if (marginFilter !== "all") {
-        const cheapest = getCheapestSupplier(product.supplier_products);
+        const cheapest = pickPurchaseSupplier<any>(product as any);
         const activePrice = product.sale_price ?? product.webshop_price;
         if (!activePrice || !cheapest) return false;
         const margin = getMarginPercent(exVat(activePrice), cheapest.purchase_price);
@@ -327,8 +327,8 @@ export default function ProductListPage() {
       if (sortField === "brand") return dir * (a.brand ?? "").localeCompare(b.brand ?? "", "da");
       if (sortField === "stock_quantity") return dir * ((a.stock_quantity ?? 0) - (b.stock_quantity ?? 0));
       if (sortField === "purchase_price") {
-        const cA = getCheapestSupplierAny(a.supplier_products)?.purchase_price ?? 0;
-        const cB = getCheapestSupplierAny(b.supplier_products)?.purchase_price ?? 0;
+        const cA = pickPurchaseSupplier<any>(a as any)?.purchase_price ?? 0;
+        const cB = pickPurchaseSupplier<any>(b as any)?.purchase_price ?? 0;
         return dir * (cA - cB);
       }
       if (sortField === "webshop_price") {
@@ -337,15 +337,15 @@ export default function ProductListPage() {
         return dir * (pA - pB);
       }
       if (sortField === "recommended") {
-        const cA = getCheapestSupplier(a.supplier_products);
-        const cB = getCheapestSupplier(b.supplier_products);
+        const cA = pickPricingSupplier<any>(a as any) ?? pickPurchaseSupplier<any>(a as any);
+        const cB = pickPricingSupplier<any>(b as any) ?? pickPurchaseSupplier<any>(b as any);
         const rA = cA ? getRecommendedPriceInclVat(cA.purchase_price, a.custom_markup_percentage ?? globalMarkup) : 0;
         const rB = cB ? getRecommendedPriceInclVat(cB.purchase_price, b.custom_markup_percentage ?? globalMarkup) : 0;
         return dir * (rA - rB);
       }
       if (sortField === "margin") {
-        const cA = getCheapestSupplierAny(a.supplier_products)?.purchase_price;
-        const cB = getCheapestSupplierAny(b.supplier_products)?.purchase_price;
+        const cA = pickPurchaseSupplier<any>(a as any)?.purchase_price;
+        const cB = pickPurchaseSupplier<any>(b as any)?.purchase_price;
         const apA = a.sale_price ?? a.webshop_price;
         const apB = b.sale_price ?? b.webshop_price;
         const mA = apA && cA ? getMarginPercent(exVat(apA), cA) : -999;
@@ -802,10 +802,10 @@ export default function ProductListPage() {
                 </tr>
               ) : (
                 sorted.map((product) => {
-                  const cheapestAny = getCheapestSupplierAny(product.supplier_products);
+                  const cheapestAny = pickPurchaseSupplier<any>(product as any);
                   const cheapestPrice = cheapestAny?.purchase_price ?? null;
-                  // Recommendation: prefer cheapest IN-STOCK, fall back to cheapest any
-                  const cheapestInStock = getCheapestSupplier(product.supplier_products);
+                  // Only suppliers selected for the product, priority first
+                  const cheapestInStock = pickPricingSupplier<any>(product as any);
                   const recommendedBasePrice = cheapestInStock?.purchase_price ?? cheapestPrice;
                   const recommendedPriceInclVat = recommendedBasePrice ? getRecommendedPriceInclVat(recommendedBasePrice, product.custom_markup_percentage ?? globalMarkup) : null;
                   const activePrice = product.sale_price ?? product.webshop_price;

@@ -44,7 +44,7 @@ const LIST_COLUMNS =
   "sync_tags,updated_at,created_at";
 
 const LIST_SUPPLIER_COLUMNS =
-  "id,supplier_id,master_product_id,purchase_price,stock_quantity,in_stock,suppliers(id,name)";
+  "id,supplier_id,master_product_id,purchase_price,stock_quantity,in_stock,suppliers(id,name,priority)";
 
 export function useMasterProducts(search?: string) {
   return useQuery({
@@ -170,6 +170,62 @@ export function getCheapestSupplierAny(
 ) {
   if (supplierProducts.length === 0) return null;
   return supplierProducts.reduce((min, sp) => (sp.purchase_price < min.purchase_price ? sp : min));
+}
+
+// --- Pricing supplier selection -------------------------------------------
+// Recommended price / purchase price must only ever come from suppliers that are
+// actually selected for the product (stock_sync_supplier_ids). Among those,
+// supplier priority wins over price (lower priority number = higher priority),
+// preferring in-stock suppliers. If no suppliers are selected, all linked
+// suppliers are considered (unchanged legacy behaviour).
+type PricingSupplierLike = {
+  supplier_id: string;
+  purchase_price: number;
+  in_stock: boolean;
+  suppliers?: { id: string; name: string; priority?: number | null } | null;
+};
+
+export function eligiblePricingSuppliers<T extends PricingSupplierLike>(product: {
+  stock_sync_supplier_ids?: string[] | null;
+  supplier_products?: T[] | null;
+}): T[] {
+  const all = product.supplier_products ?? [];
+  const selected = product.stock_sync_supplier_ids ?? [];
+  if (selected.length === 0) return all;
+  return all.filter((sp) => selected.includes(sp.supplier_id));
+}
+
+function pickByPriority<T extends PricingSupplierLike>(list: T[]): T | null {
+  if (list.length === 0) return null;
+  return list.reduce((best, sp) => {
+    const bp = best.suppliers?.priority ?? 999;
+    const cp = sp.suppliers?.priority ?? 999;
+    if (cp !== bp) return cp < bp ? sp : best;
+    return sp.purchase_price < best.purchase_price ? sp : best;
+  });
+}
+
+/** Supplier used for the recommended price: eligible + in stock, else eligible. */
+export function pickPricingSupplier<T extends PricingSupplierLike>(product: {
+  stock_sync_supplier_ids?: string[] | null;
+  supplier_products?: T[] | null;
+}): T | null {
+  const eligible = eligiblePricingSuppliers(product).filter(
+    (sp) => sp.purchase_price != null && sp.purchase_price > 0
+  );
+  const inStock = eligible.filter((sp) => sp.in_stock);
+  return pickByPriority(inStock.length > 0 ? inStock : eligible);
+}
+
+/** Supplier used for purchase price / margin display (ignores stock). */
+export function pickPurchaseSupplier<T extends PricingSupplierLike>(product: {
+  stock_sync_supplier_ids?: string[] | null;
+  supplier_products?: T[] | null;
+}): T | null {
+  const eligible = eligiblePricingSuppliers(product).filter(
+    (sp) => sp.purchase_price != null && sp.purchase_price > 0
+  );
+  return pickByPriority(eligible);
 }
 
 // Utility: true when the product counts as in stock only because a selected

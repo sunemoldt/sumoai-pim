@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useMasterProduct, getCheapestSupplier, getCheapestSupplierAny, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog, useProductAnalytics, useProductRecommendations, hasUnknownStockQty } from "@/hooks/use-products";
+import { useMasterProduct, getCheapestSupplier, getCheapestSupplierAny, pickPricingSupplier, pickPurchaseSupplier, getMarginPercent, getRecommendedPriceInclVat, getRecommendedPrice, usePriceSettings, exVat, useProductChangeLog, useProductAnalytics, useProductRecommendations, hasUnknownStockQty } from "@/hooks/use-products";
 import { applyRounding, applyRoundingWithMinMargin } from "@/lib/price-rounding";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -473,7 +473,7 @@ export default function ProductDetailPage() {
   // otherwise we risk recommending a sales price below our real purchase cost.
   const cheapestPriceForInit = (() => {
     if (!product) return null;
-    const c = getCheapestSupplier(product.supplier_products);
+    const c = pickPricingSupplier<any>(product as any);
     return c?.purchase_price ?? null;
   })();
 
@@ -495,11 +495,10 @@ export default function ProductDetailPage() {
     );
   }
 
-  const cheapest = getCheapestSupplier(product.supplier_products);
-  const cheapestAny = getCheapestSupplierAny(product.supplier_products);
-  // Display "Indkøb" still reflects the absolute cheapest supplier (incl. out-of-stock).
-  // Recommended price prefers cheapest IN-STOCK but falls back to cheapest any so we
-  // always show a guideline price, even when all suppliers are out of stock.
+  const cheapest = pickPricingSupplier<any>(product as any);
+  const cheapestAny = pickPurchaseSupplier<any>(product as any);
+  // Purchase price and recommendation only ever come from the suppliers actually
+  // selected for this product (with supplier priority respected).
   const cheapestPrice = cheapestAny?.purchase_price ?? null;
   const cheapestInStockPrice = cheapest?.purchase_price ?? null;
   const recommendedBasePrice = cheapestInStockPrice ?? cheapestPrice;
